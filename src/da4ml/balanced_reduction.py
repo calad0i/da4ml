@@ -3,7 +3,7 @@ from .scoring import py_scorer
 import numpy as np
 
 
-def balanced_reduction(vars: list[FixedVariable]):
+def _balanced_reduction(vars: list[FixedVariable]):
     vars = vars.copy()
 
     n = len(vars)
@@ -33,3 +33,12 @@ def balanced_reduction(vars: list[FixedVariable]):
                 score_mat[i, k] = py_scorer(vars[i], vars[k]) - 1000 * (vars[i]._depth + vars[k]._depth)
 
     return vars[0]
+
+
+def balanced_reduction(vars: list[FixedVariable]):
+    pos_vars = [v for v in vars if v._factor > 0]
+    neg_vars = [v for v in vars if v._factor < 0]
+    for v in neg_vars:
+        v._factor = -v._factor
+
+    return _balanced_reduction(pos_vars) - _balanced_reduction(neg_vars)

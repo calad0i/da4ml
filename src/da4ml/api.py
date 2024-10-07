@@ -1,5 +1,6 @@
 import re
 from collections.abc import Callable
+import typing
 import numpy as np
 
 from .codegen import Namer
@@ -9,6 +10,7 @@ from .cmvm import compile_kernel
 from .codegen import PyCodegenBackend
 
 m = re.compile(r'Latency: (\d+)')
+T = typing.TypeVar('T')
 
 
 def fn_from_kernel(
@@ -23,7 +25,7 @@ def fn_from_kernel(
     n_inp_max: int = -1,
     n_out_max: int = -1,
     codegen_backend: PyCodegenBackend = PyCodegenBackend()
-) -> tuple[Callable[[list[float]], list[float]], str]:
+) -> tuple[Callable[[list[T]], list[T]], str]:
     states = compile_kernel(
         kernel=kernel,
         signs=signs,
