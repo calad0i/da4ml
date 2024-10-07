@@ -7,6 +7,8 @@ def balanced_reduction(vars: list[FixedVariable]):
     vars = vars.copy()
 
     n = len(vars)
+    if n == 0:
+        return FixedVariable.from_const(0.)
     score_mat = np.full((len(vars), len(vars)), -np.inf, dtype=np.float32)
     for i in range(len(vars)):
         for j in range(i + 1, len(vars)):

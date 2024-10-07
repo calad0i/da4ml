@@ -14,9 +14,11 @@ def var_from_nb_var(op_codes: OpCode, nb_variables: list[NBFixedPrecision], bias
     while i < len(op_codes) and op_codes[i].pos1 < 0:
         op_code = op_codes[i]
         pos0, pos1 = op_code.pos0, op_code.pos1
+        shift = op_code.shift0
         if pos1 >= 0:
             break
         v = FixedVariable.from_nb_precision(nb_variables[pos0], name=f'inp[{pos0+bias_idx}]')
+        v._factor = 2. ** shift
         variables.append(v)
         i += 1
 
