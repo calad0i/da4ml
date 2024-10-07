@@ -4,7 +4,6 @@ import numpy as np
 from numba import prange
 import heapq
 import numba as nb
-from tqdm import tqdm
 from math import ceil
 
 from .utils import OpCode, DAState, Score

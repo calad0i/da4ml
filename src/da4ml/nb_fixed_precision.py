@@ -10,7 +10,6 @@ from numba import prange
 import heapq
 from collections import namedtuple
 import numba as nb
-from tqdm import tqdm
 import re
 
 spec = [
