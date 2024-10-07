@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=67.8", "setuptools_scm>=8"]
+
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "da4ml"
+version = "0.0.1"
+authors = [{ name = "Chang Sun", email = "chsun@cern.ch" }]
+description = "Digital Arithmetic for Machine Learning"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GNU Lesser General Public License v3 (LGPLv3)" }
+keywords = [
+  "distributed arithmetic",
+  "subexpression elimination",
+  "MCM",
+  "CMVM",
+  "hls4ml",
+]
+
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+  "Development Status :: 2 - Pre-Alpha",
+]
+
+[project.urls]
+repository = "https://github.com/calad0i/da4ml"
+
+
+[tool.setuptools]
+packages = ["da4ml"]
+include-package-data = true
+package-dir = { "" = "src" }
+
+
+[tool.setuptools_scm]
+write_to = "src/da4ml/_version.py"
+
+[project.optional-dependencies]
+docs = ["sphinx", "sphinx-rtd-theme", "myst-parser", "pyparsing"]
+
+
+dependencies = ['numba>=0.60', "numpy"]
