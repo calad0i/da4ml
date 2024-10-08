@@ -24,7 +24,8 @@ def fn_from_kernel(
     dc: int | None = None,
     n_inp_max: int = -1,
     n_out_max: int = -1,
-    codegen_backend: PyCodegenBackend = PyCodegenBackend()
+    codegen_backend: PyCodegenBackend = PyCodegenBackend(),
+    signed_balanced_reduction:bool=True
 ) -> tuple[Callable[[list[T]], list[T]], str]:
     states = compile_kernel(
         kernel=kernel,
@@ -39,7 +40,7 @@ def fn_from_kernel(
         n_out_max=n_out_max
     )
     with Namer().tmp_scope():
-        inp, out = graph_compile_states(states)
+        inp, out = graph_compile_states(states,signed_balanced_reduction)
         fn, fn_str = codegen_backend(inp, out)
     return fn, fn_str
 

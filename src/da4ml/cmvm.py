@@ -9,7 +9,7 @@ from math import ceil
 from .utils import OpCode, DAState, Score
 from .nb_fixed_precision import NBFixedPrecision
 from .scoring import scorer
-from .csd import to_csd
+from .csd import to_csd, to_binary
 
 
 @njit(parallel=True)
@@ -201,14 +201,14 @@ def update_state(state: DAState, pair: tuple[float, int, int, int, int, int], dc
 
 @njit(cache=True)
 def get_top_n_pairs(state: DAState, n: int):
+    return state.pairs[:n]
     _pairs = state.pairs.copy()
     return [heapq.heappop(_pairs) for _ in range(min(n, len(_pairs)))]
 
 
 @njit
 def cmvm_cse(state: DAState, progress=None, beams: int = 1, dc=None):
-    pass
-    assert len(state.pairs) > 0 and state.pairs[0][0] < 0
+    assert len(state.pairs) > 0, f"{len(state.pairs)}"
     top_pairs = get_top_n_pairs(state, beams)
     states_0 = [update_state(state, top_pairs[i], dc) for i in range(len(top_pairs))]
 

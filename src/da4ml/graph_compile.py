@@ -45,7 +45,7 @@ def gather_output_var_cumlist(state: DAState, variables: list[FixedVariable]):
     return cumlist
 
 
-def graph_compile_states(states: list[list[DAState]]):
+def graph_compile_states(states: list[list[DAState]], signed_balanced_reduction=True):
     n_split_in = len(states)
     n_split_out = len(states[0])
     assert all(len(states[i]) == n_split_out for i in range(n_split_in))
@@ -79,6 +79,6 @@ def graph_compile_states(states: list[list[DAState]]):
         for k, buf in enumerate(_cumlist):
             output_variables[idx_out_bias + k].extend(buf)
 
-    _output_variables: list[FixedVariable] = [balanced_reduction(buf) for buf in output_variables]  # type: ignore
+    _output_variables: list[FixedVariable] = [balanced_reduction(buf, signed=signed_balanced_reduction) for buf in output_variables]  # type: ignore
     input_variables = [v for vs in input_variables for v in vs]
     return input_variables, _output_variables

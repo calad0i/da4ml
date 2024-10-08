@@ -35,7 +35,9 @@ def _balanced_reduction(vars: list[FixedVariable]):
     return vars[0]
 
 
-def balanced_reduction(vars: list[FixedVariable]):
+def balanced_reduction(vars: list[FixedVariable], signed=True):
+    if not signed:
+        return _balanced_reduction(vars)
     pos_vars = [v for v in vars if v._factor > 0]
     neg_vars = [v for v in vars if v._factor < 0]
     for v in neg_vars:
