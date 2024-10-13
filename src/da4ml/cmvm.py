@@ -327,6 +327,9 @@ def compile_kernel(
         _int_bits = [int(v) for v in _int_bits]
         _symmetrics = [bool(v) for v in _symmetrics]
         _depths = [int(v) for v in _depths]
-        states[i][j] = compile_kernel_mono(_kernel, _signs, _bits, _int_bits, _symmetrics, _depths, n_beams, dc)
+        try:
+            states[i][j] = compile_kernel_mono(_kernel, _signs, _bits, _int_bits, _symmetrics, _depths, n_beams, dc)
+        except AssertionError:
+            states[i][j] = init_state(_kernel, _signs, _bits, _int_bits, _symmetrics, _depths)
 
     return states  # type: ignore
