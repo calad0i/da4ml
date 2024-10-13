@@ -1,4 +1,7 @@
-#pypi
+# Notebooks
+*.ipynb
+
+# PyPI
 _version.py
 
 
