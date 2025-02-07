@@ -12,7 +12,7 @@ from .scoring import scorer
 from .csd import to_csd, to_binary
 
 
-@njit(parallel=True)
+@njit
 def extract_pairs(
     csd: list[NDArray[np.int8]],
     precisions: list[NBFixedPrecision],
@@ -156,8 +156,8 @@ def update_state(state: DAState, pair: tuple[float, int, int, int, int, int], dc
     neg_cum_score, count, pos0, pos1, dshift, dsign = pair
     variables = state.variables.copy()
     op_codes = state.op_codes.copy()
-    csd = [_csd.copy() for _csd in state.csd]  # .copy()
-    pairs = state.pairs.copy()
+    csd = state.csd
+    pairs = state.pairs
 
     realized = state.score.realized - neg_cum_score
 
@@ -281,7 +281,7 @@ def compile_kernel_mono(
     return _state
 
 
-# @njit
+# @njit(cache=True)
 def compile_kernel(
     kernel: np.ndarray,
     signs: list[bool],

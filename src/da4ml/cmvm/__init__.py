@@ -15,7 +15,7 @@ int_bits = [0] * d_in
 symmetrics = [False] * d_in
 depths = [0] * d_in
 
-print('Compiling the library. This will take a while...', end=' ')
+print('The da4ml library is compiling. This will take a while...', end=' ')
 _ = fn_from_kernel(
     kernel=kernel,
     signs=signs,
@@ -24,7 +24,7 @@ _ = fn_from_kernel(
     symmetrics=symmetrics,
     depths=depths,
     n_beams=1,
-    dc=None,
+    dc=0,
     n_inp_max=-1,
     n_out_max=-1,
     codegen_backend=PyCodegenBackend()
