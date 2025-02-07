@@ -8,9 +8,12 @@ class PyCodegenBackend:
 
     _comment = '#'
 
-    def __init__(self, namer=Namer(), **kwargs):
+    def __init__(self, namer=Namer(), fn_name: str = 'placeholder', **kwargs):
         self._namer = namer
-        self._attrs = kwargs
+        self._attrs = {
+            'fn_name': fn_name,
+            **kwargs
+        }
 
     def reference_code(self, v: FixedVariable):
         """How the variable should be referenced in the code"""
@@ -76,8 +79,8 @@ class PyCodegenBackend:
             codes.append(f'out[{i}] = {self.reference_code(out)}')
         return codes
 
-    def gen_fn(self, inputs: list[FixedVariable], outputs: list[FixedVariable], fn_name: str | None = None):
-        fn_name = fn_name or self._attrs.get('fn_name', 'test_fn')
+    def gen_fn(self, inputs: list[FixedVariable], outputs: list[FixedVariable], **kwargs):
+        fn_name = kwargs.get('fn_name', self._attrs['fn_name'])
         code = self.gen_lines(inputs, outputs)
         code_str = '\n    '.join(code)
         fn_str = f'''def {fn_name}(inp: list[float]):
@@ -93,56 +96,68 @@ class PyCodegenBackend:
         return self.gen_fn(inputs, outputs)
 
 
-# class VitisCodegenBackend(CodegenBackend):
-#     _comment = '//'
+class VitisCodegenBackend(PyCodegenBackend):
+    _comment = '//'
 
-#     def reference_code(self, v: FixedVariable):
-#         """How the variable should be referenced in the code"""
-#         if v.int_min == v.int_max:
-#             return f'{v.min}'
+    def __init__(self, namer=Namer(), fn_name: str = 'placeholder', **kwargs):
+        self._namer = namer
+        self._attrs = {
+            'fn_name': fn_name,
+            **kwargs
+        }
 
-#         neg = v._factor < 0
-#         shift = log2(abs(v._factor))
-#         assert shift % 1 == 0
-#         shift = int(shift)
-#         s_sign = "-" if neg else ""
-#         if shift == 0:
-#             return f'{s_sign}{v.name}'
-#         return f'{s_sign}shift<{shift}>({v.name})'
+    def reference_code(self, v: FixedVariable):
+        """How the variable should be referenced in the code"""
+        if v.int_min == v.int_max:
+            return f'{v.min}'
 
-#     def gen_lines(self, inputs: list[FixedVariable], outputs: list[FixedVariable]):
-#         codes = super().gen_lines(inputs, outputs)
-#         n = len(outputs)
-#         for i, out in enumerate(outputs):
-#             codes[-n + i] = f'out[{i}] = {self.reference_code(out)};'
-#         return codes
+        neg = v._factor < 0
+        shift = log2(abs(v._factor))
+        assert shift % 1 == 0
+        shift = int(shift)
+        s_sign = "-" if neg else ""
+        if shift == 0:
+            return f'{s_sign}{v.name}'
+        return f'{s_sign}bit_shift<{shift}>({v.name})'
 
-#     def def_code(self, v: FixedVariable):
-#         """How the variable should be defined in the code"""
-#         if v.int_min == v.int_max:
-#             raise ValueError("Constant variable should not be defined")
-#         assert v._from is not None, "Variable not derived from other variables cannot be defined in runtime"
-#         v1_str = self.reference_code(v._from[0])
-#         v2_str = self.reference_code(v._from[1])
-#         if v2_str[0] == '-':
-#             return f'{v.name} = {v1_str} - {v2_str[1:]};'
-#         return f'{v.name} = {v1_str} + {v2_str};'
+    def gen_lines(self, inputs: list[FixedVariable], outputs: list[FixedVariable]):
+        codes = super().gen_lines(inputs, outputs)
+        n = len(outputs)
+        for i, out in enumerate(outputs):
+            codes[-n + i] = f'out[{i}] = {self.reference_code(out)};'
+        return codes
 
-#     def gen_fn(self, inputs: list[FixedVariable], outputs: list[FixedVariable], fn_name: str | None = None):
-#         fn_name = fn_name or self._attrs.get('fn_name', 'test_fn')
-#         inp_t = self._attrs.get('inp_t', 'auto')
-#         out_t = self._attrs.get('out_t', 'auto')
-#         code = self.gen_lines(inputs, outputs)
-#         code_str = '\n    '.join(code)
+    def def_code(self, v: FixedVariable):
+        """How the variable should be defined in the code"""
+        if v.int_min == v.int_max:
+            raise ValueError("Constant variable should not be defined")
+        assert v._from is not None, "Variable not derived from other variables cannot be defined in runtime"
+        v1_str = self.reference_code(v._from[0])
+        v2_str = self.reference_code(v._from[1])
+        vv = v * (1 / v._factor)
+        k, b, i = vv.k, vv.b, vv.i
+        b, i = b + k, i + k  # b and i did not include sign bit
+        u = '' if k else 'u'
+        type_str = f'ap_{u}fixed<{b}, {i}>'
+        if v2_str[0] == '-':
+            return f'{type_str} {v.name} = {v1_str} - {v2_str[1:]};'
+        return f'{type_str} {v.name} = {v1_str} + {v2_str};'
 
-#         fn_str = f'''void {fn_name}({inp_t} inp[{len(inputs)}], {out_t} out[{len(outputs)}]) {{:
-#     {code_str}
-# }}
-# '''
-#         self._comment = '#'
-#         fn, _ = super().gen_fn(inputs, outputs, fn_name)
-#         self._comment = '//'
-#         return fn, fn_str
+    def gen_fn(self, inputs: list[FixedVariable], outputs: list[FixedVariable], **kwargs):
+        attrs = {**self._attrs, **kwargs}
+        fn_name = attrs['fn_name']
+        code = self.gen_lines(inputs, outputs)
+        code_str = '\n    '.join(code)
 
-#     def __call__(self, inputs: list[FixedVariable], outputs: list[FixedVariable]):
-#         return self.gen_fn(inputs, outputs)
+        fn_str = f'''template <typename inp_t, typename out_t>
+void {fn_name}(inp_t inp[{len(inputs)}], out_t out[{len(outputs)}]) {{
+    {code_str}
+}}
+'''
+        self._comment = '#'
+        fn, _ = PyCodegenBackend().gen_fn(inputs, outputs, fn_name=fn_name)
+        self._comment = '//'
+        return fn, fn_str
+
+    def __call__(self, inputs: list[FixedVariable], outputs: list[FixedVariable]):
+        return self.gen_fn(inputs, outputs)
