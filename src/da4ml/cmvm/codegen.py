@@ -109,7 +109,11 @@ class VitisCodegenBackend(PyCodegenBackend):
     def reference_code(self, v: FixedVariable):
         """How the variable should be referenced in the code"""
         if v.int_min == v.int_max:
-            return f'{v.min}'
+            k, b, i = v.k, v.b, v.i
+            u = '' if k else 'u'
+            type_str = f'ap_{u}fixed<{max(b+k,1)}, {i+k}>'
+            return f'{type_str}({v.min})'
+
 
         neg = v._factor < 0
         shift = log2(abs(v._factor))
