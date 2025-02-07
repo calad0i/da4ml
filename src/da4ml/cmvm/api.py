@@ -58,7 +58,10 @@ def fn_from_kernel(
     Returns
     -------
     tuple[Callable[[list[T]], list[T]], str]
-        _description_
+        fn : Callable[[list[T]], list[T]]
+            The compiled python function. It takes a list of inputs and returns a list of outputs with only accumulation/subtraction/powers of 2 operations.
+        fn_str : str
+            The code of the compiled function, depending on the codegen_backend used.
     """
 
     assert n_beams == 1, 'n_beams>1 is disabled for now. Change line 159 & 160 in this file to enable it.'
