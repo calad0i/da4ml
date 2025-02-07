@@ -1,19 +1,15 @@
-from math import log2
-from .fixed_variable import FixedVariable, Namer
-
 import types
+from math import log2
+
+from .fixed_variable import FixedVariable, Namer
 
 
 class PyCodegenBackend:
-
     _comment = '#'
 
     def __init__(self, namer=Namer(), fn_name: str = 'placeholder', **kwargs):
         self._namer = namer
-        self._attrs = {
-            'fn_name': fn_name,
-            **kwargs
-        }
+        self._attrs = {'fn_name': fn_name, **kwargs}
 
     def reference_code(self, v: FixedVariable):
         """How the variable should be referenced in the code"""
@@ -24,15 +20,15 @@ class PyCodegenBackend:
         shift = log2(abs(v._factor))
         assert shift % 1 == 0
         shift = int(shift)
-        s_sign = "-" if neg else ""
-        s_shift = f" * {2.**shift}" if shift != 0 else ""
+        s_sign = '-' if neg else ''
+        s_shift = f' * {2.**shift}' if shift != 0 else ''
         return f'{s_sign}{v.name}{s_shift}'
 
     def def_code(self, v: FixedVariable):
         """How the variable should be defined in the code"""
         if v.int_min == v.int_max:
-            raise ValueError("Constant variable should not be defined")
-        assert v._from is not None, "Variable not derived from other variables cannot be defined in runtime"
+            raise ValueError('Constant variable should not be defined')
+        assert v._from is not None, 'Variable not derived from other variables cannot be defined in runtime'
         v1_str = self.reference_code(v._from[0])
         v2_str = self.reference_code(v._from[1])
         if v2_str[0] == '-':
@@ -48,7 +44,7 @@ class PyCodegenBackend:
             return
 
         if v._from is None:
-            raise ValueError("Variable not derived from other variables cannot be defined in runtime")
+            raise ValueError('Variable not derived from other variables cannot be defined in runtime')
 
         self._resolve_variable(v._from[0], _recorded)
         self._resolve_variable(v._from[1], _recorded)
@@ -83,11 +79,11 @@ class PyCodegenBackend:
         fn_name = kwargs.get('fn_name', self._attrs['fn_name'])
         code = self.gen_lines(inputs, outputs)
         code_str = '\n    '.join(code)
-        fn_str = f'''def {fn_name}(inp: list[float]):
+        fn_str = f"""def {fn_name}(inp: list[float]):
     out = [0.]*{len(outputs)}
     {code_str}
     return out
-'''
+"""
         fn_obj = compile(fn_str, '<string>', 'exec')
         fn = types.FunctionType(fn_obj.co_consts[1], globals())
         return fn, fn_str
@@ -101,10 +97,7 @@ class VitisCodegenBackend(PyCodegenBackend):
 
     def __init__(self, namer=Namer(), fn_name: str = 'placeholder', **kwargs):
         self._namer = namer
-        self._attrs = {
-            'fn_name': fn_name,
-            **kwargs
-        }
+        self._attrs = {'fn_name': fn_name, **kwargs}
 
     def reference_code(self, v: FixedVariable):
         """How the variable should be referenced in the code"""
@@ -114,12 +107,11 @@ class VitisCodegenBackend(PyCodegenBackend):
             type_str = f'ap_{u}fixed<{max(b+k,1)}, {i+k}>'
             return f'{type_str}({v.min})'
 
-
         neg = v._factor < 0
         shift = log2(abs(v._factor))
         assert shift % 1 == 0
         shift = int(shift)
-        s_sign = "-" if neg else ""
+        s_sign = '-' if neg else ''
         if shift == 0:
             return f'{s_sign}{v.name}'
         return f'{s_sign}bit_shift<{shift}>({v.name})'
@@ -134,8 +126,8 @@ class VitisCodegenBackend(PyCodegenBackend):
     def def_code(self, v: FixedVariable):
         """How the variable should be defined in the code"""
         if v.int_min == v.int_max:
-            raise ValueError("Constant variable should not be defined")
-        assert v._from is not None, "Variable not derived from other variables cannot be defined in runtime"
+            raise ValueError('Constant variable should not be defined')
+        assert v._from is not None, 'Variable not derived from other variables cannot be defined in runtime'
         v1_str = self.reference_code(v._from[0])
         v2_str = self.reference_code(v._from[1])
         vv = v * (1 / v._factor)
@@ -153,11 +145,11 @@ class VitisCodegenBackend(PyCodegenBackend):
         code = self.gen_lines(inputs, outputs)
         code_str = '\n    '.join(code)
 
-        fn_str = f'''template <typename inp_t, typename out_t>
+        fn_str = f"""template <typename inp_t, typename out_t>
 void {fn_name}(inp_t inp[{len(inputs)}], out_t out[{len(outputs)}]) {{
     {code_str}
 }}
-'''
+"""
         self._comment = '#'
         fn, _ = PyCodegenBackend().gen_fn(inputs, outputs, fn_name=fn_name)
         self._comment = '//'

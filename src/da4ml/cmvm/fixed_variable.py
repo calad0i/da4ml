@@ -1,5 +1,4 @@
-
-from math import log2, ceil
+from math import ceil, log2
 
 
 class Singleton(type):
@@ -29,6 +28,7 @@ class Namer(metaclass=Singleton):
 
             def __exit__(self, *args) -> None:
                 outer._counters = _counters
+
         return _Ctx()
 
     def __call__(self, name: str, scope: str | None = None) -> str:
@@ -51,8 +51,7 @@ class FixedVariable:
         name: str = '',
         _factor: int = 1,
         _from: tuple['FixedVariable', 'FixedVariable'] | None = None,
-        namer=Namer()
-
+        namer=Namer(),
     ):
         self.int_min = int_min
         self.int_max = int_max
@@ -65,7 +64,7 @@ class FixedVariable:
         self.namer = namer
 
         if self.int_min > self.int_max:
-            raise ValueError("int_min must be less than or equal to int_max")
+            raise ValueError('int_min must be less than or equal to int_max')
 
     @property
     def k(self) -> int:
@@ -81,27 +80,26 @@ class FixedVariable:
 
     @property
     def min(self) -> float:
-        return self.int_min * 2.**(-self.shift)
+        return self.int_min * 2.0 ** (-self.shift)
 
     @property
     def max(self) -> float:
-        return self.int_max * 2.**(-self.shift)
+        return self.int_max * 2.0 ** (-self.shift)
 
     def __str__(self) -> str:
-        s = "" if self.k else "u"
-        p = f"{s}fixed({self.b+self.k}, {self.i+self.k})"
+        s = '' if self.k else 'u'
+        p = f'{s}fixed({self.b+self.k}, {self.i+self.k})'
         if self.int_min == self.int_max:
             return f'{p}({self.min})'
         return p
 
     def __add__(self, other: 'FixedVariable|float'):
-
         if other == 0:
             return self
         if not isinstance(other, FixedVariable):
             return self + self.from_const(other, self.namer)
 
-        assert self.namer is other.namer, "Namer must be the same"
+        assert self.namer is other.namer, 'Namer must be the same'
         shift = max(self.shift, other.shift)
         _shift0, _shift1 = shift - self.shift, shift - other.shift
         int_min = (self.int_min << _shift0) + (other.int_min << _shift1)
@@ -123,7 +121,6 @@ class FixedVariable:
         return self + other
 
     def __neg__(self):
-
         return FixedVariable(
             -self.int_max,
             -self.int_min,
@@ -187,12 +184,12 @@ class FixedVariable:
         _low, _high = -32, 32
         while _high - _low > 1:
             _mid = (_high + _low) // 2
-            _value = value * (2.**_mid)
+            _value = value * (2.0**_mid)
             if _value == int(_value):
                 _high = _mid
             else:
                 _low = _mid
-        _value = value * (2.**_high)
+        _value = value * (2.0**_high)
         shift = int(_high)
         int_min = int_max = int(_value)
         return cls(

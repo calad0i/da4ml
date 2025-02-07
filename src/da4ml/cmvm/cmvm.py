@@ -1,28 +1,23 @@
-from numba import njit
-from numpy.typing import NDArray
-import numpy as np
-from numba import prange
 import heapq
-import numba as nb
 from math import ceil
 
-from .utils import OpCode, DAState, Score
+import numpy as np
+from numba import njit, prange
+from numpy.typing import NDArray
+
+from .csd import to_csd
 from .nb_fixed_precision import NBFixedPrecision
 from .scoring import scorer
-from .csd import to_csd, to_binary
+from .utils import DAState, OpCode, Score
 
 
 @njit
 def extract_pairs(
-    csd: list[NDArray[np.int8]],
-    precisions: list[NBFixedPrecision],
-    updated: list[int] | None = None,
-    dc: int | None = None
+    csd: list[NDArray[np.int8]], precisions: list[NBFixedPrecision], updated: list[int] | None = None, dc: int | None = None
 ):
-
     d_in = len(csd)
     if d_in == 0:
-        raise ValueError("csd must have at least one element")
+        raise ValueError('csd must have at least one element')
     d_out, n_bit = csd[0].shape
     _stat = np.zeros((d_in, d_in, n_bit, 2), dtype=np.int64)
     process_locs = np.zeros((d_in, d_out), dtype=np.bool_)
@@ -127,7 +122,6 @@ def init_state(
     symmetrics: list[bool],
     depths: list[int],
 ):
-
     assert kernel.ndim == 2
     assert len(signs) == len(bits) == len(int_bits) == len(symmetrics) == len(depths) == kernel.shape[0]
     csd, shifts = to_csd(kernel)
@@ -142,10 +136,10 @@ def init_state(
         vars_[i] = vars_[i] << shift
     pairs = extract_pairs(csd, vars_)
 
-    potential = 0.
+    potential = 0.0
     for i in range(len(pairs)):
         potential -= pairs[i][0]
-    score = Score(potential, 0., 0., 0.)
+    score = Score(potential, 0.0, 0.0, 0.0)
 
     state = DAState(csd, vars_, op_codes, pairs, score, kernel)
     return state
@@ -161,7 +155,7 @@ def update_state(state: DAState, pair: tuple[float, int, int, int, int, int], dc
 
     realized = state.score.realized - neg_cum_score
 
-    d_in, d_out, n_bit = len(csd), *csd[0].shape
+    _d_in, d_out, n_bit = len(csd), *csd[0].shape
     new_csd_col = np.zeros((d_out, n_bit), dtype=np.int8)
     dsign = -1 if dsign else 1
     for n in range(d_out):
@@ -189,7 +183,7 @@ def update_state(state: DAState, pair: tuple[float, int, int, int, int, int], dc
     for i in range(len(d_pairs)):
         heapq.heappush(pairs, d_pairs[i])
 
-    cur_potential = 0.
+    cur_potential = 0.0
     for i in range(len(pairs)):
         cur_potential -= pairs[i][0]
 
@@ -208,14 +202,13 @@ def get_top_n_pairs(state: DAState, n: int):
 
 @njit
 def cmvm_cse(state: DAState, progress=None, beams: int = 1, dc=None):
-    assert len(state.pairs) > 0, f"{len(state.pairs)}"
+    assert len(state.pairs) > 0, f'{len(state.pairs)}'
     top_pairs = get_top_n_pairs(state, beams)
     states_0 = [update_state(state, top_pairs[i], dc) for i in range(len(top_pairs))]
 
     next_score = np.full((beams, beams), -1, dtype=np.float64)
     use_n = np.empty(beams, dtype=np.int64)
     while True:
-
         use_n[:] = 0
         next_score[:] = -1
         for i in range(len(states_0)):
@@ -274,7 +267,7 @@ def compile_kernel_mono(
     symmetrics: list[bool],
     depths: list[int],
     n_beams: int = 1,
-    dc: int | None = None
+    dc: int | None = None,
 ):
     state = init_state(kernel, signs, bits, int_bits, symmetrics, depths)
     _state = cmvm_cse(state, beams=n_beams, dc=dc)

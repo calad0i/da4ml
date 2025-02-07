@@ -1,13 +1,12 @@
 import re
-from collections.abc import Callable
 import typing
+from collections.abc import Callable
+
 import numpy as np
 
-from .codegen import Namer
-from .utils import DAState
-from .graph_compile import graph_compile_states
 from .cmvm import compile_kernel
-from .codegen import PyCodegenBackend
+from .codegen import Namer, PyCodegenBackend
+from .graph_compile import graph_compile_states
 
 m = re.compile(r'Latency: (\d+)')
 T = typing.TypeVar('T')
@@ -25,7 +24,7 @@ def fn_from_kernel(
     n_inp_max: int = -1,
     n_out_max: int = -1,
     codegen_backend: PyCodegenBackend = PyCodegenBackend(),
-    signed_balanced_reduction: bool = True
+    signed_balanced_reduction: bool = True,
 ) -> tuple[Callable[[list[T]], list[T]], str]:
     """Compile a CMVM operation, with the constant kernel, into a function with only accumulation/subtraction/shift operations.
 
@@ -62,7 +61,7 @@ def fn_from_kernel(
         _description_
     """
 
-    assert n_beams == 1, "n_beams>1 is disabled for now. Change line 159 & 160 in this file to enable it."
+    assert n_beams == 1, 'n_beams>1 is disabled for now. Change line 159 & 160 in this file to enable it.'
     if depths is None:
         depths = [0] * len(signs)
     states = compile_kernel(
@@ -75,7 +74,7 @@ def fn_from_kernel(
         n_beams=n_beams,
         dc=dc,
         n_inp_max=n_inp_max,
-        n_out_max=n_out_max
+        n_out_max=n_out_max,
     )
     with Namer().tmp_scope():
         inp, out = graph_compile_states(states, signed_balanced_reduction)

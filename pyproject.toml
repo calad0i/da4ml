@@ -1,46 +1,60 @@
 [build-system]
-requires = ["setuptools>=67.8", "setuptools_scm>=8"]
-
 build-backend = "setuptools.build_meta"
+
+requires = [ "setuptools>=67.8", "setuptools-scm>=8" ]
 
 [project]
 name = "da4ml"
-version = "0.0.1"
-authors = [{ name = "Chang Sun", email = "chsun@cern.ch" }]
 description = "Digital Arithmetic for Machine Learning"
 readme = "README.md"
-requires-python = ">=3.10"
-license = { text = "GNU Lesser General Public License v3 (LGPLv3)" }
 keywords = [
-  "distributed arithmetic",
-  "subexpression elimination",
-  "MCM",
   "CMVM",
+  "distributed arithmetic",
   "hls4ml",
+  "MCM",
+  "subexpression elimination",
 ]
 
+license = { text = "GNU Lesser General Public License v3 (LGPLv3)" }
+authors = [ { name = "Chang Sun", email = "chsun@cern.ch" } ]
+requires-python = ">=3.10"
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "Operating System :: OS Independent",
+  "Development Status :: 4 - Beta",
   "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
-  "Development Status :: 2 - Pre-Alpha",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
+dynamic = [ "version" ]
 
-[project.urls]
-repository = "https://github.com/calad0i/da4ml"
-
+urls.repository = "https://github.com/calad0i/da4ml"
 
 [tool.setuptools]
-packages = ["da4ml"]
+packages = [ "da4ml" ]
 include-package-data = true
 package-dir = { "" = "src" }
-
 
 [tool.setuptools_scm]
 write_to = "src/da4ml/_version.py"
 
-[project.optional-dependencies]
-docs = ["sphinx", "sphinx-rtd-theme", "myst-parser", "pyparsing"]
+[tool.ruff]
+target-version = "py310"
 
+line-length = 130
+indent-width = 4
 
-dependencies = ['numba>=0.60', "numpy"]
+include = [ "src/**/*.py" ]
+
+format.indent-style = "space"
+format.quote-style = "single"
+format.skip-magic-trailing-comma = false
+format.docstring-code-line-length = 130
+format.docstring-code-format = true
+lint.select = [ "E", "F", "F401", "I", "W" ]
+lint.ignore = [ "E501", "F403", "F405" ]
+lint.explicit-preview-rules = true
+lint.fixable = [ "ALL" ]
+lint.unfixable = [  ]

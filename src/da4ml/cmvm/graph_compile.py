@@ -1,13 +1,12 @@
 import numpy as np
 
-from .utils import OpCode, DAState
-from .nb_fixed_precision import NBFixedPrecision
-from .fixed_variable import FixedVariable
 from .balanced_reduction import balanced_reduction
+from .fixed_variable import FixedVariable
+from .nb_fixed_precision import NBFixedPrecision
+from .utils import DAState, OpCode
 
 
 def var_from_nb_var(op_codes: OpCode, nb_variables: list[NBFixedPrecision], bias_idx: int):
-
     variables: list[FixedVariable] = []
 
     i = 0
@@ -18,7 +17,7 @@ def var_from_nb_var(op_codes: OpCode, nb_variables: list[NBFixedPrecision], bias
         if pos1 >= 0:
             break
         v = FixedVariable.from_nb_precision(nb_variables[pos0], name=f'inp[{pos0+bias_idx}]')
-        v._factor = 2. ** shift
+        v._factor = 2.0**shift
         variables.append(v)
         i += 1
 
@@ -53,8 +52,8 @@ def graph_compile_states(states: list[list[DAState]], signed_balanced_reduction=
     for i, j in np.ndindex(n_split_in, n_split_out):
         state = states[i][j]
         kernel_shapes[i, j] = state.kernel.shape
-    assert np.all(np.std(kernel_shapes[:, :, 0], axis=1) == 0), "Input kernel shapes must be the same"
-    assert np.all(np.std(kernel_shapes[:, :, 1], axis=0) == 0), "Output kernel shapes must be the same"
+    assert np.all(np.std(kernel_shapes[:, :, 0], axis=1) == 0), 'Input kernel shapes must be the same'
+    assert np.all(np.std(kernel_shapes[:, :, 1], axis=0) == 0), 'Output kernel shapes must be the same'
     n_in = kernel_shapes[:, 0, 0]
     n_out = kernel_shapes[0, :, 1]
     idx_in_biases = np.cumsum([0] + list(n_in[:-1]))
@@ -79,6 +78,8 @@ def graph_compile_states(states: list[list[DAState]], signed_balanced_reduction=
         for k, buf in enumerate(_cumlist):
             output_variables[idx_out_bias + k].extend(buf)
 
-    _output_variables: list[FixedVariable] = [balanced_reduction(buf, signed=signed_balanced_reduction) for buf in output_variables]  # type: ignore
+    _output_variables: list[FixedVariable] = [
+        balanced_reduction(buf, signed=signed_balanced_reduction) for buf in output_variables
+    ]  # type: ignore
     input_variables = [v for vs in input_variables for v in vs]
     return input_variables, _output_variables

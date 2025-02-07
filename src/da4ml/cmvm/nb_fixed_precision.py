@@ -1,16 +1,8 @@
-from math import log2, ceil, floor
-from numba import njit, jit_module
-from numba.experimental import jitclass
-from numba import int32, float32, float64, int8, int64
+from math import ceil, log2
+
+from numba import int32
 from numba import types as nb_types
-from numpy.typing import NDArray
-from dataclasses import dataclass, field
-import numpy as np
-from numba import prange
-import heapq
-from collections import namedtuple
-import numba as nb
-import re
+from numba.experimental import jitclass
 
 spec = [
     ('int_min', int32),
@@ -30,7 +22,6 @@ class NBFixedPrecision:
         shift: int,
         symmetric: bool = False,
         _depth: int = 0,
-
     ):
         self.int_min = int_min
         self.int_max = int_max
@@ -39,7 +30,7 @@ class NBFixedPrecision:
         self._depth = _depth
 
         if self.int_min > self.int_max:
-            raise ValueError("int_min must be less than or equal to int_max")
+            raise ValueError('int_min must be less than or equal to int_max')
 
     @property
     def k(self) -> int:
@@ -55,15 +46,15 @@ class NBFixedPrecision:
 
     @property
     def min(self) -> float:
-        return self.int_min * 2.**(-self.shift)
+        return self.int_min * 2.0 ** (-self.shift)
 
     @property
     def max(self) -> float:
-        return self.int_max * 2.**(-self.shift)
+        return self.int_max * 2.0 ** (-self.shift)
 
     def __str__(self) -> str:
-        s = "" if self.k else "u"
-        p = f"ap_{s}fixed({self.b+self.k}, {self.i+self.k})"
+        s = '' if self.k else 'u'
+        p = f'ap_{s}fixed({self.b+self.k}, {self.i+self.k})'
         if self.int_min == self.int_max:
             return f'{p}({self.min})'
         return p
@@ -83,7 +74,6 @@ class NBFixedPrecision:
         )
 
     def __neg__(self):
-
         return NBFixedPrecision(
             -self.int_max,
             -self.int_min,

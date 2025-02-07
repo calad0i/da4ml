@@ -1,11 +1,10 @@
+import numpy as np
 from numba import njit
 from numpy.typing import NDArray
-import numpy as np
 
 
 @njit
 def _volatile_int_arr_to_csd(x: NDArray) -> NDArray[np.int8]:
-
     x = x
     N = np.max(np.ceil(np.log2(np.abs(x + 1e-19) * 1.5)))
     N = int(max(N, 1))
@@ -28,12 +27,12 @@ def to_csd(x: NDArray) -> tuple[list[NDArray[np.int8]], NDArray[np.int8]]:
         high = low = 0
     while high - low > 1:
         mid = (high + low) // 2
-        xs = x * (2.**mid)
+        xs = x * (2.0**mid)
         if np.all(xs == np.floor(xs)):
             high = mid
         else:
             low = mid
-    _x = x * (2.**high)
+    _x = x * (2.0**high)
     csd = _volatile_int_arr_to_csd(_x)
     shifts = np.arange(csd.shape[-1], dtype=np.int8) - high
     return list(csd), shifts
@@ -41,7 +40,6 @@ def to_csd(x: NDArray) -> tuple[list[NDArray[np.int8]], NDArray[np.int8]]:
 
 @njit
 def _volatile_int_arr_to_binary(x: NDArray) -> NDArray[np.int8]:
-
     x = x
     N = np.max(np.ceil(np.log2(np.abs(x) + 1)))
     N = int(max(N, 1))
@@ -64,12 +62,12 @@ def to_binary(x: NDArray) -> tuple[list[NDArray[np.int8]], NDArray[np.int8]]:
         high = low = 0
     while high - low > 1:
         mid = (high + low) // 2
-        xs = x * (2.**mid)
+        xs = x * (2.0**mid)
         if np.all(xs == np.floor(xs)):
             high = mid
         else:
             low = mid
-    _x = x * (2.**high)
+    _x = x * (2.0**high)
     csd = _volatile_int_arr_to_binary(_x)
     shifts = np.arange(csd.shape[-1], dtype=np.int8) - high
     return list(csd), shifts

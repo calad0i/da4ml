@@ -1,6 +1,7 @@
+import numpy as np
+
 from .fixed_variable import FixedVariable
 from .scoring import py_scorer
-import numpy as np
 
 
 def _balanced_reduction(vars: list[FixedVariable]):
@@ -8,21 +9,20 @@ def _balanced_reduction(vars: list[FixedVariable]):
 
     n = len(vars)
     if n == 0:
-        return FixedVariable.from_const(0.)
+        return FixedVariable.from_const(0.0)
     score_mat = np.full((len(vars), len(vars)), -np.inf, dtype=np.float32)
     for i in range(len(vars)):
         for j in range(i + 1, len(vars)):
             score_mat[i, j] = py_scorer(vars[i], vars[j]) - 1000 * (vars[i]._depth + vars[j]._depth)
 
     while n > 1:
-
         idx = np.argmax(score_mat)
         i, j = np.unravel_index(idx, score_mat.shape)
         vars[i] = vars[i] + vars[j]
         vars.pop(j)
-        score_mat[j:n - 1] = score_mat[j + 1:n]
-        score_mat[:, j:n - 1] = score_mat[:, j + 1:n]
-        score_mat = score_mat[:n - 1, :n - 1]
+        score_mat[j : n - 1] = score_mat[j + 1 : n]
+        score_mat[:, j : n - 1] = score_mat[:, j + 1 : n]
+        score_mat = score_mat[: n - 1, : n - 1]
         n -= 1
         for k in range(n):
             if k == i:
