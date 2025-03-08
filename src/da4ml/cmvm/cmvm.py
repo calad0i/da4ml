@@ -22,16 +22,6 @@ def extract_pairs(
     _stat = np.zeros((d_in, d_in, n_bit, 2), dtype=np.int64)
     process_locs = np.zeros((d_in, d_out), dtype=np.bool_)
 
-    if dc is not None:
-        depths = np.zeros(d_in, dtype=np.int64)
-        for pos in range(d_in):
-            depths[pos] = precisions[pos]._depth
-        depth_min = np.min(depths)
-        mask = depths <= depth_min + dc
-        if np.count_nonzero(mask) >= 2:
-            for n in range(d_out):
-                process_locs[:, n] = mask
-
     if updated is not None:
         for i in range(len(updated)):
             pos = updated[i]
@@ -42,6 +32,16 @@ def extract_pairs(
             for n in range(d_out):
                 if np.any(csd[pos][n]) and precisions[pos].b != 0:
                     process_locs[pos, n] = True
+
+    if dc is not None:
+        depths = np.zeros(d_in, dtype=np.int64)
+        for pos in range(d_in):
+            depths[pos] = precisions[pos]._depth
+        depth_min = np.min(depths)
+        mask = depths <= depth_min + dc
+        if np.count_nonzero(mask) >= 2:
+            for n in range(d_out):
+                process_locs[:, n] &= mask
 
     args: list[tuple[int, int, int]] = []
     for pos0 in range(d_in):

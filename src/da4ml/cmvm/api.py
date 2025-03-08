@@ -45,7 +45,7 @@ def fn_from_kernel(
     n_beams : int, optional
         Number of beams to use in beam search. Defaults to 1. (Currently disabled!)
     dc : int | None, optional
-        Delay constraint. Not implemented yet. Defaults to None.
+        Delay constraint. Not (properly) implemented yet. Defaults to None.
     n_inp_max : int, optional
         Number of inputs to process in one block. Defaults to -1 (no limit). Decrease to improve performance, but result will be less optimal.
     n_out_max : int, optional
