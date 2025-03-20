@@ -1,4 +1,5 @@
 import heapq
+from collections.abc import Sequence
 from math import ceil
 
 import numpy as np
@@ -100,11 +101,11 @@ def init_var(
 
 @njit
 def init_vars(
-    ks: list[bool],
-    bs: list[int],
-    is_: list[int],
-    symmetrics: list[bool],
-    depths: list[int],
+    ks: tuple[bool, ...],
+    bs: tuple[int, ...],
+    is_: tuple[int, ...],
+    symmetrics: tuple[bool, ...],
+    depths: tuple[int, ...],
 ):
     n = len(ks)
     vars_ = []
@@ -116,11 +117,11 @@ def init_vars(
 @njit
 def init_state(
     kernel: np.ndarray,
-    signs: list[bool],
-    bits: list[int],
-    int_bits: list[int],
-    symmetrics: list[bool],
-    depths: list[int],
+    signs: tuple[bool, ...],
+    bits: tuple[int, ...],
+    int_bits: tuple[int, ...],
+    symmetrics: tuple[bool, ...],
+    depths: tuple[int, ...],
 ):
     assert kernel.ndim == 2
     assert len(signs) == len(bits) == len(int_bits) == len(symmetrics) == len(depths) == kernel.shape[0]
@@ -261,11 +262,11 @@ def cmvm_cse(state: DAState, progress=None, beams: int = 1, dc=None):
 @njit
 def compile_kernel_mono(
     kernel: np.ndarray,
-    signs: list[bool],
-    bits: list[int],
-    int_bits: list[int],
-    symmetrics: list[bool],
-    depths: list[int],
+    signs: tuple[bool, ...],
+    bits: tuple[int, ...],
+    int_bits: tuple[int, ...],
+    symmetrics: tuple[bool, ...],
+    depths: tuple[int, ...],
     n_beams: int = 1,
     dc: int | None = None,
 ):
@@ -274,14 +275,13 @@ def compile_kernel_mono(
     return _state
 
 
-# @njit(cache=True)
 def compile_kernel(
     kernel: np.ndarray,
-    signs: list[bool],
-    bits: list[int],
-    int_bits: list[int],
-    symmetrics: list[bool],
-    depths: list[int],
+    signs: Sequence[bool],
+    bits: Sequence[int],
+    int_bits: Sequence[int],
+    symmetrics: Sequence[bool],
+    depths: Sequence[int],
     n_beams: int = 1,
     dc: int | None = None,
     n_inp_max: int = -1,
@@ -315,11 +315,11 @@ def compile_kernel(
 
         # unify input type to prevent recompilation
         _kernel = np.ascontiguousarray(_kernel)
-        _signs = [bool(v) for v in _signs]
-        _bits = [int(v) for v in _bits]
-        _int_bits = [int(v) for v in _int_bits]
-        _symmetrics = [bool(v) for v in _symmetrics]
-        _depths = [int(v) for v in _depths]
+        _signs = tuple(bool(v) for v in _signs)
+        _bits = tuple(int(v) for v in _bits)
+        _int_bits = tuple(int(v) for v in _int_bits)
+        _symmetrics = tuple(bool(v) for v in _symmetrics)
+        _depths = tuple(int(v) for v in _depths)
         try:
             states[i][j] = compile_kernel_mono(_kernel, _signs, _bits, _int_bits, _symmetrics, _depths, n_beams, dc)
         except AssertionError:
