@@ -51,5 +51,5 @@ def scorer(p1: NBFixedPrecision, p2: NBFixedPrecision, dshift: int, dsign: int) 
     p2 = p2 << dshift
     rs = resource_scorer(p1, p2)
     ls = latency_scorer(p1, p2)
-    score = rs + ls
+    score = rs + ls * 10
     return score

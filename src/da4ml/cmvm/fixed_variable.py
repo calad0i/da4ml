@@ -99,6 +99,12 @@ class FixedVariable:
         if not isinstance(other, FixedVariable):
             return self + self.from_const(other, self.namer)
 
+        if self._factor < 0:
+            if other._factor < 0:
+                return -(-self + -other)
+            else:
+                return other + self
+
         assert self.namer is other.namer, 'Namer must be the same'
         shift = max(self.shift, other.shift)
         _shift0, _shift1 = shift - self.shift, shift - other.shift
