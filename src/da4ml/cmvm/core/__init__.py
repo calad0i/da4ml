@@ -62,7 +62,7 @@ def cmvm(
     assert len(_qintervals) == kernel.shape[0]
     assert len(_inp_latencies) == kernel.shape[0]
 
-    state = create_state(kernel, _qintervals, _inp_latencies, adder_size=adder_size, carry_size=carry_size)
+    state = create_state(kernel, _qintervals, _inp_latencies)
     while True:
         if len(state.freq_stat) == 0:
             break
@@ -145,8 +145,8 @@ def to_solution(
         for i, (i_in, shift) in enumerate(zip(idx, shifts)):
             sub[i] = expr[i_in, i_out, shift] == -1
 
-        qints = [state.qintervals[i] for i in idx]
-        lats = [state.latencies[i] for i in idx]
+        qints = [state.ops[i].qint for i in idx]
+        lats = [state.ops[i].latency for i in idx]
 
         # No reduction required, dump the realized value directly
         if len(sub) == 1:
@@ -176,10 +176,10 @@ def to_solution(
             lat = max(lat0, lat1) + dlat
 
             if sub0:
-                op = Op(id1, id0, not sub1, shift0 - shift1, dlat, dcost)
+                op = Op(id1, id0, not sub1, shift0 - shift1, qint, lat, dcost)
                 shift = shift1
             else:
-                op = Op(id0, id1, sub0 != sub1, shift1 - shift0, dlat, dcost)
+                op = Op(id0, id1, sub0 != sub1, shift1 - shift0, qint, lat, dcost)
                 shift = shift0
 
             fp_align = -int(log2(qint.step)) - shift

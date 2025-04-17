@@ -65,8 +65,9 @@ class Op(NamedTuple):
     id1: int
     sub: bool
     shift: int
-    dlatency: float
-    dcost: float
+    qint: QInterval
+    latency: float
+    cost: float
 
 
 class Pair(NamedTuple):
@@ -84,8 +85,6 @@ class DAState(NamedTuple):
     shifts: tuple[NDArray[int8], NDArray[int8]]
     expr: list[NDArray[int8]]
     ops: list[Op]
-    latencies: list[float]
-    qintervals: list[QInterval]
     freq_stat: dict[Pair, int]
     kernel: NDArray[float32]
 
@@ -238,7 +237,7 @@ class Solution(NamedTuple):
     @property
     def cost(self):
         """Returns the cost of the solution."""
-        return float(sum(op.dcost for op in self.ops))
+        return float(sum(op.cost for op in self.ops))
 
     @property
     def latency(self):

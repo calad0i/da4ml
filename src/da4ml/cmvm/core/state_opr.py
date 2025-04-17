@@ -78,8 +78,6 @@ def create_state(
     kernel: np.ndarray,
     qintervals: list[QInterval],
     inp_latencies: list[float],
-    adder_size: int = -1,
-    carry_size: int = -1,
     no_stat_init: bool = False,
 ):
     assert len(qintervals) == kernel.shape[0]
@@ -124,14 +122,12 @@ def create_state(
             if stat[k] < 2.0:
                 del stat[k]
 
-    ops = [Op(i, -1, False, 0, 0.0, 0.0) for i in range(n_in)]
+    ops = [Op(i, -1, False, 0, qintervals[i], inp_latencies[i], 0.0) for i in range(n_in)]
 
     return DAState(
         shifts=shifts,
         expr=expr,
         ops=ops,
-        latencies=inp_latencies,
-        qintervals=qintervals,
         freq_stat=stat,
         kernel=kernel,
     )
@@ -221,14 +217,20 @@ def gather_matching_idxs(state: DAState, pair: Pair):
 @jit
 def pair_to_op(pair: Pair, state: DAState, adder_size: int = -1, carry_size: int = -1):
     id0, id1 = pair.id0, pair.id1
-    dcost, dlat = cost_add(
-        state.qintervals[pair.id0],
-        state.qintervals[pair.id1],
+    cost, dlat = cost_add(
+        state.ops[pair.id0].qint,
+        state.ops[pair.id1].qint,
         pair.sub,
         adder_size=adder_size,
         carry_size=carry_size,
     )
-    return Op(id0, id1, pair.sub, pair.shift, dlat, dcost)
+    lat = max(state.ops[id0].latency, state.ops[id1].latency) + dlat
+    qint = qint_add(
+        state.ops[pair.id0].qint,
+        state.ops[pair.id1].qint,
+        pair.sub,
+    )
+    return Op(id0, id1, pair.sub, pair.shift, qint, lat, cost)
 
 
 @jit
@@ -240,14 +242,11 @@ def update_expr(
 ):
     "Updates the state by implementing the operation op, excepts common 2-term pair freq update."
     id0, id1 = pair.id0, pair.id1
-    sub = pair.sub
     op = pair_to_op(pair, state, adder_size=adder_size, carry_size=carry_size)
     n_out = state.kernel.shape[1]
     n_bits = state.expr[0].shape[-1]
 
     expr = state.expr.copy()
-    latencies = state.latencies.copy()
-    qintervals = state.qintervals.copy()
     ops = state.ops.copy()
 
     ops.append(op)
@@ -260,16 +259,11 @@ def update_expr(
         expr[id1][i_out, j1] = 0
 
     expr.append(new_slice)
-    qint0, qint1 = qintervals[id0], qintervals[id1]
-    latencies.append(max(latencies[id0], latencies[id1]) + op.dlatency)
-    qintervals.append(qint_add(qint0, qint1, sub1=sub))
 
     return DAState(
         shifts=state.shifts,
         expr=expr,
         ops=ops,
-        latencies=latencies,
-        qintervals=qintervals,
         freq_stat=state.freq_stat,
         kernel=state.kernel,
     )

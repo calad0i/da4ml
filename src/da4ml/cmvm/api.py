@@ -39,7 +39,7 @@ def minimal_latency(
         The minimal latency for the given kernel, QInterval, and input latencies.
     """
 
-    state = create_state(kernel, qintervals, latencies, adder_size=adder_size, carry_size=carry_size, no_stat_init=True)
+    state = create_state(kernel, qintervals, latencies, no_stat_init=True)
     solution = to_solution(state, latencies, qintervals, adder_size=adder_size, carry_size=carry_size)
     lat = max(solution.out_lat)
     return lat
