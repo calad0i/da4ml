@@ -172,11 +172,8 @@ class Solution(NamedTuple):
 
     """
 
-    inp_qint: list[QInterval]
-    inp_lat: list[float]
-    in_shift: list[int]
-    out_qint: list[QInterval]
-    out_lat: list[float]
+    shape: tuple[int, int]
+    inp_shift: list[int]
     out_idx: list[int]
     out_shift: list[int]
     out_neg: list[bool]
@@ -203,13 +200,15 @@ class Solution(NamedTuple):
         buf = np.empty(len(self.ops), dtype=object)
         inp = np.asarray(inp)
 
+        n_in = self.shape[0]
+        inp_qint = [op.qint for op in self.ops[n_in:]]
         if quantize:  # TRN and WRAP
-            k, i, f = map(np.array, zip(*map(minimal_kif, self.inp_qint)))
+            k, i, f = map(np.array, zip(*map(minimal_kif, inp_qint)))
             eps = 2.0**-f
             _low, _high = -k * 2.0 ** (i + f), 2.0 ** (i + f) - 1
             inp = eps * ((np.floor(inp / eps) - _low) % (_high - _low) + _low)
 
-        inp = inp * (2.0 ** np.asarray(self.in_shift))
+        inp = inp * (2.0 ** np.asarray(self.inp_shift))
         for i, op in enumerate(self.ops):
             if op.id1 == -1:
                 buf[i] = inp[op.id0]
@@ -228,9 +227,8 @@ class Solution(NamedTuple):
     @property
     def kernel(self):
         """the kernel represented by the solution."""
-        n_in, n_out = len(self.inp_qint), len(self.out_qint)
-        kernel = np.empty((n_in, n_out), dtype=np.float32)
-        for i, one_hot in enumerate(np.identity(n_out)):
+        kernel = np.empty(self.shape, dtype=np.float32)
+        for i, one_hot in enumerate(np.identity(self.shape[1])):
             kernel[i] = self(one_hot)
         return kernel
 
@@ -242,13 +240,36 @@ class Solution(NamedTuple):
     @property
     def latency(self):
         """Returns the latency of the solution."""
-        return min(self.out_lat), max(self.out_lat)
+        latency = [self.ops[i].latency for i in self.out_idx]
+        if len(latency) == 0:
+            return 0.0, 0.0
+        return min(latency), max(latency)
 
     def __repr__(self):
-        n_in, n_out = len(self.inp_qint), len(self.out_qint)
+        n_in, n_out = self.shape
         cost = self.cost
         lat_min, lat_max = self.latency
         return f'Solution([{n_in}x{n_out}], cost={cost}, latency={lat_min}-{lat_max})'
+
+    @property
+    def out_latency(self):
+        """Returns the output latency of the solution."""
+        return [self.ops[i].latency if i >= 0 else 0.0 for i in self.out_idx]
+
+    @property
+    def out_qint(self):
+        """Returns the output quantization intervals of the solution."""
+        return [self.ops[i].qint if i >= 0 else QInterval(0.0, 0.0, np.inf) for i in self.out_idx]
+
+    @property
+    def inp_latency(self):
+        """Returns the input latencies of the solution."""
+        return [self.ops[i].latency for i in range(self.shape[0])]
+
+    @property
+    def inp_qint(self):
+        """Returns the input quantization intervals of the solution."""
+        return [self.ops[i].qint for i in range(self.shape[0])]
 
 
 class CascadedSolution(NamedTuple):
@@ -310,28 +331,28 @@ class CascadedSolution(NamedTuple):
         return self.solutions[-1].latency
 
     @property
-    def out_qint(self):
-        return self.solutions[-1].out_qint
-
-    @property
-    def out_lat(self):
-        return self.solutions[-1].out_lat
-
-    @property
     def inp_qint(self):
         return self.solutions[0].inp_qint
 
     @property
-    def inp_lat(self):
-        return self.solutions[0].inp_lat
+    def inp_latency(self):
+        return self.solutions[0].inp_latency
+
+    @property
+    def out_qint(self):
+        return self.solutions[-1].out_qint
+
+    @property
+    def out_latency(self):
+        return self.solutions[-1].out_latency
 
     @property
     def shape(self):
-        return len(self.solutions[0].inp_qint), len(self.solutions[-1].out_qint)
+        return self.solutions[0].shape[0], self.solutions[-1].shape[1]
 
     @property
-    def in_shift(self):
-        return self.solutions[0].in_shift
+    def inp_shift(self):
+        return self.solutions[0].inp_shift
 
     @property
     def out_shift(self):

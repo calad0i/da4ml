@@ -40,9 +40,9 @@ def minimal_latency(
     """
 
     state = create_state(kernel, qintervals, latencies, no_stat_init=True)
-    solution = to_solution(state, latencies, qintervals, adder_size=adder_size, carry_size=carry_size)
-    lat = max(solution.out_lat)
-    return lat
+    sol = to_solution(state, adder_size=adder_size, carry_size=carry_size)
+    latencies = [sol.ops[i].latency if i >= 0 else 0.0 for i in sol.out_idx]
+    return max(latencies)
 
 
 @jit(cache=True)
@@ -120,21 +120,24 @@ def solve(
         sol0 = _solve(
             mat0, method=method0, qintervals=_qintervals, latencies=_inp_latencies, adder_size=adder_size, carry_size=carry_size
         )
-        if max(sol0.out_lat) > latency_allowed:
+        latencies0 = [sol0.ops[i].latency if i >= 0 else 0.0 for i in sol0.out_idx]
+        qintervals0 = [sol0.ops[i].qint if i >= 0 else QInterval(0.0, 0.0, np.inf) for i in sol0.out_idx]
+        if max(latencies0) > latency_allowed:
             # Prevent infinite loop, shouldn't happen though
             if not method0 == method1 == 'wmc-dc' or decompose_dc > 0:
                 decompose_dc -= 1
                 continue
         sol1 = _solve(
-            mat1, method=method1, qintervals=sol0.out_qint, latencies=sol0.out_lat, adder_size=adder_size, carry_size=carry_size
+            mat1, method=method1, qintervals=qintervals0, latencies=latencies0, adder_size=adder_size, carry_size=carry_size
         )
-        if max(sol1.out_lat) > latency_allowed:
+        latencies1 = [sol1.ops[i].latency if i >= 0 else 0.0 for i in sol1.out_idx]
+        if max(latencies1) > latency_allowed:
             # Prevent infinite loop, shouldn't happen though
             if not method0 == method1 == 'wmc-dc' or decompose_dc > 0:
                 decompose_dc -= 1
                 continue
         break
-    if max(sol1.out_lat) > latency_allowed:
+    if max(latencies1) > latency_allowed:
         # Should never happen
-        print(f'Latency constraint not satisfied: {int(latency_allowed)} < {int(max(sol1.out_lat))}')
+        print(f'Latency constraint not satisfied: {int(latency_allowed)} < {int(max(latencies1))}')
     return CascadedSolution((sol0, sol1))

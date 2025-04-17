@@ -217,7 +217,7 @@ def gather_matching_idxs(state: DAState, pair: Pair):
 @jit
 def pair_to_op(pair: Pair, state: DAState, adder_size: int = -1, carry_size: int = -1):
     id0, id1 = pair.id0, pair.id1
-    cost, dlat = cost_add(
+    dlat, cost = cost_add(
         state.ops[pair.id0].qint,
         state.ops[pair.id1].qint,
         pair.sub,

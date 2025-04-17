@@ -93,10 +93,8 @@ def cmvm(
 @jit(cache=True)
 def to_solution(
     state: DAState,
-    inp_latencies: list[float] | None = None,
-    inp_qintervals: list[QInterval] | None = None,
-    adder_size: int = -1,
-    carry_size: int = -1,
+    adder_size: int,
+    carry_size: int,
 ):
     """Converts the DAState to a Solution object with balanced tree reduction for the non-extracted bits in the kernel.
 
@@ -124,7 +122,7 @@ def to_solution(
     """
 
     ops = state.ops.copy()
-    n_in, n_out = state.kernel.shape
+    n_out = state.kernel.shape[1]
     expr = np.empty((len(state.expr), *state.expr[0].shape), dtype=np.int8)
     for i, v in enumerate(state.expr):
         expr[i] = v
@@ -158,7 +156,7 @@ def to_solution(
         # Output is zero
         if len(sub) == 0:
             out_idx.append(-1)  # -1 means output constant zero
-            out_qints.append(QInterval(0.0, 0.0, 0.0))
+            out_qints.append(QInterval(0.0, 0.0, np.inf))
             out_lats.append(0.0)
             out_neg.append(False)
             continue
@@ -194,21 +192,9 @@ def to_solution(
         out_neg.append(sub)
         out_shift[i_out] = out_shift[i_out] + shift0
 
-    if inp_qintervals is None:
-        inp_qints = [QInterval(-128.0, 127.0, 1.0) for _ in range(n_in)]
-    else:
-        inp_qints = inp_qintervals
-    if inp_latencies is None:
-        inp_lats = [0.0 for _ in range(n_in)]
-    else:
-        inp_lats = inp_latencies
-
     return Solution(
-        inp_qint=inp_qints,
-        inp_lat=inp_lats,
-        in_shift=list(in_shift),
-        out_qint=out_qints,
-        out_lat=out_lats,
+        shape=state.kernel.shape,  # type: ignore
+        inp_shift=list(in_shift),
         out_idx=out_idx,
         out_shift=list(out_shift),
         out_neg=out_neg,
@@ -228,4 +214,4 @@ def _solve(
     state = cmvm(
         kernel, method=method, qintervals=qintervals, inp_latencies=latencies, adder_size=adder_size, carry_size=carry_size
     )
-    return to_solution(state, inp_latencies=latencies, inp_qintervals=qintervals, adder_size=adder_size, carry_size=carry_size)
+    return to_solution(state, adder_size=adder_size, carry_size=carry_size)
