@@ -1,6 +1,6 @@
 from functools import reduce
 from math import ceil, log2
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 from numba import jit
@@ -73,7 +73,6 @@ class DAState(NamedTuple):
     """Internal state of the DA algorithm."""
 
     shifts: tuple[NDArray[int8], NDArray[int8]]
-    expr_idx: list[int]
     expr: list[NDArray[int8]]
     ops: list[Op]
     latencies: list[float]
@@ -111,7 +110,11 @@ def _minimal_kif(qi: QInterval, symmetric: bool = False) -> Precision:
     return Precision(keep_negative=keep_negative, integers=integers, fractional=fractional)
 
 
-minimal_kif = jit(_minimal_kif)
+if TYPE_CHECKING:
+
+    def minimal_kif(qi: QInterval, symmetric: bool = False) -> Precision: ...
+else:
+    minimal_kif = jit(_minimal_kif)
 
 
 class Solution(NamedTuple):

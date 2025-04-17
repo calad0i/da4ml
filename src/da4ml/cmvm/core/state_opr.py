@@ -97,7 +97,6 @@ def create_state(
     # Dirty numba typing trick
     stat = {Op(-1, -1, False, 0, 0.0, 0.0): 0}
     del stat[Op(-1, -1, False, 0, 0.0, 0.0)]
-    expr_idx = list(range(len(expr)))
 
     # Loop over outputs, in0, in1, shift0, shift1 to gather all two-term pairs
     # Force i1>=i0
@@ -136,7 +135,6 @@ def create_state(
 
     return DAState(
         shifts=shifts,
-        expr_idx=expr_idx,
         expr=expr,
         ops=ops,
         latencies=inp_latencies,
@@ -163,10 +161,9 @@ def update_stats(
 
     n_constructed = len(state.expr)
     modified = [n_constructed - 1]
-    if id0 in state.expr_idx:
-        modified.append(state.expr_idx.index(id0))
-    if id1 != id0 and id1 in state.expr_idx:
-        modified.append(state.expr_idx.index(id1))
+    modified.append(id0)
+    if id1 != id0:
+        modified.append(id1)
 
     n_bits = state.expr[0].shape[-1]
 
@@ -178,21 +175,20 @@ def update_stats(
                     # Avoid double counting of the two locations when _i0 != _i1
                     continue
                 # Order inputs, as _in0 can be either in0 or in1, range of _in is not restricted
-                in0, in1 = (_in0, _in1) if _in0 <= _in1 else (_in1, _in0)
+                id0, id1 = (_in0, _in1) if _in0 <= _in1 else (_in1, _in0)
                 for j0 in range(n_bits):
-                    bit0 = state.expr[in0][i_out, j0]
+                    bit0 = state.expr[id0][i_out, j0]
                     if not bit0:
                         continue
                     for j1 in range(n_bits):
-                        bit1 = state.expr[in1][i_out, j1]
+                        bit1 = state.expr[id1][i_out, j1]
                         if not bit1:
                             continue
-                        if in0 == in1 and j0 <= j1:
+                        if id0 == id1 and j0 <= j1:
                             continue
-                        id0, id1 = state.expr_idx[in0], state.expr_idx[in1]
                         dlat, dcost = cost_add(
-                            state.qintervals[in0],
-                            state.qintervals[in1],
+                            state.qintervals[id0],
+                            state.qintervals[id1],
                             bit0 != bit1,
                             adder_size=adder_size,
                             carry_size=carry_size,
@@ -211,7 +207,6 @@ def update_stats(
 def gather_matching_idxs(state: DAState, op: Op):
     """Generates all i_out, j0, j1 ST expr[i_out][in0, j0] and expr[i_out][in1, j1] corresponds to op provided."""
     id0, id1 = op.id0, op.id1
-    in0, in1 = state.expr_idx.index(id0), state.expr_idx.index(id1)
     shift = op.shift
     sub = op.sub
     n_out = state.kernel.shape[1]
@@ -219,7 +214,7 @@ def gather_matching_idxs(state: DAState, op: Op):
 
     flip = False
     if shift < 0:
-        in0, in1 = in1, in0
+        id0, id1 = id1, id0
         shift = -shift
         flip = True
 
@@ -227,9 +222,9 @@ def gather_matching_idxs(state: DAState, op: Op):
 
     for j0 in range(n_bits - shift):
         for i_out in range(n_out):
-            bit0 = state.expr[in0][i_out, j0]
+            bit0 = state.expr[id0][i_out, j0]
             j1 = j0 + shift
-            bit1 = state.expr[in1][i_out, j1]
+            bit1 = state.expr[id1][i_out, j1]
             if sign * bit1 * bit0 != 1:
                 continue
 
@@ -246,12 +241,10 @@ def update_expr(
 ):
     "Updates the state by implementing the operation op, excepts common 2-term pair freq update."
     id0, id1 = op.id0, op.id1
-    in0, in1 = state.expr_idx.index(id0), state.expr_idx.index(id1)
     sub = op.sub
     n_out = state.kernel.shape[1]
     n_bits = state.expr[0].shape[-1]
 
-    expr_idx = state.expr_idx.copy()
     expr = state.expr.copy()
     latencies = state.latencies.copy()
     qintervals = state.qintervals.copy()
@@ -262,34 +255,31 @@ def update_expr(
     new_slice = np.zeros((n_out, n_bits), dtype=np.int8)
 
     for i_out, j0, j1 in gather_matching_idxs(state, op):
-        new_slice[i_out, j0] = expr[in0][i_out, j0]
-        expr[in0][i_out, j0] = 0
-        expr[in1][i_out, j1] = 0
+        new_slice[i_out, j0] = expr[id0][i_out, j0]
+        expr[id0][i_out, j0] = 0
+        expr[id1][i_out, j1] = 0
 
     expr.append(new_slice)
-    expr_idx.append(len(ops) - 1)
-    qint0, qint1 = qintervals[in0], qintervals[in1]
-    latencies.append(max(latencies[in0], latencies[in1]) + op.dlatency)
+    qint0, qint1 = qintervals[id0], qintervals[id1]
+    latencies.append(max(latencies[id0], latencies[id1]) + op.dlatency)
     qintervals.append(qint_add(qint0, qint1, sub1=sub))
 
-    if in0 != in1:
-        if in0 > in1:
-            it = [in0, in1]
-        else:
-            it = [in1, in0]
-    else:
-        it = [in0]
+    # if id0 != id1:
+    #     if id0 > id1:
+    #         it = [id0, id1]
+    #     else:
+    #         it = [id1, id0]
+    # else:
+    #     it = [id0]
 
-    for i in it:
-        if np.all(expr[i] == 0):
-            expr.pop(i)
-            expr_idx.pop(i)
-            latencies.pop(i)
-            qintervals.pop(i)
+    # for i in it:
+    #     if np.all(expr[i] == 0):
+    #         expr.pop(i)
+    #         latencies.pop(i)
+    #         qintervals.pop(i)
 
     return DAState(
         shifts=state.shifts,
-        expr_idx=expr_idx,
         expr=expr,
         ops=ops,
         latencies=latencies,

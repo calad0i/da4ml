@@ -22,8 +22,7 @@ def idx_mc_dc(state: DAState, absolute: bool = False):
         return -1
     factor = max(freqs) + 1
     lats = state.latencies
-    _idx = state.expr_idx
-    lat_penalty = [abs(lats[_idx.index(op.id1)] - lats[_idx.index(op.id0)]) * factor for op in state.freq_stat.keys()]
+    lat_penalty = [abs(lats[op.id1] - lats[op.id0]) * factor for op in state.freq_stat.keys()]
     score = [freq - lat_penalty[i] for i, freq in enumerate(freqs)]
     max_score = max(score)
     if absolute and max_score < 0:
@@ -49,8 +48,8 @@ def idx_wmc(state: DAState):
     keys = list(state.freq_stat.keys())
     score = np.empty(len(freqs), dtype=np.float32)
     for i, (k, v) in enumerate(zip(keys, freqs)):
-        in0, in1 = state.expr_idx.index(k.id0), state.expr_idx.index(k.id1)
-        qint0, qint1 = state.qintervals[in0], state.qintervals[in1]
+        id0, id1 = k.id0, k.id1
+        qint0, qint1 = state.qintervals[id0], state.qintervals[id1]
         n_overlap, n_total = overlap_and_total(qint0, qint1)
         score[i] = v * (2 * n_overlap - n_total)
     max_score = np.max(score)
@@ -69,9 +68,9 @@ def idx_wmc_dc(state: DAState, absolute: bool = False):
     keys = list(state.freq_stat.keys())
     score = np.empty(len(freqs), dtype=np.float32)
     for i, (k, v) in enumerate(zip(keys, freqs)):
-        in0, in1 = state.expr_idx.index(k.id0), state.expr_idx.index(k.id1)
-        qint0, qint1 = state.qintervals[in0], state.qintervals[in1]
-        lat0, lat1 = state.latencies[in0], state.latencies[in1]
+        id0, id1 = k.id0, k.id1
+        qint0, qint1 = state.qintervals[id0], state.qintervals[id1]
+        lat0, lat1 = state.latencies[id0], state.latencies[id1]
         n_overlap, n_total = overlap_and_total(qint0, qint1)
         score[i] = v * (2 * n_overlap - n_total) - 256 * abs(lat0 - lat1)
     if absolute and np.max(score) < 0:

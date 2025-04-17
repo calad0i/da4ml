@@ -128,7 +128,6 @@ def to_solution(
     expr = np.empty((len(state.expr), *state.expr[0].shape), dtype=np.int8)
     for i, v in enumerate(state.expr):
         expr[i] = v
-    expr_idx = np.array(state.expr_idx)
     in_shifts, out_shifts = state.shifts
 
     out_qints = []
@@ -141,14 +140,13 @@ def to_solution(
     _global_id = len(ops)
     for i_out in range(n_out):
         heap = []
-        _idx, shifts = np.where(expr[:, i_out] != 0)
-        sub = np.empty(len(_idx), dtype=np.bool_)
-        for i, (i_in, shift) in enumerate(zip(_idx, shifts)):
+        idx, shifts = np.where(expr[:, i_out] != 0)
+        sub = np.empty(len(idx), dtype=np.bool_)
+        for i, (i_in, shift) in enumerate(zip(idx, shifts)):
             sub[i] = expr[i_in, i_out, shift] == -1
 
-        idx = expr_idx[_idx]
-        qints = [state.qintervals[i] for i in _idx]
-        lats = [state.latencies[i] for i in _idx]
+        qints = [state.qintervals[i] for i in idx]
+        lats = [state.latencies[i] for i in idx]
 
         # No reduction required, dump the realized value directly
         if len(sub) == 1:
