@@ -29,7 +29,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 dynamic = [ "version" ]
-dependencies = [ "llvmlite>=0.43", "numba>=0.60" ]
+dependencies = [ "llvmlite>=0.44", "numba>=0.61" ]
 urls.repository = "https://github.com/calad0i/da4ml"
 
 [tool.setuptools]
@@ -54,7 +54,7 @@ format.skip-magic-trailing-comma = false
 format.docstring-code-line-length = 130
 format.docstring-code-format = true
 lint.select = [ "E", "F", "F401", "I", "W" ]
-lint.ignore = [ "E501", "F403", "F405" ]
+lint.ignore = [ "E501", "E741", "F403", "F405" ]
 lint.explicit-preview-rules = true
 lint.fixable = [ "ALL" ]
 lint.unfixable = [  ]

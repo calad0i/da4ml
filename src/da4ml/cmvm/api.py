@@ -1,91 +1,140 @@
-import re
-import typing
-from collections.abc import Callable
+from math import ceil, log2
 
 import numpy as np
+from numba import jit
 
-from .cmvm import compile_kernel
-from .codegen import Namer, PyCodegenBackend
-from .graph_compile import graph_compile_states
-
-m = re.compile(r'Latency: (\d+)')
-T = typing.TypeVar('T')
+from .core import _solve, create_state, to_solution
+from .types import CascadedSolution, QInterval
+from .util import kernel_decompose
 
 
-def fn_from_kernel(
+@jit(cache=True)
+def minimal_latency(
     kernel: np.ndarray,
-    signs: list[bool],
-    bits: list[int],
-    int_bits: list[int],
-    symmetrics: list[bool],
-    depths: list[int] | None = None,
-    n_beams: int = 1,
-    dc: int | None = None,
-    n_inp_max: int = -1,
-    n_out_max: int = -1,
-    codegen_backend: PyCodegenBackend = PyCodegenBackend(),
-    signed_balanced_reduction: bool = True,
-) -> tuple[Callable[[list[T]], list[T]], str]:
-    """Compile a CMVM operation, with the constant kernel, into a function with only accumulation/subtraction/shift operations.
+    qintervals: list[QInterval],
+    latencies: list[float],
+    carry_size: int = -1,
+    adder_size: int = -1,
+):
+    """Fast latency calculation for a given kernel, QInterval, and input latencies.
+    When carry_size=-1, and the input latency is constant `l`:
+    this will be the same as `l + max(ceiling(log2(max(#CSD bits for each column, 1))))`.
 
     Parameters
     ----------
     kernel : np.ndarray
-        The kernel to compile. Must be of shape (n_inp, n_out).
-    signs : list[bool]
-        If the input is signed. Must be of length n_inp.
-    bits : list[int]
-        The bitwidth of the inputs. Must be of length n_inp.
-    int_bits : list[int]
-        The number of integer bits in the inputs (incl. sign bit!). Must be of length n_inp.
-    symmetrics : list[bool]
-        If the input is symmetricly quantized. Must be of length n_inp.
-    depths : list[int]|None, optional
-        The depth associated with each input. Must be of length n_inp. Defaults to [0]*n_inp.
-    n_beams : int, optional
-        Number of beams to use in beam search. Defaults to 1. (Currently disabled!)
-    dc : int | None, optional
-        Delay constraint. Not (properly) implemented yet. Defaults to None.
-    n_inp_max : int, optional
-        Number of inputs to process in one block. Defaults to -1 (no limit). Decrease to improve performance, but result will be less optimal.
-    n_out_max : int, optional
-        Number of outputs to process in one block. Defaults to -1 (no limit). Decrease to improve performance, but result will be less optimal.
-    codegen_backend : PyCodegenBackend, optional
-        The codegen backend to be used. Defaults to PyCodegenBackend().
-    signed_balanced_reduction : bool, optional
-        If the reduction tree should isolate the plus and minus terms. Set to False to improve latency. Defaults to True.
+        The input kernel matrix.
+    qintervals : list[QInterval]
+        List of QIntervals for each input.
+    latencies : list[float]
+        List of latencies for each input
+    carry_size : int, optional
+        The size of the carry unit for latency computation, by default -1 (fixed latency for each addition operation)
+    adder_size : int, optional
+        The size of the adder unit for latency computation, by default -1 (fixed cost for each addition operation)
 
     Returns
     -------
-    tuple[Callable[[list[T]], list[T]], str]
-        fn : Callable[[list[T]], list[T]]
-            The compiled python function. It takes a list of inputs and returns a list of outputs with only accumulation/subtraction/powers of 2 operations.
-        fn_str : str
-            The code of the compiled function, depending on the codegen_backend used.
+    float
+        The minimal latency for the given kernel, QInterval, and input latencies.
     """
 
-    assert n_beams == 1, 'n_beams>1 is disabled for now. Change line 159 & 160 in this file to enable it.'
-    if depths is None:
-        depths = [0] * len(signs)
-    states = compile_kernel(
-        kernel=kernel,
-        signs=signs,
-        bits=bits,
-        int_bits=int_bits,
-        symmetrics=symmetrics,
-        depths=depths,
-        n_beams=n_beams,
-        dc=dc,
-        n_inp_max=n_inp_max,
-        n_out_max=n_out_max,
-    )
-    with Namer().tmp_scope():
-        inp, out = graph_compile_states(states, signed_balanced_reduction)
-        fn, fn_str = codegen_backend(inp, out)
-    return fn, fn_str
+    state = create_state(kernel, qintervals, latencies, adder_size=adder_size, carry_size=carry_size, no_stat_init=True)
+    solution = to_solution(state, latencies, qintervals, adder_size=adder_size, carry_size=carry_size)
+    lat = max(solution.out_lat)
+    return lat
 
 
-def cost(fn_str: str):
-    n_add = fn_str.count('\n') - 3 - fn_str.count('out[')
-    latency = m.findall(fn_str)[-1]
-    return n_add, int(latency)
+@jit(cache=True)
+def solve(
+    kernel: np.ndarray,
+    method0: str = 'wmc',
+    method1: str = 'auto',
+    hard_dc: int = -1,
+    decompose_dc: int = -1,
+    qintervals: list[QInterval] | None = None,
+    inp_latencies: list[float] | None = None,
+    adder_size: int = -1,
+    carry_size: int = -1,
+) -> CascadedSolution:
+    """Optimized implementation of a CMVM computation with cascaded two matrices.
+
+    Parameters
+    ----------
+    kernel : np.ndarray
+        The input kernel matrix to be implemented.
+    method0 : str, optional
+        Optimization method for the first stage. Must be one of [`wmc`, `wmc-dc`, `wmc-pdc`, `mc`, `mc-dc`, `mc-pdc`].
+    method1 : str, optional
+        Optimization method for the second stage. When 'auto', it will select based on hard_dc and method0, by default 'auto'
+    hard_dc : int, optional
+        Hard depth constraint (additional latency allowed beyond minimal latency), by default -1 (no constraint)
+    decompose_dc : int, optional
+        Decomposition depth constraint, by default -1 (no constraint, follows hard_dc)
+    qintervals : list[QInterval] | None, optional
+        List of quantization intervals for each input, by default None ([-128, 127, 1] for all inputs)
+    inp_latencies : list[float] | None, optional
+        List of input latencies, by default None (0. for all inputs)
+    adder_size : int, optional
+        Size of the adder unit for latency computation, by default -1 (fixed cost for each addition)
+    carry_size : int, optional
+        Size of the carry unit for latency computation, by default -1 (fixed latency for each addition)
+
+    Returns
+    -------
+    CascadedSolution
+        A solution containing the optimized implementation of the CMVM computation with cascaded stages.
+    """
+
+    if hard_dc < 0:
+        hard_dc = int(1e9)
+
+    if method1 == 'auto':
+        if hard_dc >= 6 or method0.endswith('dc'):
+            method1 = method0
+        else:
+            method1 = method0 + '-dc'
+
+    if qintervals is None:
+        _qintervals = [QInterval(-128.0, 127.0, 1.0)] * kernel.shape[0]
+    else:
+        _qintervals = [QInterval(*qi) for qi in qintervals]
+    if inp_latencies is None:
+        _inp_latencies = [0.0] * kernel.shape[0]
+    else:
+        _inp_latencies = [float(lat) for lat in inp_latencies]
+    assert len(_qintervals) == kernel.shape[0]
+    assert len(_inp_latencies) == kernel.shape[0]
+
+    min_lat = minimal_latency(kernel, _qintervals, _inp_latencies, carry_size=carry_size, adder_size=adder_size)
+    latency_allowed = hard_dc + min_lat
+    if decompose_dc < 0:
+        decompose_dc = min(hard_dc, ceil(log2(kernel.shape[0])))
+    else:
+        decompose_dc = min(hard_dc, decompose_dc, ceil(log2(kernel.shape[0])))
+
+    while True:
+        if decompose_dc <= 0:
+            method0, method1 = 'wmc-dc', 'wmc-dc'
+        mat0, mat1 = kernel_decompose(kernel, dc=decompose_dc)
+        sol0 = _solve(
+            mat0, method=method0, qintervals=_qintervals, latencies=_inp_latencies, adder_size=adder_size, carry_size=carry_size
+        )
+        if max(sol0.out_lat) > latency_allowed:
+            # Prevent infinite loop, shouldn't happen though
+            if not method0 == method1 == 'wmc-dc' or decompose_dc > 0:
+                decompose_dc -= 1
+                continue
+        sol1 = _solve(
+            mat1, method=method1, qintervals=sol0.out_qint, latencies=sol0.out_lat, adder_size=adder_size, carry_size=carry_size
+        )
+        if max(sol1.out_lat) > latency_allowed:
+            # Prevent infinite loop, shouldn't happen though
+            if not method0 == method1 == 'wmc-dc' or decompose_dc > 0:
+                decompose_dc -= 1
+                continue
+        break
+    if max(sol1.out_lat) > latency_allowed:
+        # Should never happen
+        print(f'Latency constraint not satisfied: {int(latency_allowed)} < {int(max(sol1.out_lat))}')
+    return CascadedSolution((sol0, sol1))
