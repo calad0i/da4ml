@@ -3,7 +3,7 @@ from math import ceil, log2
 import numpy as np
 from numba import jit
 
-from ..types import DAState, Op, QInterval
+from ..types import DAState, Op, Pair, QInterval
 from ..util import csd_decompose
 
 
@@ -95,8 +95,8 @@ def create_state(
     shifts = (shift0, shift1)
 
     # Dirty numba typing trick
-    stat = {Op(-1, -1, False, 0, 0.0, 0.0): 0}
-    del stat[Op(-1, -1, False, 0, 0.0, 0.0)]
+    stat = {Pair(-1, -1, False, 0): 0}
+    del stat[Pair(-1, -1, False, 0)]
 
     # Loop over outputs, in0, in1, shift0, shift1 to gather all two-term pairs
     # Force i1>=i0
@@ -117,14 +117,7 @@ def create_state(
                             # Avoid count the same bit
                             if i0 == i1 and j0 <= j1:
                                 continue
-                            dlat, dcost = cost_add(
-                                qintervals[i0],
-                                qintervals[i1],
-                                bit0 != bit1,
-                                adder_size=adder_size,
-                                carry_size=carry_size,
-                            )
-                            pair = Op(i0, i1, bit0 != bit1, j1 - j0, dlat, dcost)
+                            pair = Pair(i0, i1, bit0 != bit1, j1 - j0)
                             stat[pair] = stat.get(pair, 0) + 1
 
         for k in list(stat.keys()):
@@ -147,12 +140,10 @@ def create_state(
 @jit
 def update_stats(
     state: DAState,
-    op: Op,
-    adder_size: int = -1,
-    carry_size: int = -1,
+    pair: Pair,
 ):
     """Updates the statistics of any 2-term pair in the state that may be affected by implementing op."""
-    id0, id1 = op.id0, op.id1
+    id0, id1 = pair.id0, pair.id1
 
     ks = list(state.freq_stat.keys())
     for k in ks:
@@ -186,14 +177,7 @@ def update_stats(
                             continue
                         if id0 == id1 and j0 <= j1:
                             continue
-                        dlat, dcost = cost_add(
-                            state.qintervals[id0],
-                            state.qintervals[id1],
-                            bit0 != bit1,
-                            adder_size=adder_size,
-                            carry_size=carry_size,
-                        )
-                        pair = Op(id0, id1, bit0 != bit1, j1 - j0, dlat, dcost)
+                        pair = Pair(id0, id1, bit0 != bit1, j1 - j0)
                         state.freq_stat[pair] = state.freq_stat.get(pair, 0) + 1
 
     ks, vs = list(state.freq_stat.keys()), list(state.freq_stat.values())
@@ -204,11 +188,11 @@ def update_stats(
 
 
 @jit
-def gather_matching_idxs(state: DAState, op: Op):
+def gather_matching_idxs(state: DAState, pair: Pair):
     """Generates all i_out, j0, j1 ST expr[i_out][in0, j0] and expr[i_out][in1, j1] corresponds to op provided."""
-    id0, id1 = op.id0, op.id1
-    shift = op.shift
-    sub = op.sub
+    id0, id1 = pair.id0, pair.id1
+    shift = pair.shift
+    sub = pair.sub
     n_out = state.kernel.shape[1]
     n_bits = state.expr[0].shape[-1]
 
@@ -235,13 +219,29 @@ def gather_matching_idxs(state: DAState, op: Op):
 
 
 @jit
+def pair_to_op(pair: Pair, state: DAState, adder_size: int = -1, carry_size: int = -1):
+    id0, id1 = pair.id0, pair.id1
+    dcost, dlat = cost_add(
+        state.qintervals[pair.id0],
+        state.qintervals[pair.id1],
+        pair.sub,
+        adder_size=adder_size,
+        carry_size=carry_size,
+    )
+    return Op(id0, id1, pair.sub, pair.shift, dlat, dcost)
+
+
+@jit
 def update_expr(
     state: DAState,
-    op: Op,
+    pair: Pair,
+    adder_size: int,
+    carry_size: int,
 ):
     "Updates the state by implementing the operation op, excepts common 2-term pair freq update."
-    id0, id1 = op.id0, op.id1
-    sub = op.sub
+    id0, id1 = pair.id0, pair.id1
+    sub = pair.sub
+    op = pair_to_op(pair, state, adder_size=adder_size, carry_size=carry_size)
     n_out = state.kernel.shape[1]
     n_bits = state.expr[0].shape[-1]
 
@@ -254,7 +254,7 @@ def update_expr(
 
     new_slice = np.zeros((n_out, n_bits), dtype=np.int8)
 
-    for i_out, j0, j1 in gather_matching_idxs(state, op):
+    for i_out, j0, j1 in gather_matching_idxs(state, pair):
         new_slice[i_out, j0] = expr[id0][i_out, j0]
         expr[id0][i_out, j0] = 0
         expr[id1][i_out, j1] = 0
@@ -263,20 +263,6 @@ def update_expr(
     qint0, qint1 = qintervals[id0], qintervals[id1]
     latencies.append(max(latencies[id0], latencies[id1]) + op.dlatency)
     qintervals.append(qint_add(qint0, qint1, sub1=sub))
-
-    # if id0 != id1:
-    #     if id0 > id1:
-    #         it = [id0, id1]
-    #     else:
-    #         it = [id1, id0]
-    # else:
-    #     it = [id0]
-
-    # for i in it:
-    #     if np.all(expr[i] == 0):
-    #         expr.pop(i)
-    #         latencies.pop(i)
-    #         qintervals.pop(i)
 
     return DAState(
         shifts=state.shifts,
@@ -292,11 +278,11 @@ def update_expr(
 @jit
 def update_state(
     state: DAState,
-    pair_chosen: Op,
+    pair_chosen: Pair,
     adder_size: int,
     carry_size: int,
 ):
     """Update the state by removing all occurrences of pair_chosen from the state, register op code, and update the statistics."""
-    state = update_expr(state, pair_chosen)
-    state = update_stats(state, pair_chosen, adder_size=adder_size, carry_size=carry_size)
+    state = update_expr(state, pair_chosen, adder_size=adder_size, carry_size=carry_size)
+    state = update_stats(state, pair_chosen)
     return state

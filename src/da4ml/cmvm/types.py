@@ -59,7 +59,7 @@ class Precision(NamedTuple):
 
 
 class Op(NamedTuple):
-    """An operation representing data[id0] +/- data[id1] * 2**shift and latency & cost associated with it."""
+    """An operation representing data[id0] +/- data[id1] * 2**shift, and precision & latency & cost associated with it."""
 
     id0: int
     id1: int
@@ -67,6 +67,15 @@ class Op(NamedTuple):
     shift: int
     dlatency: float
     dcost: float
+
+
+class Pair(NamedTuple):
+    """An operation representing data[id0] +/- data[id1] * 2**shift."""
+
+    id0: int
+    id1: int
+    sub: bool
+    shift: int
 
 
 class DAState(NamedTuple):
@@ -77,7 +86,7 @@ class DAState(NamedTuple):
     ops: list[Op]
     latencies: list[float]
     qintervals: list[QInterval]
-    freq_stat: dict[Op, int]
+    freq_stat: dict[Pair, int]
     kernel: NDArray[float32]
 
 
