@@ -50,8 +50,8 @@ def idx_wmc(state: DAState):
     for i, (k, v) in enumerate(zip(keys, freqs)):
         id0, id1 = k.id0, k.id1
         qint0, qint1 = state.ops[id0].qint, state.ops[id1].qint
-        n_overlap, _ = overlap_and_total(qint0, qint1)
-        score[i] = v * n_overlap
+        n_overlap, n_total = overlap_and_total(qint0, qint1)
+        score[i] = v * (2 * n_overlap - n_total)
     max_score = np.max(score)
     if max_score < 0:
         return -1
@@ -72,7 +72,7 @@ def idx_wmc_dc(state: DAState, absolute: bool = False):
         qint0, qint1 = state.ops[id0].qint, state.ops[id1].qint
         lat0, lat1 = state.ops[id0].latency, state.ops[id1].latency
         n_overlap, n_total = overlap_and_total(qint0, qint1)
-        score[i] = v * n_overlap - 256 * abs(lat0 - lat1)
+        score[i] = v * (2 * n_overlap - n_total) - 256 * abs(lat0 - lat1)
     if absolute and np.max(score) < 0:
         return -1
     return np.argmax(score)

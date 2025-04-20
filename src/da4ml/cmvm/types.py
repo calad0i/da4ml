@@ -1,11 +1,16 @@
-from functools import reduce
-from math import ceil, log2
-from typing import TYPE_CHECKING, NamedTuple
+from collections.abc import Sequence
+from decimal import Decimal
+from functools import reduce, singledispatch
+from math import ceil, floor, log2
+from typing import TYPE_CHECKING, NamedTuple, TypeVar
 
 import numpy as np
 from numba import jit
 from numpy import float32, int8
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from ..trace.tracer import FixedVariable
 
 
 class QInterval(NamedTuple):
@@ -63,6 +68,7 @@ class Op(NamedTuple):
 
     id0: int
     id1: int
+    # -1: copy from external id0; -2: relu; -3: qinterval change with bitdrop (WRAP & TRN); -4 copy from same buffer
     sub: bool
     shift: int
     qint: QInterval
@@ -125,6 +131,61 @@ else:
     minimal_kif = jit(_minimal_kif)
 
 
+T = TypeVar('T', 'FixedVariable', float, int, np.float32, np.float64, Decimal)
+
+
+@singledispatch
+def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False) -> 'T':
+    from ..trace.tracer import FixedVariable
+
+    assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic relu'
+    return v.relu(i, f)
+
+
+@_relu.register(float)
+@_relu.register(int)
+@_relu.register(np.float32)
+@_relu.register(np.float64)
+def _(v, i: int | None = None, f: int | None = None, inv: bool = False):
+    if inv:
+        v = -v
+    v = max(0, v)
+    if f is not None:
+        sf = 2.0**f
+        v = floor(v * sf) / sf
+    if i is not None:
+        v = v % 2.0**i
+    if inv:
+        v = -v
+    return v
+
+
+@_relu.register
+def _(v: Decimal, i: int | None = None, f: int | None = None, inv: bool = False):
+    if inv:
+        v = -v
+    v = max(Decimal(0), v)
+    if f is not None:
+        sf = Decimal(2) ** f
+        v = floor(v * sf) / sf
+    if i is not None:
+        v = v % Decimal(2) ** i
+    if inv:
+        v = -v
+    return v
+
+
+def relu(
+    vars: list['FixedVariable | float | int'],
+    i: Sequence[int | None] | None | int = None,
+    f: Sequence[int | None] | None | int = None,
+    inv=False,
+):
+    _i = i if isinstance(i, Sequence) else [i] * len(vars)
+    _f = f if isinstance(f, Sequence) else [f] * len(vars)
+    return [_relu(v, i_, f_, inv) for v, i_, f_ in zip(vars, _i, _f)]
+
+
 class Solution(NamedTuple):
     """Solution of single CMVM problem. The
 
@@ -174,12 +235,14 @@ class Solution(NamedTuple):
 
     shape: tuple[int, int]
     inp_shift: list[int]
-    out_idx: list[int]
-    out_shift: list[int]
+    out_idxs: list[int]
+    out_shifts: list[int]
     out_neg: list[bool]
     ops: list[Op]
+    carry_size: int
+    adder_size: int
 
-    def __call__(self, inp: list | np.ndarray | tuple, quantize=False):
+    def __call__(self, inp: list | np.ndarray | tuple, quantize=False, debug=False):
         """Executes the solution on the input data.
 
         Parameters
@@ -200,8 +263,7 @@ class Solution(NamedTuple):
         buf = np.empty(len(self.ops), dtype=object)
         inp = np.asarray(inp)
 
-        n_in = self.shape[0]
-        inp_qint = [op.qint for op in self.ops[n_in:]]
+        inp_qint = [op.qint for op in self.ops if op.id1 == -1]
         if quantize:  # TRN and WRAP
             k, i, f = map(np.array, zip(*map(minimal_kif, inp_qint)))
             eps = 2.0**-f
@@ -210,25 +272,35 @@ class Solution(NamedTuple):
 
         inp = inp * (2.0 ** np.asarray(self.inp_shift))
         for i, op in enumerate(self.ops):
-            if op.id1 == -1:
+            if op.id1 == -1:  # copy from external buf
                 buf[i] = inp[op.id0]
                 continue
+            elif op.id1 == -2:  # relu, -(relu(-))
+                v = buf[op.id0]
+                _, _i, _f = _minimal_kif(op.qint)
+                buf[i] = _relu(v, _i, _f, inv=op.sub)
+                # buf[i] = max(0, v)
+                continue
+            assert op.id1 >= 0, f'Unknown id1 {op.id1} in {op}'
             v0, v1 = buf[op.id0], buf[op.id1]
             if op.sub:
                 v1 = -v1
             buf[i] = v0 + 2.0**op.shift * v1
 
-        sf = 2.0 ** np.asarray(self.out_shift)
+        sf = 2.0 ** np.asarray(self.out_shifts)
         sign = np.where(self.out_neg, -1, 1)
-        out_idx = np.asarray(self.out_idx)
+        out_idx = np.asarray(self.out_idxs)
         mask = np.where(out_idx < 0, 0, 1)
+        if debug:
+            for i, v in enumerate(buf):
+                print(f'buf[{i}] = {v}')
         return buf[out_idx] * sf * sign * mask
 
     @property
     def kernel(self):
         """the kernel represented by the solution."""
         kernel = np.empty(self.shape, dtype=np.float32)
-        for i, one_hot in enumerate(np.identity(self.shape[1])):
+        for i, one_hot in enumerate(np.identity(self.shape[0])):
             kernel[i] = self(one_hot)
         return kernel
 
@@ -240,7 +312,7 @@ class Solution(NamedTuple):
     @property
     def latency(self):
         """Returns the latency of the solution."""
-        latency = [self.ops[i].latency for i in self.out_idx]
+        latency = [self.ops[i].latency for i in self.out_idxs]
         if len(latency) == 0:
             return 0.0, 0.0
         return min(latency), max(latency)
@@ -249,17 +321,17 @@ class Solution(NamedTuple):
         n_in, n_out = self.shape
         cost = self.cost
         lat_min, lat_max = self.latency
-        return f'Solution([{n_in}x{n_out}], cost={cost}, latency={lat_min}-{lat_max})'
+        return f'Solution([{n_in} -> {n_out}], cost={cost}, latency={lat_min}-{lat_max})'
 
     @property
     def out_latency(self):
         """Returns the output latency of the solution."""
-        return [self.ops[i].latency if i >= 0 else 0.0 for i in self.out_idx]
+        return [self.ops[i].latency if i >= 0 else 0.0 for i in self.out_idxs]
 
     @property
     def out_qint(self):
         """Returns the output quantization intervals of the solution."""
-        return [self.ops[i].qint if i >= 0 else QInterval(0.0, 0.0, np.inf) for i in self.out_idx]
+        return [self.ops[i].qint if i >= 0 else QInterval(0.0, 0.0, np.inf) for i in self.out_idxs]
 
     @property
     def inp_latency(self):
@@ -312,10 +384,10 @@ class CascadedSolution(NamedTuple):
 
     solutions: tuple[Solution, ...]
 
-    def __call__(self, inp: list | np.ndarray | tuple, quantize=False):
+    def __call__(self, inp: list | np.ndarray | tuple, quantize=False, debug=False):
         out = np.asarray(inp)
         for sol in self.solutions:
-            out = sol(out, quantize=quantize)
+            out = sol(out, quantize=quantize, debug=debug)
         return out
 
     @property
@@ -343,7 +415,7 @@ class CascadedSolution(NamedTuple):
         return self.solutions[-1].out_qint
 
     @property
-    def out_latency(self):
+    def out_latencies(self):
         return self.solutions[-1].out_latency
 
     @property
@@ -356,14 +428,15 @@ class CascadedSolution(NamedTuple):
 
     @property
     def out_shift(self):
-        return self.solutions[-1].out_shift
+        return self.solutions[-1].out_shifts
 
     @property
     def out_neg(self):
         return self.solutions[-1].out_neg
 
     def __repr__(self) -> str:
-        n_in, n_out = self.shape
+        n_ins = [sol.shape[0] for sol in self.solutions] + [self.shape[1]]
+        shape_str = ' -> '.join(map(str, n_ins))
         _cost = self.cost
         lat_min, lat_max = self.latency
-        return f'CascatedSolution([{n_in}x{n_out}], cost={_cost}, latency={lat_min}-{lat_max})'
+        return f'CascatedSolution([{shape_str}], cost={_cost}, latency={lat_min}-{lat_max})'

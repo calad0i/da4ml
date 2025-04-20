@@ -41,7 +41,7 @@ def minimal_latency(
 
     state = create_state(kernel, qintervals, latencies, no_stat_init=True)
     sol = to_solution(state, adder_size=adder_size, carry_size=carry_size)
-    latencies = [sol.ops[i].latency if i >= 0 else 0.0 for i in sol.out_idx]
+    latencies = [sol.ops[i].latency if i >= 0 else 0.0 for i in sol.out_idxs]
     return max(latencies)
 
 
@@ -53,7 +53,7 @@ def solve(
     hard_dc: int = -1,
     decompose_dc: int = -1,
     qintervals: list[QInterval] | None = None,
-    inp_latencies: list[float] | None = None,
+    latencies: list[float] | None = None,
     adder_size: int = -1,
     carry_size: int = -1,
 ) -> CascadedSolution:
@@ -99,10 +99,10 @@ def solve(
         _qintervals = [QInterval(-128.0, 127.0, 1.0)] * kernel.shape[0]
     else:
         _qintervals = [QInterval(*qi) for qi in qintervals]
-    if inp_latencies is None:
+    if latencies is None:
         _inp_latencies = [0.0] * kernel.shape[0]
     else:
-        _inp_latencies = [float(lat) for lat in inp_latencies]
+        _inp_latencies = [float(lat) for lat in latencies]
     assert len(_qintervals) == kernel.shape[0]
     assert len(_inp_latencies) == kernel.shape[0]
 
@@ -120,8 +120,8 @@ def solve(
         sol0 = _solve(
             mat0, method=method0, qintervals=_qintervals, latencies=_inp_latencies, adder_size=adder_size, carry_size=carry_size
         )
-        latencies0 = [sol0.ops[i].latency if i >= 0 else 0.0 for i in sol0.out_idx]
-        qintervals0 = [sol0.ops[i].qint if i >= 0 else QInterval(0.0, 0.0, np.inf) for i in sol0.out_idx]
+        latencies0 = [sol0.ops[i].latency if i >= 0 else 0.0 for i in sol0.out_idxs]
+        qintervals0 = [sol0.ops[i].qint if i >= 0 else QInterval(0.0, 0.0, np.inf) for i in sol0.out_idxs]
         if max(latencies0) > latency_allowed:
             # Prevent infinite loop, shouldn't happen though
             if not method0 == method1 == 'wmc-dc' or decompose_dc > 0:
@@ -130,7 +130,7 @@ def solve(
         sol1 = _solve(
             mat1, method=method1, qintervals=qintervals0, latencies=latencies0, adder_size=adder_size, carry_size=carry_size
         )
-        latencies1 = [sol1.ops[i].latency if i >= 0 else 0.0 for i in sol1.out_idx]
+        latencies1 = [sol1.ops[i].latency if i >= 0 else 0.0 for i in sol1.out_idxs]
         if max(latencies1) > latency_allowed:
             # Prevent infinite loop, shouldn't happen though
             if not method0 == method1 == 'wmc-dc' or decompose_dc > 0:

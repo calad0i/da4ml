@@ -6,31 +6,34 @@ from numba import jit
 from ..types import DAState, Op, Pair, QInterval
 from ..util import csd_decompose
 
+# @jit
+# def _qint_add(qi1: QInterval, qi2: QInterval) -> QInterval:
+#     return QInterval(min=qi1.min + qi2.min, max=qi1.max + qi2.max, step=min(qi1.step, qi2.step))
+
+
+# @jit
+# def _qint_sub(qi1: QInterval, qi2: QInterval) -> QInterval:
+#     return QInterval(min=qi1.min - qi2.max, max=qi1.max - qi2.min, step=min(qi1.step, qi2.step))
+
 
 @jit
-def _qint_add(qi1: QInterval, qi2: QInterval) -> QInterval:
-    return QInterval(min=qi1.min + qi2.min, max=qi1.max + qi2.max, step=min(qi1.step, qi2.step))
-
-
-@jit
-def _qint_sub(qi1: QInterval, qi2: QInterval) -> QInterval:
-    return QInterval(min=qi1.min - qi2.max, max=qi1.max - qi2.min, step=min(qi1.step, qi2.step))
-
-
-@jit
-def qint_add(qi1: QInterval, qi2: QInterval, sub0=False, sub1=False) -> QInterval:
-    if sub0 != sub1:
-        r = _qint_sub(qi1, qi2)
-    else:
-        r = _qint_add(qi1, qi2)
+def qint_add(qint0: QInterval, qint1: QInterval, shift: int, sub0=False, sub1=False) -> QInterval:
+    min0, max0, step0 = qint0
+    min1, max1, step1 = qint1
     if sub0:
-        r = QInterval(min=-r.max, max=-r.min, step=r.step)
-    return r
+        min0, max0 = -max0, -min0
+    if sub1:
+        min1, max1 = -max1, -min1
+
+    s = 2.0**shift
+    min1, max1, step1 = min1 * s, max1 * s, step1 * s
+
+    return QInterval(min0 + min1, max0 + max1, min(step0, step1))
 
 
 @jit
 def cost_add(
-    qint1: QInterval, qint2: QInterval, sub: bool = False, adder_size: int = -1, carry_size: int = -1
+    qint0: QInterval, qint1: QInterval, shift: int, sub: bool = False, adder_size: int = -1, carry_size: int = -1
 ) -> tuple[float, float]:
     """Calculate the latency and cost of an addition operation.
 
@@ -59,18 +62,21 @@ def cost_add(
     if carry_size < 0:
         carry_size = 65535
 
-    f = -log2(min(qint1.step, qint2.step))
-    min1, min2 = qint1.min, qint2.min
-    max1, max2 = qint1.max, qint2.max
+    min0, max0, step0 = qint0
+    min1, max1, step1 = qint1
     if sub:
-        min2, max2 = max2, min2
-    max1, max2 = max1 + qint1.step, max2 + qint2.step
-    i = ceil(log2(max(abs(min1), abs(min2), abs(max1), abs(max2))))
-    k = int(qint1.min < 0 or qint2.min < 0)
+        min1, max1 = max1, min1
+    sf = 2.0**shift
+    min1, max1, step1 = min1 * sf, max1 * sf, step1 * sf
+    max0, max1 = max0 + step0, max1 + step1
+
+    f = -log2(min(step0, step1))
+    i = ceil(log2(max(abs(min0), abs(min1), abs(max0), abs(max1))))
+    k = int(qint0.min < 0 or qint1.min < 0)
     n_accum = k + i + f + 1
     # Align to the number of carry and adder bits, when they are block-based (e.g., 4/8 bits look-ahead carry in Xilinx FPGAs)
     # For Altera, the carry seems to be single bit adder chains, but need to check
-    return float(ceil(n_accum / carry_size)), float(ceil(n_accum / adder_size))
+    return float(ceil((n_accum - 1) / carry_size)), float(ceil(n_accum / adder_size))
 
 
 @jit
@@ -220,6 +226,7 @@ def pair_to_op(pair: Pair, state: DAState, adder_size: int = -1, carry_size: int
     dlat, cost = cost_add(
         state.ops[pair.id0].qint,
         state.ops[pair.id1].qint,
+        pair.shift,
         pair.sub,
         adder_size=adder_size,
         carry_size=carry_size,
@@ -228,7 +235,8 @@ def pair_to_op(pair: Pair, state: DAState, adder_size: int = -1, carry_size: int
     qint = qint_add(
         state.ops[pair.id0].qint,
         state.ops[pair.id1].qint,
-        pair.sub,
+        shift=pair.shift,
+        sub1=pair.sub,
     )
     return Op(id0, id1, pair.sub, pair.shift, qint, lat, cost)
 

@@ -169,15 +169,20 @@ def to_solution(
         while len(heap) > 1:
             lat0, sub0, _, qint0, id0, shift0 = heapq.heappop(heap)
             lat1, sub1, _, qint1, id1, shift1 = heapq.heappop(heap)
-            qint = qint_add(qint0, qint1, sub0=sub0, sub1=sub1)
-            dlat, dcost = cost_add(qint0, qint1, sub=sub0 != sub1, adder_size=adder_size, carry_size=carry_size)
-            lat = max(lat0, lat1) + dlat
 
             if sub0:
-                op = Op(id1, id0, not sub1, shift0 - shift1, qint, lat, dcost)
+                shift = shift0 - shift1
+                qint = qint_add(qint1, qint0, shift, sub1, sub0)
+                dlat, dcost = cost_add(qint1, qint0, shift=shift, sub=not sub1, adder_size=adder_size, carry_size=carry_size)
+                lat = max(lat0, lat1) + dlat
+                op = Op(id1, id0, not sub1, shift, qint, lat, dcost)
                 shift = shift1
             else:
-                op = Op(id0, id1, sub0 != sub1, shift1 - shift0, qint, lat, dcost)
+                shift = shift1 - shift0
+                qint = qint_add(qint0, qint1, shift, sub0, sub1)
+                dlat, dcost = cost_add(qint0, qint1, shift=shift, sub=sub1, adder_size=adder_size, carry_size=carry_size)
+                lat = max(lat0, lat1) + dlat
+                op = Op(id0, id1, sub1, shift, qint, lat, dcost)
                 shift = shift0
 
             fp_align = -int(log2(qint.step)) - shift
@@ -195,10 +200,12 @@ def to_solution(
     return Solution(
         shape=state.kernel.shape,  # type: ignore
         inp_shift=list(in_shift),
-        out_idx=out_idx,
-        out_shift=list(out_shift),
+        out_idxs=out_idx,
+        out_shifts=list(out_shift),
         out_neg=out_neg,
         ops=ops,
+        carry_size=carry_size,
+        adder_size=adder_size,
     )
 
 
