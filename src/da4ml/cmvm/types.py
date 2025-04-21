@@ -155,8 +155,6 @@ def _(v, i: int | None = None, f: int | None = None, inv: bool = False):
         v = floor(v * sf) / sf
     if i is not None:
         v = v % 2.0**i
-    if inv:
-        v = -v
     return v
 
 
@@ -170,8 +168,6 @@ def _(v: Decimal, i: int | None = None, f: int | None = None, inv: bool = False)
         v = floor(v * sf) / sf
     if i is not None:
         v = v % Decimal(2) ** i
-    if inv:
-        v = -v
     return v
 
 
@@ -331,7 +327,15 @@ class Solution(NamedTuple):
     @property
     def out_qint(self):
         """Returns the output quantization intervals of the solution."""
-        return [self.ops[i].qint if i >= 0 else QInterval(0.0, 0.0, np.inf) for i in self.out_idxs]
+        buf = []
+        for i, idx in enumerate(self.out_idxs):
+            _min, _max, _step = self.ops[idx].qint
+            sf = 2.0 ** self.out_shifts[i]
+            _min, _max, _step = _min * sf, _max * sf, _step * sf
+            if self.out_neg[i]:
+                _min, _max = -_max, -_min
+            buf.append(QInterval(_min, _max, _step))
+        return buf
 
     @property
     def inp_latency(self):

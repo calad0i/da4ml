@@ -44,17 +44,16 @@ class CppCodeGen:
                 val = f'inp[{ops[op.id0].id0}]'
 
             elif op.id1 == -2:
-                ref0_type = all_types[op.id0]
-                if ops[op.id0].qint.min < 0 and not op.sub:  # ReLU
-                    val = f'{ref0} > 0 ? {ref0} : {ref0_type}(0)'
-                elif ops[op.id0].qint.max > 0 and op.sub:  # "Anti"-ReLU
-                    # happens for a "latent-negative" variable
-                    # latent-negative means that the variable should be negative,
-                    # But as we have only a+/-b>>s type of operations, negativeness is applied
-                    # only towards the end of the pipeline
-                    val = f'{ref0} > 0 ? {ref0_type}(0) : {ref0}'
-                else:
-                    val = ref0
+                if not op.sub:  # Normal ReLU
+                    if ops[op.id0].qint.min < 0:  # ReLU
+                        val = f'{ref0} > 0 ? {_type}({ref0}) : {_type}(0)'
+                    else:
+                        val = ref0
+                else:  # ReLU over -value
+                    if ops[op.id0].qint.max > 0:
+                        val = f'{ref0} > 0 ? {_type}(0) : {_type}(-{ref0})'
+                    else:
+                        val = f'-{ref0}'
 
             elif op.id1 == -3:
                 # Explicit quantization
@@ -82,7 +81,7 @@ class CppCodeGen:
             if shift == 0:
                 lines.append(f'out[{i}] = {_type}({neg_str}v{idx});')
             else:
-                lines.append(f'out[{i}] = {_type}({neg_str}bit_shift<{shift}>({neg_str}v{idx}));')
+                lines.append(f'out[{i}] = {_type}({neg_str}bit_shift<{shift}>(v{idx}));')
         return lines
 
     def __call__(self, sol: Solution, fn_name: str, n_indent: int = 4, n_base_indent: int = 0, print_latency: bool = False):
@@ -103,9 +102,18 @@ class CppCodeGen:
         indent = ' ' * n_indent
         base_indent = indent * n_base_indent
         body_indent = '\n' + base_indent + indent
-        return f"""{base_indent}{fn_signature} {{
+        code = f"""{base_indent}{fn_signature} {{
 {body_indent}{pragma}
 {body_indent}{body_indent.join(ssa_lines)}
 {body_indent}{body_indent.join(output_lines)}
 {base_indent}}}
 """
+        bridge = f"""#include "bridge.h"
+#include "fn.h"
+
+extern "C" {{
+void bridge(double *inp, double *out, int size) {{
+    vitis_bridge<{inp_type}, {out_type}, {n_in}, {n_out}>({fn_name}, inp, out, size);
+}}
+}}"""
+        return code, bridge

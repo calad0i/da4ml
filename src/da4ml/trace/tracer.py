@@ -289,7 +289,6 @@ class FixedVariable:
         _factor = self._factor
         _from = (self, DummyVariable(-2, _factor))
         # sub flag depends on sign(_factor1)
-        # id1==-2 means relu, with inverts it
         latency = self.latency
         cost = self.cost
         return FixedVariable(
@@ -297,7 +296,7 @@ class FixedVariable:
             high,
             step,
             _from=_from,
-            _factor=_factor,
+            _factor=abs(_factor),
             latency=latency,
             cost=cost,
         )
