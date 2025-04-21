@@ -148,6 +148,7 @@ def to_solution(
 
         # No reduction required, dump the realized value directly
         if len(sub) == 1:
+            out_shift[i_out] = out_shift[i_out] + shifts[0]
             out_qints.append(qints[0])
             out_lats.append(lats[0])
             out_idx.append(idx[0])

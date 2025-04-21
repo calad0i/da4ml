@@ -113,6 +113,8 @@ def _minimal_kif(qi: QInterval, symmetric: bool = False) -> Precision:
         A named tuple with the KIF values.
     """
 
+    if qi.min == qi.max == 0:
+        return Precision(keep_negative=False, integers=0, fractional=0)
     keep_negative = qi.min < 0
     fractional = int(-log2(qi.step))
     int_min, int_max = round(qi.min / qi.step), round(qi.max / qi.step)
