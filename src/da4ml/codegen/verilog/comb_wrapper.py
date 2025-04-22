@@ -80,7 +80,9 @@ def generate_io_wrapper(module_name: str, sol: Solution):
     return f"""`timescale 1 ns / 1 ps
 
 module {module_name}_wrapper (
+    // verilator lint_off UNUSEDSIGNAL
     input [{w_reg_in-1}:0] inp,
+    // verilator lint_on UNUSEDSIGNAL
     output [{w_reg_out-1}:0] out
 );
     wire [{w_het_in-1}:0] packed_inp;
@@ -100,8 +102,10 @@ endmodule
 
 
 def binder_gen(module_name: str, sol: Solution):
-    max_inp_bw = sum(map(max, zip(*map(_minimal_kif, sol.inp_qint))))
-    max_out_bw = sum(map(max, zip(*map(_minimal_kif, sol.out_qint))))
+    k_in, i_in, f_in = zip(*map(_minimal_kif, sol.inp_qint))
+    k_out, i_out, f_out = zip(*map(_minimal_kif, sol.out_qint))
+    max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)
+    max_out_bw = max(k + i for k, i in zip(k_out, i_out)) + max(f_out)
 
     n_in, n_out = sol.shape
     return f"""#include "V{module_name}.h"

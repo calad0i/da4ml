@@ -35,7 +35,7 @@ class VerilogCombGen:
                     if ops[op.id0].qint.min < 0:
                         line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0-1}]}}}};'
                     else:
-                        line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}]'
+                        line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
                 case -3:  # Explicit quantization
                     lsb_bias = kifs[op.id0][2] - kifs[i][2]
                     i0, i1 = bw + lsb_bias - 1, lsb_bias

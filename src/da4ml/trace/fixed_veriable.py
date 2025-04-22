@@ -54,8 +54,6 @@ class FixedVariable:
     @classmethod
     def from_const(cls, const: float | Decimal, latency: float = 0.0):
         const = float(const)
-        if const == 0:
-            return cls(0, 0, 0)
         _low, _high = -32, 32
         while _high - _low > 1:
             _mid = (_high + _low) // 2
@@ -86,6 +84,8 @@ class FixedVariable:
 
     def __add__(self, other: 'FixedVariable|float|Decimal'):
         if not isinstance(other, FixedVariable):
+            if other == 0:
+                return self
             return self + FixedVariable.from_const(other)
 
         if other.low == other.high == 0:  # +0

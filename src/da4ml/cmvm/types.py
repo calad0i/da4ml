@@ -265,8 +265,8 @@ class Solution(NamedTuple):
         if quantize:  # TRN and WRAP
             k, i, f = map(np.array, zip(*map(minimal_kif, inp_qint)))
             eps = 2.0**-f
-            _low, _high = -k * 2.0 ** (i + f), 2.0 ** (i + f) - 1
-            inp = eps * ((np.floor(inp / eps) - _low) % (_high - _low) + _low)
+            _low, _high = -(2.0 ** (i + f)) * k, 2.0 ** (i + f) - 1
+            inp = eps * ((np.floor(inp / eps) - _low) % 2.0 ** (k + i + f) + _low)
 
         inp = inp * (2.0 ** np.asarray(self.inp_shift))
         for i, op in enumerate(self.ops):
