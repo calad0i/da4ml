@@ -288,7 +288,7 @@ class Solution(NamedTuple):
                 buf[i] = eps * ((np.floor(v / eps) + bias) % 2**b - bias)
                 continue
             elif op.id1 == -4:  # define constant
-                buf[i] = op.id0 * 2.0**op.shift
+                buf[i] = op.qint.min
                 continue
             assert op.id1 >= 0, f'Unknown id1 {op.id1} in {op}'
             v0, v1 = buf[op.id0], buf[op.id1]

@@ -41,15 +41,13 @@ class Trace:
         self.out_factors: list[float] = list(out_factors) if out_factors is not None else []
 
     def add(self, v: 'FixedVariable'):
-        if v._from is None:
-            if v.low != v.high:
-                id0 = v._id
-                id1 = -1
-                op = Op(id0, id1, False, 0, v.unscaled.qint, v.latency, 0.0)
-            else:
-                id0 = int(v.low / v.step)
-                id1 = -4  # copy from constant
-                op = Op(id0, id1, False, int(log2(v.step)), v.qint, v.latency, 0.0)
+        if v.low == v.high:
+            # define constant
+            op = Op(-1, -4, False, int(log2(v.step)), v.qint, v.latency, 0.0)
+        elif v._from is None:
+            id0 = v._id
+            id1 = -1
+            op = Op(id0, id1, False, 0, v.unscaled.qint, v.latency, 0.0)
         else:
             v0, v1 = v._from
             assert v0._factor > 0 or v._from[1]._id == -2  # relu being exception here
@@ -89,6 +87,11 @@ class _TraceManager(metaclass=Singleton):
     def set_outputs(self, outputs: 'list[FixedVariable]'):
         self.trace.out_idx = [v._id for v in outputs]
         self.trace.out_factors = [float(v._factor) for v in outputs]
+
+    def update_latency(self, id: int, latency: float):
+        _op = self.trace.ops[id]
+        op = Op(_op.id0, _op.id1, _op.sub, _op.shift, _op.qint, latency, _op.cost)
+        self.trace.ops[id] = op
 
 
 class Tracer:

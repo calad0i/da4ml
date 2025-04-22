@@ -52,7 +52,7 @@ class FixedVariable:
         return k, i, f
 
     @classmethod
-    def from_const(cls, const: float | Decimal):
+    def from_const(cls, const: float | Decimal, latency: float = 0.0):
         const = float(const)
         if const == 0:
             return cls(0, 0, 0)
@@ -64,7 +64,7 @@ class FixedVariable:
                 _high = _mid
             else:
                 _low = _mid
-        return cls(const, const, 2.0**-_high)
+        return cls(const, const, 2.0**-_high, latency=latency)
 
     def __repr__(self) -> str:
         k, i, f = self.kif
@@ -99,11 +99,12 @@ class FixedVariable:
                 return -((-self) + (-other))
 
         mgr = _TraceManager()
-        int0 = QInterval(float(self.low), float(self.high), float(self.step))
-        int1 = QInterval(float(other.low), float(other.high), float(other.step))
         adder_size = mgr.hwconf.adder_size
         carry_size = mgr.hwconf.carry_size
         latency_cutoff = mgr.hwconf.latency_cutoff
+
+        int0 = QInterval(float(self.low), float(self.high), float(self.step))
+        int1 = QInterval(float(other.low), float(other.high), float(other.step))
         dlat, cost = cost_add(int0, int1, 0, False, adder_size, carry_size)
         base_lat = max(self.latency, other.latency)
         latency = dlat + base_lat
@@ -113,6 +114,13 @@ class FixedVariable:
                 dlat <= latency_cutoff
             ), f'Latency of an atomic operation {dlat} is larger than the pipelining latency cutoff {latency_cutoff}'
             latency = ceil(base_lat / latency_cutoff) * latency_cutoff + dlat
+
+        # For constants, assign the latency of the output
+        # make sure it will be defined within the same pipeline stage as the computation needs it
+        if other.low == other.high:
+            mgr.update_latency(other._id, latency)
+        if self.low == self.high:
+            mgr.update_latency(self._id, latency)
 
         return FixedVariable(
             self.low + other.low,

@@ -61,7 +61,7 @@ class CppCodeGen:
 
             elif op.id1 == -4:
                 # Constant def
-                val = f'{_type}({op.id0 * 2.**op.shift})'
+                val = f'{_type}({op.qint.min})'
 
             else:
                 raise ValueError(f'Invalid id1: {op.id1}')

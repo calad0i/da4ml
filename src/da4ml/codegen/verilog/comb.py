@@ -41,8 +41,9 @@ class VerilogCombGen:
                     i0, i1 = bw + lsb_bias - 1, lsb_bias
                     line = f'{_def} assign {v} = v{op.id0}[{i0}:{i1}];'
                 case -4:  # Constant def
-                    number = op.id0 if op.id0 >= 0 else 2**bw + op.id0
-                    line = f"{_def} assign {v} = '{bin(number)[1:]};"
+                    num = int(op.qint.min / op.qint.step)
+                    num = num if num >= 0 else 2**bw + num
+                    line = f"{_def} assign {v} = '{bin(num)[1:]};"
                 case _:  # Common a+/-b<<shift oprs
                     assert op.id1 >= 0, f'Invalid id1: {op.id1}'
                     p0, p1 = kifs[op.id0], kifs[op.id1]  # precision -> keep_neg, integers (no sign), fractional

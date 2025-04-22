@@ -37,14 +37,14 @@ def pipelining(trace: Trace) -> CascadedSolution:
     lat = max(ops[i].latency for i in trace.out_idx)
     for i in trace.out_idx:
         op_out = ops[i]
-        ops.append(Op(i, -4, False, 0, op_out.qint, lat, 0.0))
+        ops.append(Op(i, -1001, False, 0, op_out.qint, lat, 0.0))
 
     for i, op in enumerate(ops):
         stage = get_stage(op)
-        if op.id1 == -1:
+        if op.id1 in (-1, -4):
             # Copy from external buffer
             opd.setdefault(stage, []).append(op)
-            locator.append({stage: i})
+            locator.append({stage: len(opd[stage]) - 1})
             continue
         p0_stages = locator[op.id0].keys()
         if stage not in p0_stages:
@@ -81,7 +81,7 @@ def pipelining(trace: Trace) -> CascadedSolution:
         else:
             p1_idx = op.id1
 
-        if p1_idx == -4:
+        if p1_idx == -1001:
             # Output to external buffer
             out_idxd.setdefault(stage, []).append(p0_idx)
         else:
