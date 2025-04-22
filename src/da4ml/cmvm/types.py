@@ -138,7 +138,7 @@ T = TypeVar('T', 'FixedVariable', float, int, np.float32, np.float64, Decimal)
 
 @singledispatch
 def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False) -> 'T':
-    from ..trace.tracer import FixedVariable
+    from ..trace.fixed_veriable import FixedVariable
 
     assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic relu'
     return v.relu(i, f)
