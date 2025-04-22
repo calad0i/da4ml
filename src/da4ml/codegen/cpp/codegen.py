@@ -35,7 +35,7 @@ class CppCodeGen:
             ref0 = f'v{op.id0}'
 
             if op.id1 >= 0:
-                # Common BOPs
+                # Common a+/-b<<shift op
                 ref1 = f'bit_shift<{op.shift}>(v{op.id1})' if op.shift != 0 else f'v{op.id1}'
                 val = f'{ref0} {"-" if op.sub else "+"} {ref1}'
 
@@ -44,19 +44,19 @@ class CppCodeGen:
                 val = f'inp[{ops[op.id0].id0}]'
 
             elif op.id1 == -2:
-                if not op.sub:  # Normal ReLU
-                    if ops[op.id0].qint.min < 0:  # ReLU
+                if not op.sub:  # relu(inp)
+                    if ops[op.id0].qint.min < 0:
                         val = f'{ref0} > 0 ? {_type}({ref0}) : {_type}(0)'
                     else:
                         val = ref0
-                else:  # ReLU over -value
+                else:  # relu(-inp)
                     if ops[op.id0].qint.max > 0:
                         val = f'{ref0} > 0 ? {_type}(0) : {_type}(-{ref0})'
                     else:
                         val = f'-{ref0}'
 
             elif op.id1 == -3:
-                # Explicit quantization
+                # Explicit quantization op, done implicitly via assignment
                 val = ref0
 
             else:
