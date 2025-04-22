@@ -72,7 +72,7 @@ template <size_t bw, size_t N_out> std::vector<int32_t> bitunpack(const std::vec
 template <size_t bits_in, typename inp_buf_t>
 std::enable_if_t<std::is_integral_v<inp_buf_t>, void> _write_input(inp_buf_t &inp_buf, const std::vector<int32_t> &input) {
     assert(input.size() == (bits_in + 31) / 32);
-    inp_buf = input[0];
+    inp_buf = input[0] & 0xFFFFFFFF;
     if (bits_in > 32) {
         inp_buf |= static_cast<int64_t>(input[1]) << 32;
     }
