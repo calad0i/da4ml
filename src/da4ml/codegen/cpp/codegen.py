@@ -59,6 +59,10 @@ class CppCodeGen:
                 # Explicit quantization op, done implicitly via assignment
                 val = ref0
 
+            elif op.id1 == -4:
+                # Constant def
+                val = f'{_type}({op.id0 * 2.**op.shift})'
+
             else:
                 raise ValueError(f'Invalid id1: {op.id1}')
 

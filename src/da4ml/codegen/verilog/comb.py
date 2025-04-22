@@ -33,13 +33,16 @@ class VerilogCombGen:
                         lines.append(f'wire [{bw0-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw0-1}:0] = -{v0_name}[{bw0-1}:0];')
                         v0_name = f'v{op.id0}_neg'
                     if ops[op.id0].qint.min < 0:
-                        line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{({bw}){{~{v0_name}[{bw0-1}]}}}};'
+                        line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0-1}]}}}};'
                     else:
                         line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}]'
                 case -3:  # Explicit quantization
                     lsb_bias = kifs[op.id0][2] - kifs[i][2]
                     i0, i1 = bw + lsb_bias - 1, lsb_bias
                     line = f'{_def} assign {v} = v{op.id0}[{i0}:{i1}];'
+                case -4:  # Constant def
+                    number = op.id0 if op.id0 >= 0 else 2**bw + op.id0
+                    line = f"{_def} assign {v} = '{bin(number)[1:]};"
                 case _:  # Common a+/-b<<shift oprs
                     assert op.id1 >= 0, f'Invalid id1: {op.id1}'
                     p0, p1 = kifs[op.id0], kifs[op.id1]  # precision -> keep_neg, integers (no sign), fractional

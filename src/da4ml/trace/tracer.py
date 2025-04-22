@@ -42,9 +42,14 @@ class Trace:
 
     def add(self, v: 'FixedVariable'):
         if v._from is None:
-            id0 = v._id
-            id1 = -1
-            op = Op(id0, id1, False, 0, v.unscaled.qint, v.latency, 0.0)
+            if v.low != v.high:
+                id0 = v._id
+                id1 = -1
+                op = Op(id0, id1, False, 0, v.unscaled.qint, v.latency, 0.0)
+            else:
+                id0 = int(v.low / v.step)
+                id1 = -4  # copy from constant
+                op = Op(id0, id1, False, int(log2(v.step)), v.qint, v.latency, 0.0)
         else:
             v0, v1 = v._from
             assert v0._factor > 0 or v._from[1]._id == -2  # relu being exception here
@@ -138,9 +143,10 @@ def order_trace(
     for i in range(n):
         op = trace.ops[int(order[i])]
         id0, id1 = op.id0, op.id1
-        id0 = int(rev_order[id0])
+        if id1 not in (-1, -4):
+            id0 = int(rev_order[id0])
         id1 = int(rev_order[id1]) if id1 >= 0 else id1
-        assert (id0 <= i and id1 <= i) or id1 == -1, f'Invalid id0={id0}, id1={id1}, i={i}'
+        assert (id0 <= i and id1 <= i) or id1 in (-1, -4), f'Invalid id0={id0}, id1={id1}, i={i}'
         _op = Op(id0, id1, *op[2:])
         ops.append(_op)
     out_idx = [int(rev_order[i]) for i in trace.out_idx]

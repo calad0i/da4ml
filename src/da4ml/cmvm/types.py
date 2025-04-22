@@ -279,6 +279,17 @@ class Solution(NamedTuple):
                 buf[i] = _relu(v, _i, _f, inv=op.sub)
                 # buf[i] = max(0, v)
                 continue
+            elif op.id1 == -3:  # quantization only
+                v = buf[op.id0]
+                _k, _i, _f = _minimal_kif(op.qint)
+                bias = _k * 2.0**_i
+                b = _k + _i + _f
+                eps = 2.0**-_f
+                buf[i] = eps * ((np.floor(v / eps) + bias) % 2**b - bias)
+                continue
+            elif op.id1 == -4:  # define constant
+                buf[i] = op.id0 * 2.0**op.shift
+                continue
             assert op.id1 >= 0, f'Unknown id1 {op.id1} in {op}'
             v0, v1 = buf[op.id0], buf[op.id1]
             if op.sub:
