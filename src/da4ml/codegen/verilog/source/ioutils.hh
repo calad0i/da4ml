@@ -109,8 +109,11 @@ template <size_t N, size_t max_bw, typename inp_buf_t> void write_input(inp_buf_
     _write_input<bits_in>(inp_buf, input);
 }
 
-template <size_t N, size_t max_bw, typename out_buf_t> std::vector<int32_t> read_output(out_buf_t out_buf) {
+template <size_t N, size_t max_bw, typename out_buf_t> void read_output(out_buf_t out_buf, int32_t *c_out) {
     constexpr size_t bits_out = N * max_bw;
     std::vector<int32_t> packed = _read_output<bits_out>(out_buf);
-    return bitunpack<max_bw, N>(packed);
+    std::vector<int32_t> unpacked = bitunpack<max_bw, N>(packed);
+    for (size_t i = 0; i < N; ++i) {
+        c_out[i] = unpacked[i];
+    }
 }

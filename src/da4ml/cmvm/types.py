@@ -353,12 +353,12 @@ class Solution(NamedTuple):
     @property
     def inp_latency(self):
         """Returns the input latencies of the solution."""
-        return [self.ops[i].latency for i in range(self.shape[0])]
+        return [op.latency for op in self.ops if op.id1 == -1]
 
     @property
     def inp_qint(self):
         """Returns the input quantization intervals of the solution."""
-        return [self.ops[i].qint for i in range(self.shape[0])]
+        return [op.qint for op in self.ops if op.id1 == -1]
 
 
 class CascadedSolution(NamedTuple):

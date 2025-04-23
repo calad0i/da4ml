@@ -1,8 +1,11 @@
-from .comb import VerilogCombGen
-from .comb_wrapper import binder_gen, generate_io_wrapper
+from .comb import comb_logic_gen
+from .io_wrapper import comb_binder_gen, generate_io_wrapper, pipeline_binder_gen
+from .pipeline import pipeline_logic_gen
 
 __all__ = [
-    'VerilogCombGen',
+    'comb_logic_gen',
     'generate_io_wrapper',
-    'binder_gen',
+    'comb_binder_gen',
+    'pipeline_logic_gen',
+    'pipeline_binder_gen',
 ]

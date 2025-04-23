@@ -1,6 +1,6 @@
 from itertools import accumulate
 
-from ...cmvm.types import QInterval, Solution, _minimal_kif
+from ...cmvm.types import CascadedSolution, QInterval, Solution, _minimal_kif
 
 
 def hetero_io_map(qints: list[QInterval], merge: bool = False):
@@ -54,7 +54,7 @@ def hetero_io_map(qints: list[QInterval], merge: bool = False):
     return regular, hetero, pads, (width_regular, width_packed)
 
 
-def generate_io_wrapper(module_name: str, sol: Solution):
+def generate_io_wrapper(module_name: str, sol: Solution | CascadedSolution, pipelined: bool = False):
     reg_in, het_in, _, shape_in = hetero_io_map(sol.inp_qint, merge=True)
     reg_out, het_out, pad_out, shape_out = hetero_io_map(sol.out_qint, merge=True)
 
@@ -77,9 +77,14 @@ def generate_io_wrapper(module_name: str, sol: Solution):
     inp_assignment_str = '\n    '.join(inp_assignment)
     out_assignment_str = '\n    '.join(out_assignment)
 
+    clk_and_rst_inp, clk_and_rst_bind = '', ''
+    if pipelined:
+        clk_and_rst_inp = '\n   input clk,\n    input rst,'
+        clk_and_rst_bind = '\n        .clk(clk),\n        .rst(rst),'
+
     return f"""`timescale 1 ns / 1 ps
 
-module {module_name}_wrapper (
+module {module_name}_wrapper ({clk_and_rst_inp}
     // verilator lint_off UNUSEDSIGNAL
     input [{w_reg_in-1}:0] inp,
     // verilator lint_on UNUSEDSIGNAL
@@ -90,7 +95,7 @@ module {module_name}_wrapper (
 
     {inp_assignment_str}
 
-    {module_name} op (
+    {module_name} op ({clk_and_rst_bind}
         .inp(packed_inp),
         .out(packed_out)
     );
@@ -101,7 +106,7 @@ endmodule
 """
 
 
-def binder_gen(module_name: str, sol: Solution):
+def comb_binder_gen(module_name: str, sol: Solution):
     k_in, i_in, f_in = zip(*map(_minimal_kif, sol.inp_qint))
     k_out, i_out, f_out = zip(*map(_minimal_kif, sol.out_qint))
     max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)
@@ -109,30 +114,79 @@ def binder_gen(module_name: str, sol: Solution):
 
     n_in, n_out = sol.shape
     return f"""#include "V{module_name}.h"
-    #include "ioutils.hh"
-    #include <iostream>
-    #include <verilated.h>
+#include "ioutils.hh"
+#include <iostream>
+#include <verilated.h>
 
-    constexpr size_t N_in = {n_in};
-    constexpr size_t N_out = {n_out};
-    constexpr size_t max_inp_bw = {max_inp_bw};
-    constexpr size_t max_out_bw = {max_out_bw};
+constexpr size_t N_inp = {n_in};
+constexpr size_t N_out = {n_out};
+constexpr size_t max_inp_bw = {max_inp_bw};
+constexpr size_t max_out_bw = {max_out_bw};
 
-    extern "C" {{
-    void test(int32_t *c_inp, int32_t *c_out) {{
-        V{module_name} *dut = new V{module_name};
+extern "C" {{
+void test(int32_t *c_inp, int32_t *c_out) {{
+    V{module_name} *dut = new V{module_name};
 
-        write_input<N_in, max_inp_bw>(dut->inp, c_inp);
+    write_input<N_inp, max_inp_bw>(dut->inp, c_inp);
 
+    dut->eval();
+
+    read_output<N_out, max_out_bw>(dut->out, c_out);
+
+    // Clean up
+    dut->final();
+    delete dut;
+}}
+}}"""
+
+
+def pipeline_binder_gen(module_name: str, csol: CascadedSolution, II: int = 1):
+    k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
+    k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
+    max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)
+    max_out_bw = max(k + i for k, i in zip(k_out, i_out)) + max(f_out)
+
+    n_stage = len(csol.solutions)
+
+    n_in, n_out = csol.shape
+    return f"""#include "V{module_name}.h"
+#include "ioutils.hh"
+#include <iostream>
+#include <verilated.h>
+
+constexpr size_t N_inp = {n_in};
+constexpr size_t N_out = {n_out};
+constexpr size_t max_inp_bw = {max_inp_bw};
+constexpr size_t max_out_bw = {max_out_bw};
+constexpr size_t II = {II};
+constexpr size_t latency = {n_stage};
+
+extern "C" {{
+void test(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
+    V{module_name} *dut = new V{module_name};
+
+    size_t clk_req = n_samples * II + latency + 1;
+
+    dut->rst = 0;
+    for (size_t t_inp = 0; t_inp < clk_req; ++t_inp) {{
+        size_t t_out = t_inp - latency - 1;
+
+        if (t_inp < n_samples * II && t_inp % II == 0) {{
+            write_input<N_inp, max_inp_bw>(dut->inp, &c_inp[t_inp / II * N_inp]);
+        }}
+
+        dut->clk = 0;
         dut->eval();
 
-        std::vector<int32_t> output = read_output<N_out, max_out_bw>(dut->out);
-        for (size_t i = 0; i < output.size(); ++i) {{
-            c_out[i] = output[i];
+        if (t_inp > latency && t_out % II == 0) {{
+            read_output<N_out, max_out_bw>(dut->out, &c_out[t_out / II * N_out]);
         }}
-        // Clean up
 
-        dut->final();
-        delete dut;
+        dut->clk = 1;
+        dut->eval();
     }}
-    }}"""
+
+    dut->final();
+    delete dut;
+}}
+}}"""

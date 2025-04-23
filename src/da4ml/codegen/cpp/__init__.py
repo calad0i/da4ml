@@ -1,3 +1,3 @@
-from .codegen import CppCodeGen
+from .cpp_codegen import cpp_logic_and_bridge_gen
 
-__all__ = ['CppCodeGen']
+__all__ = ['cpp_logic_and_bridge_gen']
