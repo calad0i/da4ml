@@ -94,6 +94,9 @@ def create_state(
     n_in, n_out = kernel.shape
     kernel = np.asarray(kernel)
     csd, shift0, shift1 = csd_decompose(kernel)
+    for i, qint in enumerate(qintervals):
+        if qint.min == qint.max == 0:
+            csd[i] = 0
     n_bits = csd.shape[-1]
     expr = list(csd)
     shifts = (shift0, shift1)

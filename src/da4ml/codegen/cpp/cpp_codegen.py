@@ -90,7 +90,13 @@ def output_gen(sol: Solution, typestr_fn: Callable[[bool | int, int, int], str])
 
 
 def cpp_logic_and_bridge_gen(
-    sol: Solution, fn_name: str, flavor: str, n_indent: int = 4, n_base_indent: int = 0, print_latency: bool = False
+    sol: Solution,
+    fn_name: str,
+    flavor: str,
+    pragmas: list[str] | None = None,
+    n_indent: int = 4,
+    n_base_indent: int = 0,
+    print_latency: bool = False,
 ):
     typestr_fn = get_typestr_fn(flavor)
     in_kif = map(max, zip(*map(_minimal_kif, sol.inp_qint)))
@@ -99,10 +105,9 @@ def cpp_logic_and_bridge_gen(
     out_type = typestr_fn(*out_kif)
 
     n_in, n_out = sol.shape
-    fn_signature = f'void {fn_name}({inp_type} inp[{n_in}], {out_type} out[{n_out}])'
-    pragma = ''
-    if flavor == 'vitis':
-        pragma = '#pragma HLS INLINE'
+    template_def = 'template <typename inp_t, typename out_t>'
+    fn_signature = f'void {fn_name}(inp_t inp[{n_in}], out_t out[{n_out}])'
+    pragmas = pragmas or []
 
     ssa_lines = ssa_gen(sol.ops, print_latency=print_latency, typestr_fn=typestr_fn)
     output_lines = output_gen(sol, typestr_fn=typestr_fn)
@@ -110,8 +115,9 @@ def cpp_logic_and_bridge_gen(
     indent = ' ' * n_indent
     base_indent = indent * n_base_indent
     body_indent = '\n' + base_indent + indent
-    code = f"""{base_indent}{fn_signature} {{
-{body_indent}{pragma}
+    code = f"""{base_indent}{template_def}
+{base_indent}{fn_signature} {{
+{body_indent}{body_indent.join(pragmas)}
 {body_indent}{body_indent.join(ssa_lines)}
 {body_indent}{body_indent.join(output_lines)}
 {base_indent}}}
@@ -121,7 +127,8 @@ def cpp_logic_and_bridge_gen(
 
 extern "C" {{
 void bridge(double *inp, double *out, int size) {{
-vitis_bridge<{inp_type}, {out_type}, {n_in}, {n_out}>({fn_name}, inp, out, size);
+    auto fn = {fn_name}<{inp_type}, {out_type}>;
+    vitis_bridge<{inp_type}, {out_type}, {n_in}, {n_out}>(fn, inp, out, size);
 }}
 }}"""
     return code, bridge
