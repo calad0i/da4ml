@@ -161,6 +161,8 @@ class FixedVariable:
         )
 
     def _const_add(self, other: float | Decimal):
+        if not isinstance(other, (int, float, Decimal)):
+            other = float(other)  # direct numpy to decimal raises error
         other = Decimal(other)
         if other == 0:
             return self
