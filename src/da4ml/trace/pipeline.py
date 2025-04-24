@@ -38,7 +38,7 @@ def pipelining(sol: Solution, latency_cutoff: int) -> CascadedSolution:
 
     for i, op in enumerate(ops):
         stage = get_stage(op)
-        if op.id1 in (-1, -4):
+        if op.id1 == -1:
             # Copy from external buffer
             opd.setdefault(stage, []).append(op)
             locator.append({stage: len(opd[stage]) - 1})
