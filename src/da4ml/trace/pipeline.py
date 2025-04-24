@@ -1,10 +1,9 @@
 from math import floor
 
-from ..cmvm.types import CascadedSolution, Op
-from .tracer import Trace, trace_to_solution
+from ..cmvm.types import CascadedSolution, Op, Solution
 
 
-def pipelining(trace: Trace) -> CascadedSolution:
+def pipelining(sol: Solution, latency_cutoff: int) -> CascadedSolution:
     """Split the record into multiple stages based on the latency of the operations.
     Only useful for HDL generation.
 
@@ -18,12 +17,10 @@ def pipelining(trace: Trace) -> CascadedSolution:
     CascadedSolution
         The cascaded solution with multiple stages.
     """
-    assert len(trace.ops) > 0, 'No operations in the record'
-    for i, op in enumerate(trace.ops):
+    assert len(sol.ops) > 0, 'No operations in the record'
+    for i, op in enumerate(sol.ops):
         if op.id1 != -1:
             break
-
-    latency_cutoff = trace.hwconf.latency_cutoff
 
     def get_stage(op: Op):
         return floor(op.latency / (latency_cutoff + 1e-9)) if latency_cutoff > 0 else 0
@@ -33,9 +30,9 @@ def pipelining(trace: Trace) -> CascadedSolution:
 
     locator: list[dict[int, int]] = []
 
-    ops = trace.ops.copy()
-    lat = max(ops[i].latency for i in trace.out_idx)
-    for i in trace.out_idx:
+    ops = sol.ops.copy()
+    lat = max(ops[i].latency for i in sol.out_idxs)
+    for i in sol.out_idxs:
         op_out = ops[i]
         ops.append(Op(i, -1001, False, 0, op_out.qint, lat, 0.0))
 
@@ -88,20 +85,30 @@ def pipelining(trace: Trace) -> CascadedSolution:
             _Op = Op(p0_idx, p1_idx, op.sub, op.shift, op.qint, op.latency, op.cost)
             opd.setdefault(stage, []).append(_Op)
             locator.append({stage: len(opd[stage]) - 1})
-    outputs = []
+    sols = []
     max_stage = max(opd.keys())
     for i, stage in enumerate(opd.keys()):
         _ops = opd[stage]
         _out_idx = out_idxd[stage]
+        n_in = sum(op.id1 == -1 for op in _ops)
+        n_out = len(_out_idx)
+
         if i == max_stage:
-            out_factors = trace.out_factors
+            out_shifts = sol.out_shifts
+            out_negs = sol.out_negs
         else:
-            out_factors = [1.0] * len(_out_idx)
-        rec = Trace(
-            trace.hwconf,
+            out_shifts = [0] * len(_out_idx)
+            out_negs = [False] * len(_out_idx)
+
+        _sol = Solution(
+            shape=(n_in, n_out),
+            inp_shift=[0] * n_in,
+            out_idxs=_out_idx,
+            out_shifts=out_shifts,
+            out_negs=out_negs,
             ops=_ops,
-            out_idx=_out_idx,
-            out_factors=out_factors,
+            carry_size=sol.carry_size,
+            adder_size=sol.adder_size,
         )
-        outputs.append(trace_to_solution(rec))
-    return CascadedSolution(tuple(outputs))
+        sols.append(_sol)
+    return CascadedSolution(tuple(sols))

@@ -1,3 +1,5 @@
+from math import ceil, log2
+
 import numpy as np
 
 from da4ml.cmvm.types import Op, Solution, _minimal_kif
@@ -39,10 +41,17 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
                 line = f'{_def} assign {v} = v{op.id0}[{i0}:{i1}];'
-            case -4:  # Constant def
-                num = int(op.qint.min / op.qint.step)
-                num = num if num >= 0 else 2**bw + num
-                line = f"{_def} assign {v} = '{bin(num)[1:]};"
+            case -4:  # constant addition
+                num = op.shift
+                sign, mag = int(num < 0), abs(num)
+                line = f"{_def} assign {v} = '{bin(mag)[1:]};"
+                bw1 = ceil(log2(mag + 1))
+                bw0 = widths[op.id0]
+                s0 = int(kifs[op.id0][0])
+                v0 = f'v{op.id0}[{bw0-1}:0]'
+                v1 = f"'{bin(mag)[1:]}"
+                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, 0, {sign}) op_{i} ({v0}, {v1}, {v});'
+
             case _:  # Common a+/-b<<shift oprs
                 assert op.id1 >= 0, f'Invalid id1: {op.id1}'
                 p0, p1 = kifs[op.id0], kifs[op.id1]  # precision -> keep_neg, integers (no sign), fractional
@@ -72,7 +81,7 @@ def output_gen(sol: Solution):
         i0, i1 = out_idxs[i]
         bw = widths[i]
         bw0 = sum(_minimal_kif(sol.ops[idx].qint))
-        if sol.out_neg[i]:
+        if sol.out_negs[i]:
             lines.append(f'wire [{bw-1}:0] out_neg{i}; assign out_neg{i} = -v{idx}[{bw0-1}:0];')
             lines.append(f'assign out[{i0}:{i1}] = out_neg{i}[{bw-1}:0];')
         else:

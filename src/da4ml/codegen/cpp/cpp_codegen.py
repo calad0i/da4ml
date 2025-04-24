@@ -1,13 +1,18 @@
 from collections.abc import Callable
 
-from da4ml.cmvm.types import Op, Solution, _minimal_kif
+from ...cmvm.types import Op, QInterval, Solution, _minimal_kif
+from ...trace.fixed_veriable import _const_f
 
 
 def kif_to_vitis_type(k: bool | int, i: int, f: int):
+    if k == i == f == 0:
+        f = 1
     return f'ap_{"" if k else "u"}fixed<{k+i+f},{k+i}>'
 
 
 def kif_to_hlslib_type(k: bool | int, i: int, f: int):
+    if k == i == f == 0:
+        f = 1
     return f'ac_fixed<{int(k)},{k+i+f},{k+i}>'
 
 
@@ -60,7 +65,11 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
 
         elif op.id1 == -4:
             # Constant def
-            val = f'{_type}({op.qint.min})'
+            _number = op.shift * op.qint.step
+            sign, mag = ('-' if _number < 0 else '+'), abs(_number)
+            f = _const_f(mag)
+            const_type_str = typestr_fn(*_minimal_kif(QInterval(mag, mag, 2.0**-f)))
+            val = f'{ref0} {sign} {const_type_str}({mag})'
 
         else:
             raise ValueError(f'Invalid id1: {op.id1}')
@@ -81,7 +90,7 @@ def output_gen(sol: Solution, typestr_fn: Callable[[bool | int, int, int], str])
             continue
         _type = typestr_fn(*_minimal_kif(sol.out_qint[i]))
         shift = sol.out_shifts[i]
-        neg_str = '-' if sol.out_neg[i] else ''
+        neg_str = '-' if sol.out_negs[i] else ''
         if shift == 0:
             lines.append(f'out[{i}] = {_type}({neg_str}v{idx});')
         else:

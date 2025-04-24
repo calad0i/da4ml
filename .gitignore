@@ -1,3 +1,11 @@
+# test files
+_*_codegen/
+
+# Verilator generated files
+obj_dir/
+*.vcd
+*.vpd
+
 # Notebooks
 *.ipynb
 

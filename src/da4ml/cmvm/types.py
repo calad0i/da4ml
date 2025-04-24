@@ -68,7 +68,11 @@ class Op(NamedTuple):
 
     id0: int
     id1: int
-    # -1: copy from external id0; -2: relu; -3: qinterval change with bitdrop (WRAP & TRN); -4 copy from same buffer
+    # >= 0: buf[id0] +/- buf[id1] * 2**shift
+    # -1: ext_buf[id0]
+    # -2: quantize(relu(+/-buf[id0]), kif from qint)
+    # -3: quantize(buf[id0], kif from qint)
+    # -4: const op.id0 * 2**shift
     sub: bool
     shift: int
     qint: QInterval
@@ -137,22 +141,24 @@ T = TypeVar('T', 'FixedVariable', float, int, np.float32, np.float64, Decimal)
 
 
 @singledispatch
-def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False) -> 'T':
-    from ..trace.fixed_veriable import FixedVariable
+def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False, round_mode: str = 'TRN') -> 'T':
+    # from ..trace.fixed_veriable import FixedVariable
 
-    assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic relu'
-    return v.relu(i, f)
+    # assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic relu'
+    return v.relu(i, f, round_mode=round_mode)
 
 
 @_relu.register(float)
 @_relu.register(int)
 @_relu.register(np.float32)
 @_relu.register(np.float64)
-def _(v, i: int | None = None, f: int | None = None, inv: bool = False):
+def _(v, i: int | None = None, f: int | None = None, inv: bool = False, round_mode: str = 'TRN'):
     if inv:
         v = -v
     v = max(0, v)
     if f is not None:
+        if round_mode.upper() == 'RND':
+            v += 2.0 ** (-f - 1)
         sf = 2.0**f
         v = floor(v * sf) / sf
     if i is not None:
@@ -161,11 +167,13 @@ def _(v, i: int | None = None, f: int | None = None, inv: bool = False):
 
 
 @_relu.register
-def _(v: Decimal, i: int | None = None, f: int | None = None, inv: bool = False):
+def _(v: Decimal, i: int | None = None, f: int | None = None, inv: bool = False, round_mode: str = 'TRN'):
     if inv:
         v = -v
     v = max(Decimal(0), v)
     if f is not None:
+        if round_mode.upper() == 'RND':
+            v += Decimal(2) ** (-f - 1)
         sf = Decimal(2) ** f
         v = floor(v * sf) / sf
     if i is not None:
@@ -177,11 +185,12 @@ def relu(
     vars: list['FixedVariable | float | int'],
     i: Sequence[int | None] | None | int = None,
     f: Sequence[int | None] | None | int = None,
+    round_mode: str = 'TRN',
     inv=False,
 ):
     _i = i if isinstance(i, Sequence) else [i] * len(vars)
     _f = f if isinstance(f, Sequence) else [f] * len(vars)
-    return [_relu(v, i_, f_, inv) for v, i_, f_ in zip(vars, _i, _f)]
+    return [_relu(v, i_, f_, inv, round_mode=round_mode) for v, i_, f_ in zip(vars, _i, _f)]
 
 
 class Solution(NamedTuple):
@@ -235,7 +244,7 @@ class Solution(NamedTuple):
     inp_shift: list[int]
     out_idxs: list[int]
     out_shifts: list[int]
-    out_neg: list[bool]
+    out_negs: list[bool]
     ops: list[Op]
     carry_size: int
     adder_size: int
@@ -276,19 +285,19 @@ class Solution(NamedTuple):
             elif op.id1 == -2:  # relu, -(relu(-))
                 v = buf[op.id0]
                 _, _i, _f = _minimal_kif(op.qint)
-                buf[i] = _relu(v, _i, _f, inv=op.sub)
+                buf[i] = _relu(v, _i, _f, inv=op.sub, round_mode='TRN')
                 # buf[i] = max(0, v)
                 continue
             elif op.id1 == -3:  # quantization only
                 v = buf[op.id0]
                 _k, _i, _f = _minimal_kif(op.qint)
-                bias = _k * 2.0**_i
                 b = _k + _i + _f
+                bias = 2.0 ** (b - 1) * _k
                 eps = 2.0**-_f
                 buf[i] = eps * ((np.floor(v / eps) + bias) % 2**b - bias)
                 continue
             elif op.id1 == -4:  # define constant
-                buf[i] = op.qint.min
+                buf[i] = buf[op.id0] + op.shift * op.qint.step
                 continue
             assert op.id1 >= 0, f'Unknown id1 {op.id1} in {op}'
             v0, v1 = buf[op.id0], buf[op.id1]
@@ -297,7 +306,7 @@ class Solution(NamedTuple):
             buf[i] = v0 + 2.0**op.shift * v1
 
         sf = 2.0 ** np.asarray(self.out_shifts)
-        sign = np.where(self.out_neg, -1, 1)
+        sign = np.where(self.out_negs, -1, 1)
         out_idx = np.asarray(self.out_idxs)
         mask = np.where(out_idx < 0, 0, 1)
         if debug:
@@ -345,7 +354,7 @@ class Solution(NamedTuple):
             _min, _max, _step = self.ops[idx].qint
             sf = 2.0 ** self.out_shifts[i]
             _min, _max, _step = _min * sf, _max * sf, _step * sf
-            if self.out_neg[i]:
+            if self.out_negs[i]:
                 _min, _max = -_max, -_min
             buf.append(QInterval(_min, _max, _step))
         return buf
@@ -449,7 +458,7 @@ class CascadedSolution(NamedTuple):
 
     @property
     def out_neg(self):
-        return self.solutions[-1].out_neg
+        return self.solutions[-1].out_negs
 
     def __repr__(self) -> str:
         n_ins = [sol.shape[0] for sol in self.solutions] + [self.shape[1]]

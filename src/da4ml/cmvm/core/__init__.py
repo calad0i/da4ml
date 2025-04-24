@@ -203,7 +203,7 @@ def to_solution(
         inp_shift=list(in_shift),
         out_idxs=out_idx,
         out_shifts=list(out_shift),
-        out_neg=out_neg,
+        out_negs=out_neg,
         ops=ops,
         carry_size=carry_size,
         adder_size=adder_size,
