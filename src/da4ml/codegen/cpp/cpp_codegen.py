@@ -38,41 +38,40 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
 
         ref0 = f'v{op.id0}'
 
-        if op.id1 >= 0:
-            # Common a+/-b<<shift op
-            ref1 = f'bit_shift<{op.shift}>(v{op.id1})' if op.shift != 0 else f'v{op.id1}'
-            val = f'{ref0} {"-" if op.sub else "+"} {ref1}'
+        match op.id1:
+            case -1:
+                # Input marker
+                val = f'inp[{ops[op.id0].id0}]'
 
-        elif op.id1 == -1:
-            # Input marker
-            val = f'inp[{ops[op.id0].id0}]'
+            case -2:
+                if not op.sub:  # relu(inp)
+                    if ops[op.id0].qint.min < 0:
+                        val = f'{ref0} > 0 ? {_type}({ref0}) : {_type}(0)'
+                    else:
+                        val = ref0
+                else:  # relu(-inp)
+                    if ops[op.id0].qint.max > 0:
+                        val = f'{ref0} > 0 ? {_type}(0) : {_type}(-{ref0})'
+                    else:
+                        val = f'-{ref0}'
 
-        elif op.id1 == -2:
-            if not op.sub:  # relu(inp)
-                if ops[op.id0].qint.min < 0:
-                    val = f'{ref0} > 0 ? {_type}({ref0}) : {_type}(0)'
-                else:
-                    val = ref0
-            else:  # relu(-inp)
-                if ops[op.id0].qint.max > 0:
-                    val = f'{ref0} > 0 ? {_type}(0) : {_type}(-{ref0})'
-                else:
-                    val = f'-{ref0}'
+            case -3:
+                # Explicit quantization op, done implicitly via assignment
+                val = ref0
 
-        elif op.id1 == -3:
-            # Explicit quantization op, done implicitly via assignment
-            val = ref0
+            case -4:
+                # Constant def
+                _number = op.shift * op.qint.step
+                sign, mag = ('-' if _number < 0 else '+'), abs(_number)
+                f = _const_f(mag)
+                const_type_str = typestr_fn(*_minimal_kif(QInterval(mag, mag, 2.0**-f)))
+                val = f'{ref0} {sign} {const_type_str}({mag})'
 
-        elif op.id1 == -4:
-            # Constant def
-            _number = op.shift * op.qint.step
-            sign, mag = ('-' if _number < 0 else '+'), abs(_number)
-            f = _const_f(mag)
-            const_type_str = typestr_fn(*_minimal_kif(QInterval(mag, mag, 2.0**-f)))
-            val = f'{ref0} {sign} {const_type_str}({mag})'
-
-        else:
-            raise ValueError(f'Invalid id1: {op.id1}')
+            case _:
+                assert op.id1 >= 0, f'Invalid id1: {op.id1}'
+                # Common a+/-b<<shift op
+                ref1 = f'bit_shift<{op.shift}>(v{op.id1})' if op.shift != 0 else f'v{op.id1}'
+                val = f'{ref0} {"-" if op.sub else "+"} {ref1}'
 
         line = f'{_type} v{i} = {val};'
 
