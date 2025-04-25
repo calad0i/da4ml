@@ -102,12 +102,6 @@ def to_solution(
     ----------
     state : DAState
         The DAState to convert.
-    inp_latencies : list[float] | None, optional
-        List of latencies for each input, by default None
-        If None, defaults to 0. for each input.
-    inp_qintervals : list[QInterval] | None, optional
-        List of QIntervals for each input, by default None
-        If None, defaults to [-128., 127., 1.] for each input.
     adder_size : int, optional
         The atomic size of the adder for cost computation, by default -1
         if -1, each adder can be arbitrary large, and the cost will be the number of adders
@@ -139,7 +133,7 @@ def to_solution(
     for i_out in range(n_out):
         heap = []
         idx, shifts = np.where(expr[:, i_out] != 0)
-        sub = np.empty(len(idx), dtype=np.bool_)
+        sub = np.empty(len(idx), dtype=np.int64)
         for i, (i_in, shift) in enumerate(zip(idx, shifts)):
             sub[i] = expr[i_in, i_out, shift] == -1
 
@@ -174,9 +168,9 @@ def to_solution(
             if sub0:
                 shift = shift0 - shift1
                 qint = qint_add(qint1, qint0, shift, sub1, sub0)
-                dlat, dcost = cost_add(qint1, qint0, shift=shift, sub=not sub1, adder_size=adder_size, carry_size=carry_size)
+                dlat, dcost = cost_add(qint1, qint0, shift=shift, sub=1 ^ sub1, adder_size=adder_size, carry_size=carry_size)
                 lat = max(lat0, lat1) + dlat
-                op = Op(id1, id0, not sub1, shift, qint, lat, dcost)
+                op = Op(id1, id0, 1 ^ sub1, shift, qint, lat, dcost)
                 shift = shift1
             else:
                 shift = shift1 - shift0
@@ -187,7 +181,7 @@ def to_solution(
                 shift = shift0
 
             fp_align = -int(log2(qint.step)) - shift
-            heapq.heappush(heap, (lat, sub0 and sub1, fp_align, qint, _global_id, shift))
+            heapq.heappush(heap, (lat, sub0 & sub1, fp_align, qint, _global_id, shift))
             ops.append(op)
             _global_id += 1
 

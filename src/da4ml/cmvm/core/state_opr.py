@@ -6,15 +6,6 @@ from numba import jit
 from ..types import DAState, Op, Pair, QInterval
 from ..util import csd_decompose
 
-# @jit
-# def _qint_add(qi1: QInterval, qi2: QInterval) -> QInterval:
-#     return QInterval(min=qi1.min + qi2.min, max=qi1.max + qi2.max, step=min(qi1.step, qi2.step))
-
-
-# @jit
-# def _qint_sub(qi1: QInterval, qi2: QInterval) -> QInterval:
-#     return QInterval(min=qi1.min - qi2.max, max=qi1.max - qi2.min, step=min(qi1.step, qi2.step))
-
 
 @jit
 def qint_add(qint0: QInterval, qint1: QInterval, shift: int, sub0=False, sub1=False) -> QInterval:
@@ -70,13 +61,13 @@ def cost_add(
     min1, max1, step1 = min1 * sf, max1 * sf, step1 * sf
     max0, max1 = max0 + step0, max1 + step1
 
-    f = -log2(min(step0, step1))
+    f = -log2(max(step0, step1))
     i = ceil(log2(max(abs(min0), abs(min1), abs(max0), abs(max1))))
     k = int(qint0.min < 0 or qint1.min < 0)
-    n_accum = k + i + f + 1
+    n_accum = k + i + f
     # Align to the number of carry and adder bits, when they are block-based (e.g., 4/8 bits look-ahead carry in Xilinx FPGAs)
     # For Altera, the carry seems to be single bit adder chains, but need to check
-    return float(ceil((n_accum - 1) / carry_size)), float(ceil(n_accum / adder_size))
+    return float(ceil(n_accum / carry_size)), float(ceil(n_accum / adder_size))
 
 
 @jit
@@ -131,7 +122,7 @@ def create_state(
             if stat[k] < 2.0:
                 del stat[k]
 
-    ops = [Op(i, -1, False, 0, qintervals[i], inp_latencies[i], 0.0) for i in range(n_in)]
+    ops = [Op(i, -1, 0, 0, qintervals[i], inp_latencies[i], 0.0) for i in range(n_in)]
 
     return DAState(
         shifts=shifts,
@@ -241,7 +232,7 @@ def pair_to_op(pair: Pair, state: DAState, adder_size: int = -1, carry_size: int
         shift=pair.shift,
         sub1=pair.sub,
     )
-    return Op(id0, id1, pair.sub, pair.shift, qint, lat, cost)
+    return Op(id0, id1, int(pair.sub), pair.shift, qint, lat, cost)
 
 
 @jit

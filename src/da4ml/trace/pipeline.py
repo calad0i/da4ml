@@ -34,7 +34,7 @@ def pipelining(sol: Solution, latency_cutoff: int) -> CascadedSolution:
     lat = max(ops[i].latency for i in sol.out_idxs)
     for i in sol.out_idxs:
         op_out = ops[i]
-        ops.append(Op(i, -1001, False, 0, op_out.qint, lat, 0.0))
+        ops.append(Op(i, -1001, 0, 0, op_out.qint, lat, 0.0))
 
     for i, op in enumerate(ops):
         stage = get_stage(op)
@@ -52,7 +52,7 @@ def pipelining(sol: Solution, latency_cutoff: int) -> CascadedSolution:
                 op0 = ops[op.id0]
                 latency = float(latency_cutoff * (j + 1))
                 out_idxd.setdefault(j, []).append(locator[op.id0][j])
-                _copy_op = Op(len(out_idxd[j]) - 1, -1, False, 0, op0.qint, latency, 0.0)
+                _copy_op = Op(len(out_idxd[j]) - 1, -1, 0, 0, op0.qint, latency, 0.0)
                 opd.setdefault(j + 1, []).append(_copy_op)
                 p0_idx = len(opd[j + 1]) - 1
                 locator[op.id0][j + 1] = p0_idx
@@ -69,7 +69,7 @@ def pipelining(sol: Solution, latency_cutoff: int) -> CascadedSolution:
                     op1 = ops[op.id1]
                     latency = float(latency_cutoff * (j + 1))
                     out_idxd.setdefault(j, []).append(locator[op.id1][j])
-                    _copy_op = Op(len(out_idxd[j]) - 1, -1, False, 0, op1.qint, latency, 0.0)
+                    _copy_op = Op(len(out_idxd[j]) - 1, -1, 0, 0, op1.qint, latency, 0.0)
                     opd.setdefault(j + 1, []).append(_copy_op)
                     p1_idx = len(opd[j + 1]) - 1
                     locator[op.id1][j + 1] = p1_idx
@@ -82,7 +82,7 @@ def pipelining(sol: Solution, latency_cutoff: int) -> CascadedSolution:
             # Output to external buffer
             out_idxd.setdefault(stage, []).append(p0_idx)
         else:
-            _Op = Op(p0_idx, p1_idx, op.sub, op.shift, op.qint, op.latency, op.cost)
+            _Op = Op(p0_idx, p1_idx, op.option, op.data, op.qint, op.latency, op.cost)
             opd.setdefault(stage, []).append(_Op)
             locator.append({stage: len(opd[stage]) - 1})
     sols = []

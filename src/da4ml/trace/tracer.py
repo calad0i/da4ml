@@ -42,7 +42,7 @@ def _trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
                 v0, v1 = v._from
                 f0, f1 = v0._factor, v1._factor
                 id0, id1 = index[v0.id], index[v1.id]
-                sub = f1 < 0
+                sub = int(f1 < 0)
                 shift = int(log2(abs(f1 / f0)))
                 assert id0 < i and id1 < i, f'{id0} {id1} {i} {v.id}'
                 ops.append(Op(id0, id1, sub, shift, v.unscaled.qint, v.latency, v.cost))
@@ -54,20 +54,20 @@ def _trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
                 qint = v.unscaled.qint
                 shift = int(v._data / Decimal(qint.step))
                 assert id0 < i, f'{id0} {i} {v.id}'
-                ops.append(Op(id0, -4, False, shift, qint, v.latency, v.cost))
+                ops.append(Op(id0, -4, 0, shift, qint, v.latency, v.cost))
             case 'wrap':
                 v0 = v._from[0]
                 id0 = index[v0.id]
                 assert id0 < i, f'{id0} {i} {v.id}'
-                ops.append(Op(id0, -3, False, 0, v.unscaled.qint, v.latency, v.cost))
+                ops.append(Op(id0, -3, 0, 0, v.unscaled.qint, v.latency, v.cost))
             case 'relu':
                 v0 = v._from[0]
                 id0 = index[v0.id]
                 assert id0 < i, f'{id0} {i} {v.id}'
-                ops.append(Op(id0, -2, v._from[0]._factor < 0, 0, v.unscaled.qint, v.latency, v.cost))
+                ops.append(Op(id0, -2, int(v._from[0]._factor < 0), 0, v.unscaled.qint, v.latency, v.cost))
             case 'new':
                 id0 = inp_uuids[v.id]
-                ops.append(Op(id0, -1, False, 0, v.unscaled.qint, v.latency, v.cost))
+                ops.append(Op(id0, -1, 0, 0, v.unscaled.qint, v.latency, v.cost))
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
     out_index = [index[v.id] for v in outputs]

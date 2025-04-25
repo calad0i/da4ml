@@ -30,7 +30,7 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
 
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
-                if op.sub:
+                if op.option:
                     lines.append(f'wire [{bw0-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw0-1}:0] = -{v0_name}[{bw0-1}:0];')
                     v0_name = f'v{op.id0}_neg'
                 if ops[op.id0].qint.min < 0:
@@ -42,7 +42,7 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
                 line = f'{_def} assign {v} = v{op.id0}[{i0}:{i1}];'
             case -4:  # constant addition
-                num = op.shift
+                num = op.data
                 sign, mag = int(num < 0), abs(num)
                 line = f"{_def} assign {v} = '{bin(mag)[1:]};"
                 bw1 = ceil(log2(mag + 1))
@@ -58,9 +58,9 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
 
                 bw0, bw1 = widths[op.id0], widths[op.id1]  # width
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
-                shift = op.shift + f0 - f1
+                shift = op.data + f0 - f1
                 v0, v1 = f'v{op.id0}[{bw0-1}:0]', f'v{op.id1}[{bw1-1}:0]'
-                sub = int(op.sub)
+                sub = int(op.option)
 
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {sub}) op_{i} ({v0}, {v1}, {v});'
 

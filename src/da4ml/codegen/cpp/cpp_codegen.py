@@ -44,7 +44,7 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
                 val = f'inp[{ops[op.id0].id0}]'
 
             case -2:
-                if not op.sub:  # relu(inp)
+                if not op.option:  # relu(inp)
                     if ops[op.id0].qint.min < 0:
                         val = f'{ref0} > 0 ? {_type}({ref0}) : {_type}(0)'
                     else:
@@ -61,7 +61,7 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
 
             case -4:
                 # Constant def
-                _number = op.shift * op.qint.step
+                _number = op.data * op.qint.step
                 sign, mag = ('-' if _number < 0 else '+'), abs(_number)
                 f = _const_f(mag)
                 const_type_str = typestr_fn(*_minimal_kif(QInterval(mag, mag, 2.0**-f)))
@@ -70,8 +70,8 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
             case _:
                 assert op.id1 >= 0, f'Invalid id1: {op.id1}'
                 # Common a+/-b<<shift op
-                ref1 = f'bit_shift<{op.shift}>(v{op.id1})' if op.shift != 0 else f'v{op.id1}'
-                val = f'{ref0} {"-" if op.sub else "+"} {ref1}'
+                ref1 = f'bit_shift<{op.data}>(v{op.id1})' if op.data != 0 else f'v{op.id1}'
+                val = f'{ref0} {"-" if op.option else "+"} {ref1}'
 
         line = f'{_type} v{i} = {val};'
 

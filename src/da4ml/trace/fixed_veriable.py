@@ -76,7 +76,7 @@ class FixedVariable:
             else:
                 assert self._data is not None, 'cadd must have data'
                 int0 = self._from[0].qint
-                int1 = QInterval(float(self._data), float(self._data), float(1))
+                int1 = QInterval(float(self._data), float(self._data), float(self.step))
                 base_latency = self._from[0].latency
             dlat, _cost = cost_add(int0, int1, 0, False, adder_size, carry_size)
 
@@ -243,13 +243,7 @@ class FixedVariable:
                 high = _high
         _factor = self._factor
         return FixedVariable(
-            low,
-            high,
-            step,
-            _from=(self,),
-            _factor=abs(_factor),
-            opr='relu',
-            _hwconf=self._hwconf,
+            low, high, step, _from=(self,), _factor=abs(_factor), opr='relu', _hwconf=self._hwconf, cost=sum(self.kif)
         )
 
     def quantize(
