@@ -137,8 +137,8 @@ def to_solution(
         for i, (i_in, shift) in enumerate(zip(idx, shifts)):
             sub[i] = expr[i_in, i_out, shift] == -1
 
-        qints = [state.ops[i].qint for i in idx]
-        lats = [state.ops[i].latency for i in idx]
+        qints: list[QInterval] = [state.ops[i].qint for i in idx]
+        lats: list[float] = [state.ops[i].latency for i in idx]
 
         # No reduction required, dump the realized value directly
         if len(sub) == 1:
@@ -157,8 +157,11 @@ def to_solution(
             continue
 
         # Sort by latency -> location of rightmost bit -> lower bound
-        fp_align = [-int(log2(qint.step)) - shifts[i] for i, qint in enumerate(qints)]
-        heap = list(zip(lats, sub, fp_align, qints, idx, shifts))
+        left_align: list[int] = []
+        for i, qint in enumerate(qints):
+            n_int = int(log2(max(abs(qint.max + qint.step), abs(qint.min))))
+            left_align.append(n_int + shifts[i])
+        heap = list(zip(lats, sub, left_align, qints, idx, shifts))
         heapq.heapify(heap)
 
         while len(heap) > 1:
@@ -180,8 +183,8 @@ def to_solution(
                 op = Op(id0, id1, sub1, shift, qint, lat, dcost)
                 shift = shift0
 
-            fp_align = -int(log2(qint.step)) - shift
-            heapq.heappush(heap, (lat, sub0 & sub1, fp_align, qint, _global_id, shift))
+            left_align = int(log2(max(abs(qint.max + qint.step), abs(qint.min)))) + shift
+            heapq.heappush(heap, (lat, sub0 & sub1, left_align, qint, _global_id, shift))
             ops.append(op)
             _global_id += 1
 

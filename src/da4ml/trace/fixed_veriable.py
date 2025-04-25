@@ -32,14 +32,14 @@ class FixedVariable:
         low: float | Decimal,
         high: float | Decimal,
         step: float | Decimal,
-        opr: str = 'new',
         latency: float | None = None,
+        hwconf=HWConfig(-1, -1, -1),
+        opr: str = 'new',
         cost: float | None = None,
         _from: tuple['FixedVariable', ...] = (),
         _factor: float | Decimal = 1.0,
         _data: Decimal | None = None,
         _id: UUID | None = None,
-        _hwconf=HWConfig(-1, -1, -1),
     ) -> None:
         assert low <= high, f'low {low} must be less than high {high}'
         self.low = Decimal(low)
@@ -50,7 +50,7 @@ class FixedVariable:
         self.opr = opr
         self._data = _data
         self.id = _id or uuid4()
-        self._hwconf = _hwconf
+        self.hwconf = hwconf
 
         if opr == 'cadd':
             assert _data is not None, 'cadd must have data'
@@ -65,9 +65,9 @@ class FixedVariable:
 
     def get_cost_and_latency(self):
         if self.opr in ('vadd', 'cadd'):
-            adder_size = self._hwconf.adder_size
-            carry_size = self._hwconf.carry_size
-            latency_cutoff = self._hwconf.latency_cutoff
+            adder_size = self.hwconf.adder_size
+            carry_size = self.hwconf.carry_size
+            latency_cutoff = self.hwconf.latency_cutoff
 
             if self.opr == 'vadd':
                 v0, v1 = self._from
@@ -132,7 +132,7 @@ class FixedVariable:
             opr=self.opr,
             _id=self.id,
             _data=self._data,
-            _hwconf=self._hwconf,
+            hwconf=self.hwconf,
         )
 
     def __add__(self, other: 'FixedVariable|float|Decimal|int'):
@@ -141,7 +141,7 @@ class FixedVariable:
         if other.high == other.low:
             return self._const_add(other.low)
 
-        assert self._hwconf == other._hwconf, 'FixedVariable must have the same hwconf'
+        assert self.hwconf == other.hwconf, 'FixedVariable must have the same hwconf'
 
         f0, f1 = self._factor, other._factor
         if f0 < 0:
@@ -157,7 +157,7 @@ class FixedVariable:
             _from=(self, other),
             _factor=f0,
             opr='vadd',
-            _hwconf=self._hwconf,
+            hwconf=self.hwconf,
         )
 
     def _const_add(self, other: float | Decimal):
@@ -177,7 +177,7 @@ class FixedVariable:
                 _factor=self._factor,
                 _data=other / self._factor,
                 opr='cadd',
-                _hwconf=self._hwconf,
+                hwconf=self.hwconf,
             )
 
         # cadd, combine the constant
@@ -215,7 +215,7 @@ class FixedVariable:
             cost=self.cost,
             _id=self.id,
             _data=self._data,
-            _hwconf=self._hwconf,
+            hwconf=self.hwconf,
         )
 
     def __radd__(self, other: 'float|Decimal|int|FixedVariable'):
@@ -243,7 +243,7 @@ class FixedVariable:
                 high = _high
         _factor = self._factor
         return FixedVariable(
-            low, high, step, _from=(self,), _factor=abs(_factor), opr='relu', _hwconf=self._hwconf, cost=sum(self.kif)
+            low, high, step, _from=(self,), _factor=abs(_factor), opr='relu', hwconf=self.hwconf, cost=sum(self.kif)
         )
 
     def quantize(
@@ -287,7 +287,7 @@ class FixedVariable:
             opr='wrap' if overflow_mode == 'WRAP' else 'sat',
             latency=self.latency,
             cost=self.cost,
-            _hwconf=self._hwconf,
+            hwconf=self.hwconf,
         )
 
     @classmethod

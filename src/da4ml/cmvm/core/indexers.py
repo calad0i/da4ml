@@ -1,7 +1,9 @@
+from math import ceil, log2
+
 import numpy as np
 from numba import jit
 
-from ..types import DAState, QInterval, minimal_kif
+from ..types import DAState, QInterval
 
 
 @jit
@@ -32,13 +34,20 @@ def idx_mc_dc(state: DAState, absolute: bool = False):
 
 
 @jit
-def overlap_and_total(qint0: QInterval, qint1: QInterval):
+def overlap_and_accum(qint0: QInterval, qint1: QInterval):
     """Calculate the overlap and total number of bits for two QIntervals, when represented in fixed-point format."""
-    k0, i0, f0 = minimal_kif(qint0)
-    k1, i1, f1 = minimal_kif(qint1)
-    n_overlap = max(min(k0, k1) + min(i0, i1) + min(f0, f1), 0)
-    n_total = max(k0, k1) + max(i0, i1) + max(f0, f1)
-    return n_overlap, n_total
+
+    min0, max0, step0 = qint0
+    min1, max1, step1 = qint1
+    max0, max1 = max0 + step0, max1 + step1
+
+    f = -log2(max(step0, step1))
+    i_high = ceil(log2(max(abs(min0), abs(min1), abs(max0), abs(max1))))
+    i_low = ceil(log2(min(max(abs(min0), abs(max0)), max(abs(min1), abs(max1)))))
+    k = int(qint0.min < 0 or qint1.min < 0)
+    n_accum = k + i_high + f
+    n_overlap = k + i_low + f
+    return n_overlap, n_accum
 
 
 @jit
@@ -50,8 +59,8 @@ def idx_wmc(state: DAState):
     for i, (k, v) in enumerate(zip(keys, freqs)):
         id0, id1 = k.id0, k.id1
         qint0, qint1 = state.ops[id0].qint, state.ops[id1].qint
-        n_overlap, n_total = overlap_and_total(qint0, qint1)
-        score[i] = v * (2 * n_overlap - n_total)
+        n_overlap, _ = overlap_and_accum(qint0, qint1)
+        score[i] = v * n_overlap
     max_score = np.max(score)
     if max_score < 0:
         return -1
@@ -71,8 +80,8 @@ def idx_wmc_dc(state: DAState, absolute: bool = False):
         id0, id1 = k.id0, k.id1
         qint0, qint1 = state.ops[id0].qint, state.ops[id1].qint
         lat0, lat1 = state.ops[id0].latency, state.ops[id1].latency
-        n_overlap, n_total = overlap_and_total(qint0, qint1)
-        score[i] = v * (2 * n_overlap - n_total) - 256 * abs(lat0 - lat1)
+        n_overlap, _ = overlap_and_accum(qint0, qint1)
+        score[i] = v * n_overlap - 256 * abs(lat0 - lat1)
     if absolute and np.max(score) < 0:
         return -1
     return np.argmax(score)

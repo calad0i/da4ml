@@ -1,16 +1,53 @@
-from math import floor
+from math import ceil, floor
 
 from ..cmvm.types import CascadedSolution, Op, Solution
+from .fixed_veriable import FixedVariable, HWConfig
+from .tracer import trace
 
 
-def pipelining(sol: Solution, latency_cutoff: int) -> CascadedSolution:
+def retime_pipeline(csol: CascadedSolution, verbose=True):
+    n_stages = len(csol[0])
+    cutoff_high = ceil(max(max(sol.out_latency) / (i + 1) for i, sol in enumerate(csol[0])))
+    cutoff_low = 0
+    adder_size, carry_size = csol[0][0].adder_size, csol[0][0].carry_size
+    best = csol
+    while cutoff_high - cutoff_low > 1:
+        cutoff = (cutoff_high + cutoff_low) // 2
+        _hwconf = HWConfig(adder_size, carry_size, cutoff)
+        inp = [FixedVariable(*qint, hwconf=_hwconf) for qint in csol.inp_qint]
+        try:
+            out = list(csol(inp))
+        except AssertionError:
+            cutoff_low = cutoff
+            continue
+        _sol = to_pipeline(trace(inp, out), cutoff, retiming=False)
+        if len(_sol[0]) > n_stages:
+            cutoff_low = cutoff
+        else:
+            cutoff_high = cutoff
+            best = _sol
+    if verbose:
+        print(f'actual cutoff: {cutoff_high}')
+    return best
+
+
+def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True) -> CascadedSolution:
     """Split the record into multiple stages based on the latency of the operations.
     Only useful for HDL generation.
 
     Parameters
     ----------
-    trace : Trace
-        The trace record to be split. latency_cutoff is read from the hwconf.
+    sol : Solution
+        The solution to be split into multiple stages.
+    latency_cutoff : int
+        The latency cutoff for splitting the operations.
+    retiming : bool
+        Whether to retime the solution after splitting. Default is True.
+        If False, new stages are created when the propagation latency exceeds the cutoff.
+        If True, after the first round of splitting, the solution is retimed balance the delay within each stage.
+    verbose : bool
+        Whether to print the actual cutoff used for splitting. Only used if rebalance is True.
+        Default is True.
 
     Returns
     -------
@@ -111,4 +148,8 @@ def pipelining(sol: Solution, latency_cutoff: int) -> CascadedSolution:
             adder_size=sol.adder_size,
         )
         sols.append(_sol)
-    return CascadedSolution(tuple(sols))
+    csol = CascadedSolution(tuple(sols))
+
+    if retiming:
+        csol = retime_pipeline(csol, verbose=verbose)
+    return csol

@@ -89,6 +89,6 @@ def trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
         out_shift,
         out_neg,
         ops,
-        outputs[0]._hwconf.carry_size,
-        outputs[0]._hwconf.adder_size,
+        outputs[0].hwconf.carry_size,
+        outputs[0].hwconf.adder_size,
     )

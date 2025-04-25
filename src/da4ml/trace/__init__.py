@@ -1,5 +1,5 @@
 from .fixed_veriable import FixedVariable
-from .pipeline import pipelining
+from .pipeline import to_pipeline
 from .tracer import trace
 
-__all__ = ['pipelining', 'FixedVariable', 'trace']
+__all__ = ['to_pipeline', 'FixedVariable', 'trace']
