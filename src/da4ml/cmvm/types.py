@@ -173,7 +173,7 @@ T = TypeVar('T', 'FixedVariable', float, int, np.float32, np.float64, Decimal)
 
 @singledispatch
 def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False, round_mode: str = 'TRN') -> 'T':
-    from ..trace.fixed_veriable import FixedVariable
+    from ..trace.fixed_variable import FixedVariable
 
     assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic relu'
     return v.relu(i, f, round_mode=round_mode)
@@ -226,7 +226,7 @@ def relu(
 
 @singledispatch
 def _quantize(v: 'T', k: int | bool, i: int, f: int, round_mode: str = 'TRN') -> 'T':
-    from ..trace.fixed_veriable import FixedVariable
+    from ..trace.fixed_variable import FixedVariable
 
     assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic quantization'
     return v.quantize(k, i, f, round_mode=round_mode)
@@ -558,3 +558,13 @@ class CascadedSolution(NamedTuple):
         with open(path) as f:
             data = json.load(f)
         return cls.deserialize(data)
+
+    @property
+    def reg_bits(self):
+        """The number of bits used for the register in the solution."""
+        bits = 0
+        for _sol in self.solutions:
+            kifs = [_minimal_kif(qint) for qint in _sol.out_qint]
+            _bits = sum(map(sum, kifs))
+            bits += _bits
+        return bits

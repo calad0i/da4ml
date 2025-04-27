@@ -1,7 +1,7 @@
 from math import ceil, floor
 
 from ..cmvm.types import CascadedSolution, Op, Solution
-from .fixed_veriable import FixedVariable, HWConfig
+from .fixed_variable import FixedVariable, HWConfig
 from .tracer import trace
 
 

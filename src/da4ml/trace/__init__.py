@@ -1,4 +1,4 @@
-from .fixed_veriable import FixedVariable
+from .fixed_variable import FixedVariable
 from .pipeline import to_pipeline
 from .tracer import trace
 

@@ -4,7 +4,7 @@ from math import log2
 from uuid import UUID
 
 from ..cmvm.types import Op, Solution
-from .fixed_veriable import FixedVariable
+from .fixed_variable import FixedVariable
 
 
 def _recursive_trace(v: FixedVariable, gathered: dict[UUID, FixedVariable]):

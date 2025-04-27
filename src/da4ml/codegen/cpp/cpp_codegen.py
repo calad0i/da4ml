@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from ...cmvm.types import Op, QInterval, Solution, _minimal_kif
-from ...trace.fixed_veriable import _const_f
+from ...trace.fixed_variable import _const_f
 
 
 def kif_to_vitis_type(k: bool | int, i: int, f: int):
@@ -124,7 +124,7 @@ def cpp_logic_and_bridge_gen(
     base_indent = indent * n_base_indent
     body_indent = '\n' + base_indent + indent
     code = f"""{base_indent}{template_def}
-{base_indent}{fn_signature} {{
+{base_indent}{fn_signature} {{ // {inp_type} -> {out_type}
 {body_indent}{body_indent.join(pragmas)}
 {body_indent}{body_indent.join(ssa_lines)}
 {body_indent}{body_indent.join(output_lines)}
