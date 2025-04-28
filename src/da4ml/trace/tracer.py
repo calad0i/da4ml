@@ -1,10 +1,14 @@
 from collections.abc import Sequence
 from decimal import Decimal
 from math import log2
+from typing import overload
 from uuid import UUID
+
+import numpy as np
 
 from ..cmvm.types import Op, Solution
 from .fixed_variable import FixedVariable
+from .fixed_variable_array import FixedVariableArray
 
 
 def _recursive_trace(v: FixedVariable, gathered: dict[UUID, FixedVariable]):
@@ -32,7 +36,7 @@ def gather_variables(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVar
     return variables, index
 
 
-def _trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
+def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
     variables, index = gather_variables(inputs, outputs)
     ops: list[Op] = []
     inp_uuids = {v.id: i for i, v in enumerate(inputs)}
@@ -74,8 +78,17 @@ def _trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
     return ops, out_index
 
 
-def trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
-    ops, out_index = _trace(inputs, outputs)
+@overload
+def comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]): ...
+
+
+@overload
+def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray): ...
+
+
+def comb_trace(inputs, outputs):
+    inputs, outputs = list(np.ravel(inputs)), list(np.ravel(outputs))
+    ops, out_index = _comb_trace(inputs, outputs)
     shape = len(inputs), len(outputs)
     inp_shift = [0] * shape[0]
     out_sf = [v._factor for v in outputs]

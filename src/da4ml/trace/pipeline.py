@@ -2,7 +2,7 @@ from math import ceil, floor
 
 from ..cmvm.types import CascadedSolution, Op, Solution
 from .fixed_variable import FixedVariable, HWConfig
-from .tracer import trace
+from .tracer import comb_trace
 
 
 def retime_pipeline(csol: CascadedSolution, verbose=True):
@@ -20,7 +20,7 @@ def retime_pipeline(csol: CascadedSolution, verbose=True):
         except AssertionError:
             cutoff_low = cutoff
             continue
-        _sol = to_pipeline(trace(inp, out), cutoff, retiming=False)
+        _sol = to_pipeline(comb_trace(inp, out), cutoff, retiming=False)
         if len(_sol[0]) > n_stages:
             cutoff_low = cutoff
         else:

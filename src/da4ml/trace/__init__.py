@@ -1,5 +1,6 @@
-from .fixed_variable import FixedVariable
+# from .fixed_variable import FixedVariable
+from .fixed_variable_array import FixedVariableArray
 from .pipeline import to_pipeline
-from .tracer import trace
+from .tracer import comb_trace
 
-__all__ = ['to_pipeline', 'FixedVariable', 'trace']
+__all__ = ['to_pipeline', 'comb_trace', 'FixedVariableArray']

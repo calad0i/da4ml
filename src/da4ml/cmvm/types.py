@@ -1,5 +1,4 @@
 import json
-from collections.abc import Sequence
 from decimal import Decimal
 from functools import reduce, singledispatch
 from math import ceil, floor, log2
@@ -210,18 +209,6 @@ def _(v: Decimal, i: int | None = None, f: int | None = None, inv: bool = False,
     if i is not None:
         v = v % Decimal(2) ** i
     return v
-
-
-def relu(
-    vars: list['FixedVariable | float | int'],
-    i: Sequence[int | None] | None | int = None,
-    f: Sequence[int | None] | None | int = None,
-    round_mode: str = 'TRN',
-    inv=False,
-):
-    _i = i if isinstance(i, Sequence) else [i] * len(vars)
-    _f = f if isinstance(f, Sequence) else [f] * len(vars)
-    return [_relu(v, i_, f_, inv, round_mode=round_mode) for v, i_, f_ in zip(vars, _i, _f)]
 
 
 @singledispatch
