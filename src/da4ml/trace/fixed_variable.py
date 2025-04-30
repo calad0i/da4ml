@@ -1,5 +1,5 @@
 from decimal import Decimal
-from math import ceil, log2
+from math import ceil, floor, log2
 from typing import NamedTuple
 from uuid import UUID, uuid4
 
@@ -42,11 +42,15 @@ class FixedVariable:
         _id: UUID | None = None,
     ) -> None:
         assert low <= high, f'low {low} must be less than high {high}'
-        self.low = Decimal(low)
-        self.high = Decimal(high)
-        self.step = Decimal(step)
+
+        low, high, step = Decimal(low), Decimal(high), Decimal(step)
+        low, high = floor(low / step) * step, ceil(high / step) * step
+        self.low = low
+        self.high = high
+        self.step = step
         self._factor = Decimal(_factor)
         self._from = _from
+        opr = opr if high != low else 'const'
         self.opr = opr
         self._data = _data
         self.id = _id or uuid4()
@@ -64,6 +68,8 @@ class FixedVariable:
         self.cost = _cost
 
     def get_cost_and_latency(self):
+        if self.opr == 'const':
+            return 0.0, 0.0
         if self.opr in ('vadd', 'cadd'):
             adder_size = self.hwconf.adder_size
             carry_size = self.hwconf.carry_size
@@ -73,12 +79,14 @@ class FixedVariable:
                 v0, v1 = self._from
                 int0, int1 = v0.qint, v1.qint
                 base_latency = max(v0.latency, v1.latency)
+                dlat, _cost = cost_add(int0, int1, 0, False, adder_size, carry_size)
             else:
                 assert self._data is not None, 'cadd must have data'
-                int0 = self._from[0].qint
-                int1 = QInterval(float(self._data), float(self._data), float(self.step))
+                # int0 = self._from[0].qint
+                # int1 = QInterval(float(self._data), float(self._data), float(self.step))
+                _cost = float(ceil(log2(abs(self._data) + self.step)))
                 base_latency = self._from[0].latency
-            dlat, _cost = cost_add(int0, int1, 0, False, adder_size, carry_size)
+                dlat = 0.0
 
             _latency = dlat + base_latency
             if latency_cutoff > 0 and ceil(_latency / latency_cutoff) > ceil(base_latency / latency_cutoff):
@@ -193,7 +201,7 @@ class FixedVariable:
         other: 'float|Decimal',
     ):
         if other == 0:
-            return FixedVariable(0, 0, 1)
+            return FixedVariable(0, 0, 1, hwconf=self.hwconf)
 
         assert log2(abs(other)) % 1 == 0, 'Only support pow2 multiplication'
 
@@ -248,9 +256,9 @@ class FixedVariable:
 
     def quantize(
         self,
-        k: int | bool | None = None,
-        i: int | None = None,
-        f: int | None = None,
+        k: int | bool,
+        i: int,
+        f: int,
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
     ):
@@ -258,25 +266,28 @@ class FixedVariable:
         assert overflow_mode in ('WRAP', 'SAT')
         assert round_mode in ('TRN', 'RND')
 
-        step = max(Decimal(2) ** -f, self.step) if f is not None else self.step
-
         _k, _i, _f = self.kif
 
-        if f is not None and f < _f and round_mode == 'SAT':
+        if f is not None and f < _f and round_mode == 'RND':
             return (self + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
 
-        k = min(k, _k) if k else _k
-        i = min(i, _i) if i is not None else _i
+        f = min(f, _f)
+        k = min(k, _k)
+        i = min(i, _i)
 
-        low = k * Decimal(2) ** i
+        step = max(Decimal(2) ** -f, self.step)
+
+        low = -k * Decimal(2) ** i
         high = Decimal(2) ** i - step
         _low, _high = self.low, self.high
 
         if _low >= low and _high <= high:
             low, high = _low, _high
-        else:
-            # may overflow
-            low, high = min(low, _low), max(high, _high)
+        # else:
+        #     # may overflow
+        #     low, high = min(low, _low), max(high, _high)
+        if low > high:
+            return FixedVariable(0, 0, 1, hwconf=self.hwconf)
 
         return FixedVariable(
             low,

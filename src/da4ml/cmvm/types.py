@@ -95,7 +95,9 @@ class Op(NamedTuple):
     If id1 == -3:
         buf[i] = quantize(buf[id0], kif from qint) # WRAP and TRN
     If id1 == -4:
-        buf[i] = buf[id0] + shift * qint.step # const addition
+        buf[i] = buf[id0] + data * qint.step # const addition
+    if id1 == -5:
+        buf[i] = data * qint.step # const definition
     If id1 == -1001:
         (Only used in internal conversion, but in the final solution)
         external_buf[id0] = buf[i] # copy to external buffer
@@ -331,6 +333,9 @@ class Solution(NamedTuple):
                 #     bias = bias * buf[i]._factor
                 buf[i] = buf[op.id0] + bias
                 continue
+            elif op.id1 == -5:  # const definition
+                buf[i] = op.data * op.qint.step
+                continue
             assert op.id1 >= 0, f'Unknown id1 {op.id1} in {op}'
             v0, v1 = buf[op.id0], buf[op.id1]
             if op.option:
@@ -343,7 +348,21 @@ class Solution(NamedTuple):
         mask = np.where(out_idx < 0, 0, 1)
         if debug:
             for i, v in enumerate(buf):
-                print(f'buf[{i}] = {v}')
+                op = self.ops[i]
+                match op.id1:
+                    case -1:
+                        op_str = 'inp'
+                    case -2:
+                        op_str = f'relu(buf[{op.id0}])'
+                    case -3:
+                        op_str = f'quant(buf[{op.id0}])'
+                    case -4:
+                        op_str = f'buf[{op.id0}] + {op.data * op.qint.step}'
+                    case _:
+                        _sign_str = '-' if op.option else '+'
+                        op_str = f'buf[{op.id0}] {_sign_str} buf[{op.id1}]<<{op.data}'
+
+                print(f'{op_str:24} |-> buf[{i}] = {v}')
         return buf[out_idx] * sf * sign * mask
 
     @property
@@ -529,7 +548,7 @@ class CascadedSolution(NamedTuple):
         lat_min, lat_max = self.latency
         return f'CascatedSolution([{shape_str}], cost={_cost}, latency={lat_min}-{lat_max})'
 
-    def save(self, path: str):
+    def save(self, path: str | Path):
         """Save the solution to a file."""
         with open(path, 'w') as f:
             json.dump(self, f)

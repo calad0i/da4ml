@@ -1,8 +1,6 @@
 #include "verilated.h"
-#include <bitset>
 #include <cassert>
 #include <cstdint>
-#include <iostream>
 #include <vector>
 template <size_t bw, size_t N_in> std::vector<int32_t> bitpack(const int32_t *values) {
     static_assert(bw > 0 && bw <= 32, "Bit width must be between 1 and 32");

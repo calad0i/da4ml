@@ -6,8 +6,8 @@ from uuid import UUID
 
 import numpy as np
 
-from ..cmvm.types import Op, Solution
-from .fixed_variable import FixedVariable
+from ..cmvm.types import Op, QInterval, Solution
+from .fixed_variable import FixedVariable, _const_f
 from .fixed_variable_array import FixedVariableArray
 
 
@@ -47,18 +47,18 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 f0, f1 = v0._factor, v1._factor
                 id0, id1 = index[v0.id], index[v1.id]
                 sub = int(f1 < 0)
-                shift = int(log2(abs(f1 / f0)))
+                data = int(log2(abs(f1 / f0)))
                 assert id0 < i and id1 < i, f'{id0} {id1} {i} {v.id}'
-                ops.append(Op(id0, id1, sub, shift, v.unscaled.qint, v.latency, v.cost))
+                ops.append(Op(id0, id1, sub, data, v.unscaled.qint, v.latency, v.cost))
             case 'cadd':
                 v0 = v._from[0]
                 f0 = v0._factor
                 id0 = index[v0.id]
                 assert v._data is not None, 'cadd must have data'
                 qint = v.unscaled.qint
-                shift = int(v._data / Decimal(qint.step))
+                data = int(v._data / Decimal(qint.step))
                 assert id0 < i, f'{id0} {i} {v.id}'
-                ops.append(Op(id0, -4, 0, shift, qint, v.latency, v.cost))
+                ops.append(Op(id0, -4, 0, data, qint, v.latency, v.cost))
             case 'wrap':
                 v0 = v._from[0]
                 id0 = index[v0.id]
@@ -72,6 +72,14 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
             case 'new':
                 id0 = inp_uuids[v.id]
                 ops.append(Op(id0, -1, 0, 0, v.unscaled.qint, v.latency, v.cost))
+            case 'const':
+                qint = v.unscaled.qint
+                assert qint.min == qint.max, f'const {v.id} {qint.min} {qint.max}'
+                f = _const_f(qint.min)
+                step = 2.0**-f
+                qint = QInterval(qint.min, qint.min, step)
+                data = qint.min / step
+                ops.append(Op(-1, -5, 0, int(data), qint, v.latency, v.cost))
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
     out_index = [index[v.id] for v in outputs]

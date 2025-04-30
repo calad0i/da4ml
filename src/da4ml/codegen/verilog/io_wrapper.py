@@ -54,7 +54,7 @@ def hetero_io_map(qints: list[QInterval], merge: bool = False):
     return regular, hetero, pads, (width_regular, width_packed)
 
 
-def generate_io_wrapper(module_name: str, sol: Solution | CascadedSolution, pipelined: bool = False):
+def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipelined: bool = False):
     reg_in, het_in, _, shape_in = hetero_io_map(sol.inp_qint, merge=True)
     reg_out, het_out, pad_out, shape_out = hetero_io_map(sol.out_qint, merge=True)
 
@@ -106,7 +106,7 @@ endmodule
 """
 
 
-def comb_binder_gen(module_name: str, sol: Solution):
+def comb_binder_gen(sol: Solution, module_name: str):
     k_in, i_in, f_in = zip(*map(_minimal_kif, sol.inp_qint))
     k_out, i_out, f_out = zip(*map(_minimal_kif, sol.out_qint))
     max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)
@@ -140,7 +140,7 @@ void test(int32_t *c_inp, int32_t *c_out) {{
 }}"""
 
 
-def pipeline_binder_gen(module_name: str, csol: CascadedSolution, II: int = 1):
+def pipeline_binder_gen(csol: CascadedSolution, module_name: str, II: int = 1):
     k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
     k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
     max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)

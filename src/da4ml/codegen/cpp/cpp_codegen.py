@@ -60,12 +60,16 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
                 val = ref0
 
             case -4:
-                # Constant def
+                # Constant addition
                 _number = op.data * op.qint.step
                 sign, mag = ('-' if _number < 0 else '+'), abs(_number)
                 f = _const_f(mag)
                 const_type_str = typestr_fn(*_minimal_kif(QInterval(mag, mag, 2.0**-f)))
                 val = f'{ref0} {sign} {const_type_str}({mag})'
+
+            case -5:
+                _number = op.data * op.qint.step
+                val = f'{_number}'
 
             case _:
                 assert op.id1 >= 0, f'Invalid id1: {op.id1}'

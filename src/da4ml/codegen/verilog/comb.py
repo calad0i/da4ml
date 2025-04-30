@@ -51,6 +51,11 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
                 v0 = f'v{op.id0}[{bw0-1}:0]'
                 v1 = f"'{bin(mag)[1:]}"
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, 0, {sign}) op_{i} ({v0}, {v1}, {v});'
+            case -5:  # constant
+                num = op.data
+                if num < 0:
+                    num = 2**bw + num
+                line = f"{_def} assign {v} = '{bin(num)[1:]};"
 
             case _:  # Common a+/-b<<shift oprs
                 assert op.id1 >= 0, f'Invalid id1: {op.id1}'

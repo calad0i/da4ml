@@ -42,7 +42,7 @@ def quantize(
         b = k + i + f
         bias = 2.0 ** (b - 1) * k
         eps = 2.0**-f
-        return eps * ((np.floor(x / eps) + bias) % 2**b - bias)
+        return eps * ((np.floor(x / eps) + bias) % 2.0**b - bias)
 
 
 __all__ = [
