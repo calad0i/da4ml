@@ -124,7 +124,7 @@ constexpr size_t max_inp_bw = {max_inp_bw};
 constexpr size_t max_out_bw = {max_out_bw};
 
 extern "C" {{
-void test(int32_t *c_inp, int32_t *c_out) {{
+void inference(int32_t *c_inp, int32_t *c_out) {{
     V{module_name} *dut = new V{module_name};
 
     write_input<N_inp, max_inp_bw>(dut->inp, c_inp);
@@ -162,7 +162,7 @@ constexpr size_t II = {II};
 constexpr size_t latency = {n_stage};
 
 extern "C" {{
-void test(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
+void inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
     V{module_name} *dut = new V{module_name};
 
     size_t clk_req = n_samples * II + latency + 1;

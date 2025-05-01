@@ -40,7 +40,13 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
             case -3:  # Explicit quantization
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
-                line = f'{_def} assign {v} = v{op.id0}[{i0}:{i1}];'
+                v0_name = f'v{op.id0}'
+                bw0 = widths[op.id0]
+                if op.option:
+                    lines.append(f'wire [{bw0-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw0-1}:0] = -{v0_name}[{bw0-1}:0];')
+                    v0_name = f'v{op.id0}_neg'
+
+                line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
             case -4:  # constant addition
                 num = op.data
                 sign, mag = int(num < 0), abs(num)

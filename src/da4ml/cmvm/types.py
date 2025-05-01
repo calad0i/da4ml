@@ -283,7 +283,7 @@ class Solution(NamedTuple):
     carry_size: int
     adder_size: int
 
-    def __call__(self, inp: list | np.ndarray | tuple, quantize=False, debug=False):
+    def __call__(self, inp: list | np.ndarray | tuple, quantize=False, debug=False, dump=False):
         """Executes the solution on the input data.
 
         Parameters
@@ -293,6 +293,12 @@ class Solution(NamedTuple):
         quantize : bool
             If True, the input data will be quantized to the output quantization intervals.
             Only floating point data types are supported when quantize is True.
+            Default is False.
+        debug : bool
+            If True, the function will print debug information about the operations being performed.
+            Default is False.
+        dump : bool
+            If True, the return the whole buffer, without applying the output shifts and signs.
             Default is False.
 
         Returns
@@ -311,7 +317,7 @@ class Solution(NamedTuple):
             _low, _high = -(2.0 ** (i + f)) * k, 2.0 ** (i + f) - 1
             inp = eps * ((np.floor(inp / eps) - _low) % 2.0 ** (k + i + f) + _low)
 
-        inp = inp * (2.0 ** np.asarray(self.inp_shift))
+        inp = inp * (2.0 ** np.array(self.inp_shift))
         for i, op in enumerate(self.ops):
             if op.id1 == -1:  # copy from external buf
                 buf[i] = inp[op.id0]
@@ -325,12 +331,12 @@ class Solution(NamedTuple):
             elif op.id1 == -3:  # quantization only
                 v = buf[op.id0]
                 _k, _i, _f = _minimal_kif(op.qint)
+                if op.option == 1:
+                    v = -v
                 buf[i] = _quantize(v, _k, _i, _f, round_mode='TRN')
                 continue
             elif op.id1 == -4:  # const addition
                 bias = op.data * op.qint.step
-                # if isinstance(buf[i], FixedVariable):
-                #     bias = bias * buf[i]._factor
                 buf[i] = buf[op.id0] + bias
                 continue
             elif op.id1 == -5:  # const definition
@@ -342,9 +348,9 @@ class Solution(NamedTuple):
                 v1 = -v1
             buf[i] = v0 + 2.0**op.data * v1
 
-        sf = 2.0 ** np.asarray(self.out_shifts)
+        sf = 2.0 ** np.array(self.out_shifts)
         sign = np.where(self.out_negs, -1, 1)
-        out_idx = np.asarray(self.out_idxs)
+        out_idx = np.array(self.out_idxs)
         mask = np.where(out_idx < 0, 0, 1)
         if debug:
             for i, v in enumerate(buf):
@@ -363,6 +369,8 @@ class Solution(NamedTuple):
                         op_str = f'buf[{op.id0}] {_sign_str} buf[{op.id1}]<<{op.data}'
 
                 print(f'{op_str:24} |-> buf[{i}] = {v}')
+        if dump:
+            return buf
         return buf[out_idx] * sf * sign * mask
 
     @property

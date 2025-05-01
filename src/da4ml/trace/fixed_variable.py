@@ -43,6 +43,11 @@ class FixedVariable:
     ) -> None:
         assert low <= high, f'low {low} must be less than high {high}'
 
+        if low == high:
+            opr = 'const'
+            _factor = 1.0
+            _from = ()
+
         low, high, step = Decimal(low), Decimal(high), Decimal(step)
         low, high = floor(low / step) * step, ceil(high / step) * step
         self.low = low
@@ -50,7 +55,7 @@ class FixedVariable:
         self.step = step
         self._factor = Decimal(_factor)
         self._from = _from
-        opr = opr if high != low else 'const'
+        opr = opr
         self.opr = opr
         self._data = _data
         self.id = _id or uuid4()
@@ -76,15 +81,18 @@ class FixedVariable:
             latency_cutoff = self.hwconf.latency_cutoff
 
             if self.opr == 'vadd':
+                assert len(self._from) == 2
                 v0, v1 = self._from
                 int0, int1 = v0.qint, v1.qint
                 base_latency = max(v0.latency, v1.latency)
                 dlat, _cost = cost_add(int0, int1, 0, False, adder_size, carry_size)
             else:
+                assert len(self._from) == 1
                 assert self._data is not None, 'cadd must have data'
                 # int0 = self._from[0].qint
                 # int1 = QInterval(float(self._data), float(self._data), float(self.step))
-                _cost = float(ceil(log2(abs(self._data) + self.step)))
+                _f = _const_f(self._data)
+                _cost = float(ceil(log2(abs(self._data) + Decimal(2) ** -_f))) + _f
                 base_latency = self._from[0].latency
                 dlat = 0.0
 
@@ -96,6 +104,7 @@ class FixedVariable:
                 ), f'Latency of an atomic operation {dlat} is larger than the pipelining latency cutoff {latency_cutoff}'
                 _latency = ceil(base_latency / latency_cutoff) * latency_cutoff + dlat
         elif self.opr in ('relu', 'wrap'):
+            assert len(self._from) == 1
             _latency = self._from[0].latency
             _cost = 0.0
         elif self.opr == 'new':
@@ -148,6 +157,8 @@ class FixedVariable:
             return self._const_add(other)
         if other.high == other.low:
             return self._const_add(other.low)
+        if self.high == self.low:
+            return other._const_add(self.low)
 
         assert self.hwconf == other.hwconf, 'FixedVariable must have the same hwconf'
 
@@ -177,6 +188,7 @@ class FixedVariable:
 
         if self.opr != 'cadd':
             cstep = Decimal(2.0 ** -_const_f(other))
+
             return FixedVariable(
                 self.low + other,
                 self.high + other,
@@ -189,9 +201,12 @@ class FixedVariable:
             )
 
         # cadd, combine the constant
+        assert len(self._from) == 1
+        parent = self._from[0]
         assert self._data is not None, 'cadd must have data'
-        other1 = self._data * self._factor + other
-        return self._from[0] + other1
+        sf = self._factor / parent._factor
+        other1 = (self._data * parent._factor) + other / sf
+        return (parent + other1) * sf
 
     def __sub__(self, other: 'FixedVariable|int|float|Decimal'):
         return self + (-other)
@@ -238,6 +253,16 @@ class FixedVariable:
     def relu(self, i: int | None = None, f: int | None = None, round_mode: str = 'TRN'):
         round_mode = round_mode.upper()
         assert round_mode in ('TRN', 'RND')
+
+        if self.opr == 'const':
+            val = self.low * (self.low > 0)
+            f = _const_f(val) if not f else f
+            step = Decimal(2) ** -f
+            i = ceil(log2(val + step)) if not i else i
+            eps = step / 2 if round_mode == 'RND' else 0
+            val = floor(val / step + eps) % Decimal(2) ** i * step
+            return FixedVariable(val, val, step, hwconf=self.hwconf)
+
         step = max(Decimal(2) ** -f, self.step) if f is not None else self.step
         if step > self.step and round_mode == 'RND':
             return (self + step / 2).relu(i, f, 'TRN')
@@ -268,9 +293,20 @@ class FixedVariable:
 
         _k, _i, _f = self.kif
 
-        if f is not None and f < _f and round_mode == 'RND':
+        if f < _f and round_mode == 'RND':
             return (self + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
 
+        if self.low == self.high:
+            val = self.low
+            step = Decimal(2) ** -f
+            _high = Decimal(2) ** i
+            high, low = _high - step, -_high * k
+            val = (floor(val / step) * step - low) % (2 * _high) + low
+            return FixedVariable(val, val, step, hwconf=self.hwconf)
+
+        # TODO: corner cases exists (e.g., overflow to negative, or negative overflow to high value)
+        # bit-exactness will be lost in these cases, but they should never happen (quantizers are used in a weird way)
+        # Keeping this for now; change if absolutely necessary
         f = min(f, _f)
         k = min(k, _k)
         i = min(i, _i)
@@ -283,9 +319,7 @@ class FixedVariable:
 
         if _low >= low and _high <= high:
             low, high = _low, _high
-        # else:
-        #     # may overflow
-        #     low, high = min(low, _low), max(high, _high)
+
         if low > high:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf)
 
@@ -294,10 +328,10 @@ class FixedVariable:
             high,
             step,
             _from=(self,),
-            _factor=abs(self._factor),
+            _factor=self._factor,
             opr='wrap' if overflow_mode == 'WRAP' else 'sat',
             latency=self.latency,
-            cost=self.cost,
+            cost=0.0,
             hwconf=self.hwconf,
         )
 

@@ -41,6 +41,12 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     ops: list[Op] = []
     inp_uuids = {v.id: i for i, v in enumerate(inputs)}
     for i, v in enumerate(variables):
+        if v.id in inp_uuids and v.opr != 'const':
+            id0 = inp_uuids[v.id]
+            ops.append(Op(id0, -1, 0, 0, v.unscaled.qint, v.latency, v.cost))
+            continue
+        if v.opr == 'new':
+            raise NotImplementedError('Operation "new" is only expected in the input list')
         match v.opr:
             case 'vadd':
                 v0, v1 = v._from
@@ -63,15 +69,12 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 v0 = v._from[0]
                 id0 = index[v0.id]
                 assert id0 < i, f'{id0} {i} {v.id}'
-                ops.append(Op(id0, -3, 0, 0, v.unscaled.qint, v.latency, v.cost))
+                ops.append(Op(id0, -3, int(v._from[0]._factor < 0), 0, v.unscaled.qint, v.latency, v.cost))
             case 'relu':
                 v0 = v._from[0]
                 id0 = index[v0.id]
                 assert id0 < i, f'{id0} {i} {v.id}'
                 ops.append(Op(id0, -2, int(v._from[0]._factor < 0), 0, v.unscaled.qint, v.latency, v.cost))
-            case 'new':
-                id0 = inp_uuids[v.id]
-                ops.append(Op(id0, -1, 0, 0, v.unscaled.qint, v.latency, v.cost))
             case 'const':
                 qint = v.unscaled.qint
                 assert qint.min == qint.max, f'const {v.id} {qint.min} {qint.max}'
@@ -87,11 +90,11 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
 
 
 @overload
-def comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]): ...
+def comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]) -> Solution: ...
 
 
 @overload
-def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray): ...
+def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray) -> Solution: ...
 
 
 def comb_trace(inputs, outputs):
