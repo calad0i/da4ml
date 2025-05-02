@@ -276,7 +276,14 @@ class FixedVariable:
                 high = _high
         _factor = self._factor
         return FixedVariable(
-            low, high, step, _from=(self,), _factor=abs(_factor), opr='relu', hwconf=self.hwconf, cost=sum(self.kif)
+            low,
+            high,
+            step,
+            _from=(self,),
+            _factor=abs(_factor),
+            opr='relu',
+            hwconf=self.hwconf,
+            cost=sum(self.kif) * (1 if _factor > 0 else 2),
         )
 
     def quantize(
@@ -292,6 +299,9 @@ class FixedVariable:
         assert round_mode in ('TRN', 'RND')
 
         _k, _i, _f = self.kif
+
+        if k >= _k and i >= _i and f >= _f:
+            return self
 
         if f < _f and round_mode == 'RND':
             return (self + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
@@ -331,7 +341,7 @@ class FixedVariable:
             _factor=abs(self._factor),
             opr='wrap' if overflow_mode == 'WRAP' else 'sat',
             latency=self.latency,
-            cost=0.0,
+            cost=0.0 if self._factor > 0 else sum(self.kif),
             hwconf=self.hwconf,
         )
 
