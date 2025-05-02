@@ -56,7 +56,8 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
                 s0 = int(kifs[op.id0][0])
                 v0 = f'v{op.id0}[{bw0-1}:0]'
                 v1 = f"'{bin(mag)[1:]}"
-                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, 0, {sign}) op_{i} ({v0}, {v1}, {v});'
+                shift = int(log2(op.qint.step / ops[op.id0].qint.step))
+                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, {shift}, {sign}) op_{i} ({v0}, {v1}, {v});'
             case -5:  # constant
                 num = op.data
                 if num < 0:

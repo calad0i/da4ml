@@ -328,7 +328,7 @@ class FixedVariable:
             high,
             step,
             _from=(self,),
-            _factor=self._factor,
+            _factor=abs(self._factor),
             opr='wrap' if overflow_mode == 'WRAP' else 'sat',
             latency=self.latency,
             cost=0.0,
