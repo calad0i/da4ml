@@ -100,7 +100,7 @@ def jit_solve(
     if qintervals is None:
         _qintervals = [QInterval(-128.0, 127.0, 1.0)] * kernel.shape[0]
     else:
-        _qintervals = [QInterval(*qi) for qi in qintervals]
+        _qintervals = list(qintervals)
     if latencies is None:
         _inp_latencies = [0.0] * kernel.shape[0]
     else:
@@ -155,8 +155,8 @@ def solve(
     method1: str = 'auto',
     hard_dc: int = -1,
     decompose_dc: int = -2,
-    qintervals: list[QInterval] | None = None,
-    latencies: list[float] | None = None,
+    qintervals: tuple[QInterval, ...] | None = None,
+    latencies: tuple[float, ...] | None = None,
     adder_size: int = -1,
     carry_size: int = -1,
     search_all_decompose_dc: bool = True,
@@ -192,6 +192,16 @@ def solve(
     CascadedSolution
         A solution containing the optimized implementation of the CMVM computation with cascaded stages.
     """
+
+    if qintervals is None:
+        _qintervals = [QInterval(-128.0, 127.0, 1.0)] * kernel.shape[0]
+    else:
+        _qintervals = list(qintervals)
+    if latencies is None:
+        _latencies = [0.0] * kernel.shape[0]
+    else:
+        _latencies = [float(lat) for lat in latencies]
+
     if not search_all_decompose_dc:
         return jit_solve(
             kernel,
@@ -199,8 +209,8 @@ def solve(
             method1=method1,
             hard_dc=hard_dc,
             decompose_dc=decompose_dc,
-            qintervals=qintervals,
-            latencies=latencies,
+            qintervals=_qintervals,
+            latencies=_latencies,
             adder_size=adder_size,
             carry_size=carry_size,
         )
@@ -221,8 +231,8 @@ def solve(
             method1=method1,
             hard_dc=hard_dc,
             decompose_dc=decompose_dc,
-            qintervals=qintervals,
-            latencies=latencies,
+            qintervals=_qintervals,
+            latencies=_latencies,
             adder_size=adder_size,
             carry_size=carry_size,
         )
@@ -236,8 +246,8 @@ def solve(
         method1=method1,
         hard_dc=hard_dc,
         decompose_dc=decompose_dc,
-        qintervals=qintervals,
-        latencies=latencies,
+        qintervals=_qintervals,
+        latencies=_latencies,
         adder_size=adder_size,
         carry_size=carry_size,
     )

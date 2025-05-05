@@ -75,8 +75,8 @@ class FixedVariableArray:
         r = []
         for i in range(mat0.shape[0]):
             vec = mat0[i]
-            qintervals = [QInterval(float(v.low), float(v.high), float(v.step)) for v in vec._vars]
-            latencies = [v.latency for v in vec._vars]
+            qintervals = tuple([QInterval(float(v.low), float(v.high), float(v.step)) for v in vec._vars])
+            latencies = tuple([float(v.latency) for v in vec._vars])
             hwconf = self._vars.ravel()[0].hwconf
             kwargs.update(adder_size=hwconf.adder_size, carry_size=hwconf.carry_size)
             sol = solve(mat1, qintervals=qintervals, latencies=latencies, **kwargs)
