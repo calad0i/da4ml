@@ -3,7 +3,7 @@ from math import ceil, log2
 import numpy as np
 from numba import jit
 
-from .bit_decompose import _volatile_int_arr_to_csd
+from .bit_decompose import _center, _volatile_int_arr_to_csd
 
 
 @jit
@@ -43,7 +43,7 @@ def prim_mst_dc(cost_mat: np.ndarray, dc: int = -1):
     latency = np.zeros((N,), dtype=np.int32)
 
     if dc >= 0:
-        _dc = (2**dc - 1) + ceil(log2(np.max(cost_mat[0])))
+        _dc = (2**dc - 1) + ceil(log2(np.max(cost_mat[0]) + 1e-32))
     else:
         _dc = -1
 
@@ -65,7 +65,7 @@ def prim_mst_dc(cost_mat: np.ndarray, dc: int = -1):
 
 
 @jit
-def kernel_decompose(kernel: np.ndarray, dc: int = -1):
+def kernel_decompose(kernel: np.ndarray, dc: int = -2):
     """Decompose a 2D kernel matrix into two matrices with the delay-constrained approx MST.
 
     Parameters
@@ -75,7 +75,8 @@ def kernel_decompose(kernel: np.ndarray, dc: int = -1):
 
     dc : int, optional
         Delay constraint, by default -1
-        If -1, no delay constraint is applied.
+        If -2, no delay constraint is applied.
+        If -1, return trivial decomposition (m0 = kernel, m1 = I).
 
         The delay constraint limits the maximum latency (hops) of the decomposed
         multiplication structure.
@@ -85,6 +86,8 @@ def kernel_decompose(kernel: np.ndarray, dc: int = -1):
     tuple[np.ndarray, np.ndarray]
         The decomposed matrices (m0, m1): kernel = m0 @ m1
     """
+    kernel, shift0, shift1 = _center(kernel)
+    scale0, scale1 = 2.0**shift0, 2.0**shift1
     m, n = kernel.shape[0], kernel.shape[1] + 1
     mat_aug = np.zeros((m, n), dtype=kernel.dtype)
     mat_aug[:, 1:] = kernel
@@ -98,6 +101,11 @@ def kernel_decompose(kernel: np.ndarray, dc: int = -1):
     n_in, n_out = kernel.shape
     m0, m1 = np.zeros((n_in, n_out), dtype=kernel.dtype), np.zeros((n_out, n_out), dtype=kernel.dtype)
 
+    if dc == -1:
+        m0[:] = kernel
+        m1[:] = np.eye(n_out, dtype=kernel.dtype)
+        return m0 * scale0[:, None], m1 * scale1
+
     cnt = 0
     for _from, _to in mapping:
         col0 = mat_aug[:, _to] - mat_aug[:, _from] * sign[_to, _from]
@@ -110,4 +118,4 @@ def kernel_decompose(kernel: np.ndarray, dc: int = -1):
             m0[:, cnt] = col0
             cnt += 1
         m1[:, _to - 1] = col1
-    return m0, m1
+    return m0 * scale0[:, None], m1 * scale1

@@ -205,7 +205,7 @@ class VerilogModel:
         NDArray[np.float64]
             Output of the model in shape (n_samples, output_size).
         """
-        assert self._lib is not None, 'Library not loaded'
+        assert self._lib is not None, 'Library not loaded, call .compile() first.'
         inp_size, out_size = self._solution.shape
 
         assert data.size % inp_size == 0, f'Input size {data.size} is not divisible by {inp_size}'
@@ -238,7 +238,7 @@ class VerilogModel:
         kifs_in, kifs_out = get_io_kifs(self._solution)
         in_bits, out_bits = np.sum(kifs_in), np.sum(kifs_out)
         if self._pipe is not None:
-            n_stage = len(self._solution[0])
+            n_stage = len(self._pipe[0])
             lat_cutoff = self._latency_cutoff
             reg_bits = self._pipe.reg_bits
             spec = f"""Top Module: {self._prj_name}\n====================

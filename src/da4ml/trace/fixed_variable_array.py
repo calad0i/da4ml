@@ -66,7 +66,7 @@ class FixedVariableArray:
 
     def __matmul__(self, other):
         assert isinstance(other, np.ndarray)
-        kwargs = self.solver_options or {}
+        kwargs = (self.solver_options or {}).copy()
         shape0, shape1 = self.shape, other.shape
         assert shape0[-1] == shape1[0], f'Matrix shapes do not match: {shape0} @ {shape1}'
         c = shape1[0]
@@ -77,6 +77,8 @@ class FixedVariableArray:
             vec = mat0[i]
             qintervals = [QInterval(float(v.low), float(v.high), float(v.step)) for v in vec._vars]
             latencies = [v.latency for v in vec._vars]
+            hwconf = self._vars.ravel()[0].hwconf
+            kwargs.update(adder_size=hwconf.adder_size, carry_size=hwconf.carry_size)
             sol = solve(mat1, qintervals=qintervals, latencies=latencies, **kwargs)
             _r = sol(vec._vars)
             r.append(_r)
