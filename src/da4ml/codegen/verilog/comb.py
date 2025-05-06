@@ -2,7 +2,7 @@ from math import ceil, log2
 
 import numpy as np
 
-from da4ml.cmvm.types import Op, Solution, _minimal_kif
+from da4ml.cmvm.types import Op, QInterval, Solution, _minimal_kif
 
 
 def ssa_gen(ops: list[Op], print_latency: bool = False):
@@ -30,8 +30,13 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
 
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
+
                 if op.option:
-                    lines.append(f'wire [{bw0-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw0-1}:0] = -{v0_name}[{bw0-1}:0];')
+                    _min, _max, step = ops[op.id0].qint
+                    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
+                    lines.append(
+                        f'wire [{bw_neg-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg-1}:0] = -{v0_name}[{bw0-1}:0];'
+                    )
                     v0_name = f'v{op.id0}_neg'
                 if ops[op.id0].qint.min < 0:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0-1}]}}}};'
@@ -43,7 +48,11 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
                 if op.option:
-                    lines.append(f'wire [{bw0-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw0-1}:0] = -{v0_name}[{bw0-1}:0];')
+                    _min, _max, step = ops[op.id0].qint
+                    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
+                    lines.append(
+                        f'wire [{bw_neg-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg-1}:0] = -{v0_name}[{bw0-1}:0];'
+                    )
                     v0_name = f'v{op.id0}_neg'
 
                 line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
