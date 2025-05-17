@@ -54,7 +54,7 @@ class FixedVariable:
         self.high = high
         self.step = step
         self._factor = Decimal(_factor)
-        self._from = _from
+        self._from: tuple[FixedVariable, ...] = _from
         opr = opr
         self.opr = opr
         self._data = _data
@@ -107,6 +107,12 @@ class FixedVariable:
             assert len(self._from) == 1
             _latency = self._from[0].latency
             _cost = 0.0
+            # Assume LUT5 used here (2 fan-out per LUT6, thus *1/2)
+            if self._from[0]._factor < 0:
+                _cost += sum(self.kif) / 2
+            if self.opr == 'relu':
+                _cost += sum(self.kif) / 2
+
         elif self.opr == 'new':
             # new variable, no cost
             _latency = 0.0
@@ -341,7 +347,6 @@ class FixedVariable:
             _factor=abs(self._factor),
             opr='wrap' if overflow_mode == 'WRAP' else 'sat',
             latency=self.latency,
-            cost=0.0 if self._factor > 0 else sum(self.kif),
             hwconf=self.hwconf,
         )
 

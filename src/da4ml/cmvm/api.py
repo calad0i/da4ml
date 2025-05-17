@@ -116,8 +116,11 @@ def jit_solve(
         decompose_dc = min(hard_dc, decompose_dc, ceil(log2(kernel.shape[0])))
 
     while True:
-        if decompose_dc < 0:
-            method0, method1 = 'wmc-dc', 'wmc-dc'
+        if decompose_dc < 0 and hard_dc >= 0:
+            if method0 != 'dummy':
+                method0, method1 = 'wmc-dc', 'wmc-dc'
+            else:
+                method0, method1 = 'dummy', 'dummy'
         mat0, mat1 = kernel_decompose(kernel, dc=decompose_dc)
         sol0 = _solve(
             mat0, method=method0, qintervals=_qintervals, latencies=_inp_latencies, adder_size=adder_size, carry_size=carry_size

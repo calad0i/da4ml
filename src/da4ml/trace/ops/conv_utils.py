@@ -53,9 +53,11 @@ def conv(
     if isinstance(x, FixedVariableArray):
         solver_options = x.solver_options
         data = x._vars
+        is_symbolic = True
     else:
         solver_options = None
         data = x
+        is_symbolic = False
 
     ndim = data.ndim
     ch_in, ch_out = kernel.shape[-2:]
@@ -87,7 +89,7 @@ def conv(
 
     data = np.pad(data, padding + ((0, 0),), mode='constant', constant_values=0.0)
     data = _im2col(kernel.shape, data)
-    if solver_options is not None:
+    if is_symbolic:
         _data = FixedVariableArray(data, solver_options) @ kernel.reshape(-1, ch_out)
         data = _data._vars
     else:

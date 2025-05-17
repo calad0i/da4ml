@@ -33,7 +33,7 @@ class VerilogModel:
         part_name: str = 'xcvu13p-flga2577-2-e',
         clock_period: int = 5,
         clock_uncertainty: float = 0.1,
-        io_delay_minmax: tuple[float, float] = (0.05, 0.1),
+        io_delay_minmax: tuple[float, float] = (0.2, 0.4),
     ):
         self._solution = solution
         self._path = Path(path)
@@ -92,6 +92,7 @@ class VerilogModel:
             # Verilog IO wrapper (non-uniform bw to uniform one, clk and rst passthrough)
             io_wrapper = generate_io_wrapper(self._pipe, self._prj_name, True)
 
+            self._pipe.save(self._path / 'pipeline.json')
         else:  # Comb
             assert isinstance(self._solution, Solution)
 
@@ -113,6 +114,9 @@ class VerilogModel:
         shutil.copy(self.__src_root / 'verilog/source/shift_adder.v', self._path)
         shutil.copy(self.__src_root / 'verilog/source/build_binder.mk', self._path)
         shutil.copy(self.__src_root / 'verilog/source/ioutils.hh', self._path)
+        self._solution.save(self._path / 'model.json')
+        with open(self._path / 'misc.json', 'w') as f:
+            f.write(f'{{"cost": {self._solution.cost}}}')
 
     def _compile(self, verbose=False, openmp=True, o3: bool = False, clean=True):
         """Same as compile, but will not write to the library
