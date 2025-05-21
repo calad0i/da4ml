@@ -71,11 +71,11 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
     lat = max(ops[i].latency for i in sol.out_idxs)
     for i in sol.out_idxs:
         op_out = ops[i]
-        ops.append(Op(i, -1001, 0, 0, op_out.qint, lat, 0.0))
+        ops.append(Op(i, -1001, -1001, 0, op_out.qint, lat, 0.0))
 
     for i, op in enumerate(ops):
         stage = get_stage(op)
-        if op.id1 == -1:
+        if op.opcode == -1:
             # Copy from external buffer
             opd.setdefault(stage, []).append(op)
             locator.append({stage: len(opd[stage]) - 1})
@@ -89,14 +89,14 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
                 op0 = ops[op.id0]
                 latency = float(latency_cutoff * (j + 1))
                 out_idxd.setdefault(j, []).append(locator[op.id0][j])
-                _copy_op = Op(len(out_idxd[j]) - 1, -1, 0, 0, op0.qint, latency, 0.0)
+                _copy_op = Op(len(out_idxd[j]) - 1, -1, -1, 0, op0.qint, latency, 0.0)
                 opd.setdefault(j + 1, []).append(_copy_op)
                 p0_idx = len(opd[j + 1]) - 1
                 locator[op.id0][j + 1] = p0_idx
         else:
             p0_idx = locator[op.id0][stage]
 
-        if op.id1 >= 0:
+        if op.opcode in (0, 1):
             p1_stages = locator[op.id1].keys()
             if stage not in p1_stages:
                 # Need to copy parent to later states
@@ -106,7 +106,7 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
                     op1 = ops[op.id1]
                     latency = float(latency_cutoff * (j + 1))
                     out_idxd.setdefault(j, []).append(locator[op.id1][j])
-                    _copy_op = Op(len(out_idxd[j]) - 1, -1, 0, 0, op1.qint, latency, 0.0)
+                    _copy_op = Op(len(out_idxd[j]) - 1, -1, -1, 0, op1.qint, latency, 0.0)
                     opd.setdefault(j + 1, []).append(_copy_op)
                     p1_idx = len(opd[j + 1]) - 1
                     locator[op.id1][j + 1] = p1_idx
@@ -119,7 +119,7 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
             # Output to external buffer
             out_idxd.setdefault(stage, []).append(p0_idx)
         else:
-            _Op = Op(p0_idx, p1_idx, op.option, op.data, op.qint, op.latency, op.cost)
+            _Op = Op(p0_idx, p1_idx, op.opcode, op.data, op.qint, op.latency, op.cost)
             opd.setdefault(stage, []).append(_Op)
             locator.append({stage: len(opd[stage]) - 1})
     sols = []
@@ -127,7 +127,7 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
     for i, stage in enumerate(opd.keys()):
         _ops = opd[stage]
         _out_idx = out_idxd[stage]
-        n_in = sum(op.id1 == -1 for op in _ops)
+        n_in = sum(op.opcode == -1 for op in _ops)
         n_out = len(_out_idx)
 
         if i == max_stage:

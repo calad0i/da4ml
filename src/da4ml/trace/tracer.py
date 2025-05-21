@@ -43,7 +43,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     for i, v in enumerate(variables):
         if v.id in inp_uuids and v.opr != 'const':
             id0 = inp_uuids[v.id]
-            ops.append(Op(id0, -1, 0, 0, v.unscaled.qint, v.latency, v.cost))
+            ops.append(Op(id0, -1, -1, 0, v.unscaled.qint, v.latency, v.cost))
             continue
         if v.opr == 'new':
             raise NotImplementedError('Operation "new" is only expected in the input list')
@@ -64,17 +64,19 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 qint = v.unscaled.qint
                 data = int(v._data / Decimal(qint.step))
                 assert id0 < i, f'{id0} {i} {v.id}'
-                ops.append(Op(id0, -4, 0, data, qint, v.latency, v.cost))
+                ops.append(Op(id0, -1, 4, data, qint, v.latency, v.cost))
             case 'wrap':
                 v0 = v._from[0]
                 id0 = index[v0.id]
                 assert id0 < i, f'{id0} {i} {v.id}'
-                ops.append(Op(id0, -3, int(v._from[0]._factor < 0), 0, v.unscaled.qint, v.latency, v.cost))
+                opcode = -3 if v._from[0]._factor < 0 else 3
+                ops.append(Op(id0, -1, opcode, 0, v.unscaled.qint, v.latency, v.cost))
             case 'relu':
                 v0 = v._from[0]
                 id0 = index[v0.id]
                 assert id0 < i, f'{id0} {i} {v.id}'
-                ops.append(Op(id0, -2, int(v._from[0]._factor < 0), 0, v.unscaled.qint, v.latency, v.cost))
+                opcode = -2 if v._from[0]._factor < 0 else 2
+                ops.append(Op(id0, -1, opcode, 0, v.unscaled.qint, v.latency, v.cost))
             case 'const':
                 qint = v.unscaled.qint
                 assert qint.min == qint.max, f'const {v.id} {qint.min} {qint.max}'
@@ -82,7 +84,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 step = 2.0**-f
                 qint = QInterval(qint.min, qint.min, step)
                 data = qint.min / step
-                ops.append(Op(-1, -5, 0, int(data), qint, v.latency, v.cost))
+                ops.append(Op(-1, -1, 5, int(data), qint, v.latency, v.cost))
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
     out_index = [index[v.id] for v in outputs]

@@ -79,8 +79,8 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
 
     clk_and_rst_inp, clk_and_rst_bind = '', ''
     if pipelined:
-        clk_and_rst_inp = '\n   input clk,\n    input rst,'
-        clk_and_rst_bind = '\n        .clk(clk),\n        .rst(rst),'
+        clk_and_rst_inp = '\n   input clk,'
+        clk_and_rst_bind = '\n        .clk(clk),'
 
     return f"""`timescale 1 ns / 1 ps
 
@@ -210,7 +210,6 @@ void _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
 
     size_t clk_req = n_samples * II + latency + 1;
 
-    dut->rst = 0;
     for (size_t t_inp = 0; t_inp < clk_req; ++t_inp) {{
         size_t t_out = t_inp - latency - 1;
 

@@ -8,7 +8,7 @@ from da4ml.cmvm.types import Op, QInterval, Solution, _minimal_kif
 def ssa_gen(ops: list[Op], print_latency: bool = False):
     kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     widths = list(map(sum, kifs))
-    inp_kifs = [_minimal_kif(op.qint) for op in ops if op.id1 == -1]
+    inp_kifs = [_minimal_kif(op.qint) for op in ops if op.opcode == -1]
     inp_widths = list(map(sum, inp_kifs))
     _inp_widths = np.cumsum([0] + inp_widths)
     inp_idxs = np.stack([_inp_widths[1:] - 1, _inp_widths[:-1]], axis=1)
@@ -20,18 +20,18 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
         v = f'v{i}[{bw-1}:0]'
         _def = f'wire [{bw-1}:0] v{i};'
 
-        match op.id1:
+        match op.opcode:
             case -1:  # Input marker
                 i0, i1 = inp_idxs[op.id0]
                 line = f'{_def} assign {v} = inp[{i0}:{i1}];'
-            case -2:  # ReLU
+            case 2 | -2:  # ReLU
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
 
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
 
-                if op.option:
+                if op.opcode == -2:
                     _min, _max, step = ops[op.id0].qint
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
                     lines.append(
@@ -42,12 +42,13 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0-1}]}}}};'
                 else:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
-            case -3:  # Explicit quantization
+            case 3 | -3:  # Explicit quantization
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
-                if op.option:
+
+                if op.opcode == -3:
                     _min, _max, step = ops[op.id0].qint
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
                     lines.append(
@@ -56,7 +57,7 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
                     v0_name = f'v{op.id0}_neg'
 
                 line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
-            case -4:  # constant addition
+            case 4:  # constant addition
                 num = op.data
                 sign, mag = int(num < 0), abs(num)
                 line = f"{_def} assign {v} = '{bin(mag)[1:]};"
@@ -67,23 +68,23 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
                 v1 = f"'{bin(mag)[1:]}"
                 shift = int(log2(op.qint.step / ops[op.id0].qint.step))
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, {shift}, {sign}) op_{i} ({v0}, {v1}, {v});'
-            case -5:  # constant
+            case 5:  # constant
                 num = op.data
                 if num < 0:
                     num = 2**bw + num
                 line = f"{_def} assign {v} = '{bin(num)[1:]};"
 
-            case _:  # Common a+/-b<<shift oprs
-                assert op.id1 >= 0, f'Invalid id1: {op.id1}'
+            case 0 | 1:  # Common a+/-b<<shift oprs
                 p0, p1 = kifs[op.id0], kifs[op.id1]  # precision -> keep_neg, integers (no sign), fractional
 
                 bw0, bw1 = widths[op.id0], widths[op.id1]  # width
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
                 shift = op.data + f0 - f1
                 v0, v1 = f'v{op.id0}[{bw0-1}:0]', f'v{op.id1}[{bw1-1}:0]'
-                sub = int(op.option)
 
-                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {sub}) op_{i} ({v0}, {v1}, {v});'
+                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {op.opcode}) op_{i} ({v0}, {v1}, {v});'
+            case _:
+                raise ValueError(f'Unknown opcode {op.opcode} for operation {i} ({op})')
 
         if print_latency:
             line += f' // {op.latency}'

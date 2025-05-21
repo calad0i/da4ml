@@ -89,7 +89,7 @@ class VerilogModel:
             # C++ binder w/
             binder = pipeline_binder_gen(self._pipe, f'{self._prj_name}_wrapper', 1)
 
-            # Verilog IO wrapper (non-uniform bw to uniform one, clk and rst passthrough)
+            # Verilog IO wrapper (non-uniform bw to uniform one, clk passthrough)
             io_wrapper = generate_io_wrapper(self._pipe, self._prj_name, True)
 
             self._pipe.save(self._path / 'pipeline.json')
@@ -101,7 +101,7 @@ class VerilogModel:
             with open(self._path / f'{self._prj_name}.v', 'w') as f:
                 f.write(code)
 
-            # Verilog IO wrapper (non-uniform bw to uniform one, no clk or rst)
+            # Verilog IO wrapper (non-uniform bw to uniform one, no clk)
             io_wrapper = generate_io_wrapper(self._solution, self._prj_name, False)
             binder = comb_binder_gen(self._solution, f'{self._prj_name}_wrapper')
 

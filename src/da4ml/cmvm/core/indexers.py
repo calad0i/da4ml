@@ -20,8 +20,6 @@ def idx_mc_dc(state: DAState, absolute: bool = False):
     """Choose the pair with highest frequency with latency penalty.
     If absolute is True, return -1 if any latency overhead may present."""
     freqs = list(state.freq_stat.values())
-    if max(freqs) <= 2:
-        return -1
     factor = max(freqs) + 1
     ops = state.ops
     lat_penalty = [abs(ops[pair.id1].latency - ops[pair.id0].latency) * factor for pair in state.freq_stat.keys()]
@@ -72,8 +70,6 @@ def idx_wmc_dc(state: DAState, absolute: bool = False):
     """Choose the pair with the highest weighted most common subexpression (WMC) score with latency and cost penalty.
     When absolute is True, return -1 if any latency overhead may present."""
     freqs = list(state.freq_stat.values())
-    if max(freqs) == 2:
-        return -1
     keys = list(state.freq_stat.keys())
     score = np.empty(len(freqs), dtype=np.float32)
     for i, (k, v) in enumerate(zip(keys, freqs)):

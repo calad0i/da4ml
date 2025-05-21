@@ -18,16 +18,11 @@ def pipeline_logic_gen(
     serial_logic += [f'stage{i}_inp <= stage{i-1}_out;' for i in range(1, N)]
     serial_logic += [f'out <= stage{N-1}_out;']
 
-    reset_logic = [f'stage{i}_inp <= 0;' for i in range(N)]
-    reset_logic += ['out <= 0;']
     sep0 = '\n    '
-    sep1 = '\n            '
-
-    rst = 'rst' if reset_high else '~rst'
+    sep1 = '\n        '
 
     module = f"""module {name} (
     input clk,
-    input rst,
     input [{inp_bits[0]-1}:0] inp,
     output reg [{out_bits[-1]-1}:0] out
 );
@@ -38,11 +33,7 @@ def pipeline_logic_gen(
     {sep0.join(comb_logic)}
 
     always @(posedge clk) begin
-        if ({rst}) begin
-            {sep1.join(reset_logic)}
-        end else begin
-            {sep1.join(serial_logic)}
-        end
+        {sep1.join(serial_logic)}
     end
 endmodule
 """

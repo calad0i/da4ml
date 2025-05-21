@@ -38,13 +38,18 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
 
         ref0 = f'v{op.id0}'
 
-        match op.id1:
+        match op.opcode:
             case -1:
                 # Input marker
                 val = f'inp[{ops[op.id0].id0}]'
 
-            case -2:
-                if not op.option:  # relu(inp)
+            case 0 | 1:
+                # Common a+/-b<<shift op
+                ref1 = f'bit_shift<{op.data}>(v{op.id1})' if op.data != 0 else f'v{op.id1}'
+                val = f'{ref0} {"-" if op.opcode == 1 else "+"} {ref1}'
+
+            case 2 | -2:
+                if op.opcode == 2:  # relu(inp)
                     if ops[op.id0].qint.min < 0:
                         val = f'{ref0} > 0 ? {_type}({ref0}) : {_type}(0)'
                     else:
@@ -55,11 +60,11 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
                     else:
                         val = f'-{ref0}'
 
-            case -3:
+            case 3 | -3:
                 # Explicit quantization op, done implicitly via assignment
-                val = ref0
+                val = ref0 if op.opcode == 3 else f'-{ref0}'
 
-            case -4:
+            case 4:
                 # Constant addition
                 _number = op.data * op.qint.step
                 sign, mag = ('-' if _number < 0 else '+'), abs(_number)
@@ -67,15 +72,12 @@ def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int
                 const_type_str = typestr_fn(*_minimal_kif(QInterval(mag, mag, 2.0**-f)))
                 val = f'{ref0} {sign} {const_type_str}({mag})'
 
-            case -5:
+            case 5:
                 _number = op.data * op.qint.step
                 val = f'{_number}'
 
             case _:
-                assert op.id1 >= 0, f'Invalid id1: {op.id1}'
-                # Common a+/-b<<shift op
-                ref1 = f'bit_shift<{op.data}>(v{op.id1})' if op.data != 0 else f'v{op.id1}'
-                val = f'{ref0} {"-" if op.option else "+"} {ref1}'
+                raise ValueError(f'Unsupported opcode: {op.opcode}')
 
         line = f'{_type} v{i} = {val};'
 

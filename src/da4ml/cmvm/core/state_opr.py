@@ -122,7 +122,7 @@ def create_state(
             if stat[k] < 2.0:
                 del stat[k]
 
-    ops = [Op(i, -1, 0, 0, qintervals[i], inp_latencies[i], 0.0) for i in range(n_in)]
+    ops = [Op(i, -1, -1, 0, qintervals[i], inp_latencies[i], 0.0) for i in range(n_in)]
 
     return DAState(
         shifts=shifts,
