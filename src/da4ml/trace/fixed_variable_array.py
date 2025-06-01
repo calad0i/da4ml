@@ -79,7 +79,8 @@ class FixedVariableArray:
             latencies = tuple([float(v.latency) for v in vec._vars])
             hwconf = self._vars.ravel()[0].hwconf
             kwargs.update(adder_size=hwconf.adder_size, carry_size=hwconf.carry_size)
-            sol = solve(mat1, qintervals=qintervals, latencies=latencies, **kwargs)
+            _mat = np.ascontiguousarray(mat1.astype(np.float32))
+            sol = solve(_mat, qintervals=qintervals, latencies=latencies, **kwargs)
             _r = sol(vec._vars)
             r.append(_r)
         r = np.array(r).reshape(out_shape)
