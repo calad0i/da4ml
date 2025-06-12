@@ -4,13 +4,13 @@ from ...cmvm.types import Op, QInterval, Solution, _minimal_kif
 from ...trace.fixed_variable import _const_f
 
 
-def kif_to_vitis_type(k: bool | int, i: int, f: int):
+def kif_to_vitis_type(k: bool | int = 1, i: int = 0, f: int = 0):
     if k == i == f == 0:
         f = 1
     return f'ap_{"" if k else "u"}fixed<{k+i+f},{k+i}>'
 
 
-def kif_to_hlslib_type(k: bool | int, i: int, f: int):
+def kif_to_hlslib_type(k: bool | int = 1, i: int = 0, f: int = 0):
     if k == i == f == 0:
         f = 1
     return f'ac_fixed<{int(k)},{k+i+f},{k+i}>'

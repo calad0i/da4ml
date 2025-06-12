@@ -1,6 +1,8 @@
+from inspect import signature
 from typing import Any
 
 import numpy as np
+from numba.typed import List as NumbaList
 from numpy.typing import NDArray
 
 from ..cmvm import solve
@@ -14,7 +16,13 @@ class FixedVariableArray:
         solver_options: dict[str, Any] | None = None,
     ):
         self._vars = np.array(vars)
-        self.solver_options = solver_options
+        _solver_options = signature(solve).parameters
+        _solver_options = {k: v.default for k, v in _solver_options.items() if v.default is not v.empty}
+        if solver_options is not None:
+            _solver_options.update(solver_options)
+        _solver_options.pop('qintervals', None)
+        _solver_options.pop('latencies', None)
+        self.solver_options = _solver_options
 
     @classmethod
     def from_lhs(
@@ -75,8 +83,10 @@ class FixedVariableArray:
         r = []
         for i in range(mat0.shape[0]):
             vec = mat0[i]
-            qintervals = tuple([QInterval(float(v.low), float(v.high), float(v.step)) for v in vec._vars])
-            latencies = tuple([float(v.latency) for v in vec._vars])
+            _qintervals = [QInterval(float(v.low), float(v.high), float(v.step)) for v in vec._vars]
+            _latencies = [float(v.latency) for v in vec._vars]
+            qintervals = NumbaList(_qintervals)  # type: ignore
+            latencies = NumbaList(_latencies)  # type: ignore
             hwconf = self._vars.ravel()[0].hwconf
             kwargs.update(adder_size=hwconf.adder_size, carry_size=hwconf.carry_size)
             _mat = np.ascontiguousarray(mat1.astype(np.float32))
