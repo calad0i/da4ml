@@ -140,10 +140,6 @@ def jit_solve(
             if not method0 == method1 == 'wmc-dc' or decompose_dc >= 0:
                 decompose_dc -= 1
                 continue
-        if sum([op.cost for op in sol1.ops]) * 4 > sum([op.cost for op in sol0.ops]) and decompose_dc > 0:
-            # If the second stage is too expensive, the decomposition usually doesn't worth it
-            decompose_dc -= 1
-            continue
         break
     if max(latencies1) > latency_allowed:
         # When latency depends on the bw, may happen
