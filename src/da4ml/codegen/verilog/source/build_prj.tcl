@@ -26,7 +26,6 @@ file mkdir "${output_dir}/reports"
 # synth
 synth_design -top $top_module -mode out_of_context -retiming \
     -flatten_hierarchy rebuilt -resource_sharing auto \
-    -keep_equivalent_registers -shreg_min_size 8 \
     -directive AlternateRoutability
 
 write_checkpoint -force "${output_dir}/${project_name}_post_synth.dcp"

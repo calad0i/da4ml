@@ -131,7 +131,6 @@ def to_solution(
 
     _global_id = len(ops)
     for i_out in range(n_out):
-        heap = []
         idx, shifts = np.where(expr[:, i_out] != 0)
         sub = np.empty(len(idx), dtype=np.int64)
         for i, (i_in, shift) in enumerate(zip(idx, shifts)):

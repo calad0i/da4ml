@@ -171,13 +171,13 @@ void inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
 }}"""
 
 
-def pipeline_binder_gen(csol: CascadedSolution, module_name: str, II: int = 1):
+def pipeline_binder_gen(csol: CascadedSolution, module_name: str, II: int = 1, latency_multiplier: int = 1):
     k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
     k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
     max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)
     max_out_bw = max(k + i for k, i in zip(k_out, i_out)) + max(f_out)
 
-    n_stage = len(csol.solutions)
+    latency = len(csol.solutions) * latency_multiplier
 
     n_in, n_out = csol.shape
     return f"""#include "V{module_name}.h"
@@ -196,7 +196,7 @@ constexpr size_t N_out = {n_out};
 constexpr size_t max_inp_bw = {max_inp_bw};
 constexpr size_t max_out_bw = {max_out_bw};
 constexpr size_t II = {II};
-constexpr size_t latency = {n_stage};
+constexpr size_t latency = {latency};
 typedef V{module_name} dut_t;
 
 extern "C" {{

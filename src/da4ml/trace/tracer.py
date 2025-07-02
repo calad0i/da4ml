@@ -101,6 +101,8 @@ def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray) -> Solut
 
 def comb_trace(inputs, outputs):
     inputs, outputs = list(np.ravel(inputs)), list(np.ravel(outputs))
+    # latency = max(v.latency if isinstance(v, FixedVariable) else 0 for v in outputs)
+    # outputs = [v if isinstance(v, FixedVariable) else FixedVariable(v,v,0, latency=latency, opr='const') for v in outputs]
     ops, out_index = _comb_trace(inputs, outputs)
     shape = len(inputs), len(outputs)
     inp_shift = [0] * shape[0]

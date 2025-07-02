@@ -159,6 +159,8 @@ def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False,
     from ..trace.fixed_variable import FixedVariable
 
     assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic relu'
+    if inv:
+        v = -v
     return v.relu(i, f, round_mode=round_mode)
 
 
@@ -295,9 +297,7 @@ class Solution(NamedTuple):
         inp_qint = [op.qint for op in self.ops if op.opcode == -1]
         if quantize:  # TRN and WRAP
             k, i, f = map(np.array, zip(*map(minimal_kif, inp_qint)))
-            eps = 2.0**-f
-            _low, _high = -(2.0 ** (i + f)) * k, 2.0 ** (i + f) - 1
-            inp = eps * ((np.floor(inp / eps) - _low) % 2.0 ** (k + i + f) + _low)
+            inp = [_quantize(*x, round_mode='TRN') for x in zip(inp, k, i, f)]
 
         inp = inp * (2.0 ** np.array(self.inp_shift))
         for i, op in enumerate(self.ops):
@@ -561,7 +561,7 @@ class CascadedSolution(NamedTuple):
     @property
     def reg_bits(self):
         """The number of bits used for the register in the solution."""
-        bits = 0
+        bits = sum(map(sum, (_minimal_kif(qint) for qint in self.inp_qint)))
         for _sol in self.solutions:
             kifs = [_minimal_kif(qint) for qint in _sol.out_qint]
             _bits = sum(map(sum, kifs))

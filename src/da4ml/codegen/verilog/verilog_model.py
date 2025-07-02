@@ -34,6 +34,7 @@ class VerilogModel:
         clock_period: int = 5,
         clock_uncertainty: float = 0.1,
         io_delay_minmax: tuple[float, float] = (0.2, 0.4),
+        register_layers: int = 1,
     ):
         self._solution = solution
         self._path = Path(path)
@@ -45,6 +46,7 @@ class VerilogModel:
         self._clock_period = clock_period
         self._clock_uncertainty = clock_uncertainty
         self._io_delay_minmax = io_delay_minmax
+        self._register_layers = register_layers
 
         self._pipe = solution if isinstance(solution, CascadedSolution) else None
         if latency_cutoff > 0 and self._pipe is None:
@@ -62,7 +64,7 @@ class VerilogModel:
         self._path.mkdir(parents=True, exist_ok=True)
         if self._pipe is not None:  # Pipeline
             # Main logic
-            codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency)
+            codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
             for k, v in codes.items():
                 with open(self._path / f'{k}.v', 'w') as f:
                     f.write(v)
@@ -86,8 +88,8 @@ class VerilogModel:
             with open(self._path / f'{self._prj_name}.xdc', 'w') as f:
                 f.write(xdc)
 
-            # C++ binder w/
-            binder = pipeline_binder_gen(self._pipe, f'{self._prj_name}_wrapper', 1)
+            # C++ binder w/ verilog wrapper for uniform bw
+            binder = pipeline_binder_gen(self._pipe, f'{self._prj_name}_wrapper', 1, self._register_layers)
 
             # Verilog IO wrapper (non-uniform bw to uniform one, clk passthrough)
             io_wrapper = generate_io_wrapper(self._pipe, self._prj_name, True)
@@ -243,11 +245,12 @@ class VerilogModel:
         in_bits, out_bits = np.sum(kifs_in), np.sum(kifs_out)
         if self._pipe is not None:
             n_stage = len(self._pipe[0])
+            delay_suffix = '' if self._register_layers == 1 else f'x {self._register_layers} '
             lat_cutoff = self._latency_cutoff
             reg_bits = self._pipe.reg_bits
             spec = f"""Top Module: {self._prj_name}\n====================
 {inp_size} ({in_bits} bits) -> {out_size} ({out_bits} bits)
-{n_stage} stages @ max_delay={lat_cutoff}
+{n_stage} {delay_suffix}stages @ max_delay={lat_cutoff}
 Estimated cost: {cost} LUTs, {reg_bits} FFs"""
 
         else:

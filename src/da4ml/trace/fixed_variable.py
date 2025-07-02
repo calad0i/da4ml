@@ -266,7 +266,7 @@ class FixedVariable:
             step = Decimal(2) ** -f
             i = ceil(log2(val + step)) if not i else i
             eps = step / 2 if round_mode == 'RND' else 0
-            val = floor(val / step + eps) % Decimal(2) ** i * step
+            val = (floor(val / step + eps) * step) % (Decimal(2) ** i)
             return FixedVariable(val, val, step, hwconf=self.hwconf)
 
         step = max(Decimal(2) ** -f, self.step) if f is not None else self.step
@@ -324,7 +324,7 @@ class FixedVariable:
         # bit-exactness will be lost in these cases, but they should never happen (quantizers are used in a weird way)
         # Keeping this for now; change if absolutely necessary
         f = min(f, _f)
-        k = min(k, _k)
+        k = min(k, _k) if i >= _i else k
         i = min(i, _i)
 
         step = max(Decimal(2) ** -f, self.step)
