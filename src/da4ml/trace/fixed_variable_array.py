@@ -106,8 +106,8 @@ class FixedVariableArray:
         axes = _axes[ndim0 - 1 :] + _axes[: ndim0 - 1]
         return r.transpose(axes)
 
-    def __getitem__(self, *item):
-        vars = self._vars[*item]
+    def __getitem__(self, item):
+        vars = self._vars[item]
         if isinstance(vars, np.ndarray):
             return FixedVariableArray(vars, self.solver_options)
         else:
