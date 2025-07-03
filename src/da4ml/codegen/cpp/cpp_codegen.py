@@ -103,6 +103,15 @@ def output_gen(sol: Solution, typestr_fn: Callable[[bool | int, int, int], str])
     return lines
 
 
+def get_io_types(sol: Solution, flavor: str):
+    typestr_fn = get_typestr_fn(flavor)
+    in_kif = map(max, zip(*map(_minimal_kif, sol.inp_qint)))
+    inp_type = typestr_fn(*in_kif)
+    out_kif = map(max, zip(*map(_minimal_kif, sol.out_qint)))
+    out_type = typestr_fn(*out_kif)
+    return inp_type, out_type
+
+
 def cpp_logic_and_bridge_gen(
     sol: Solution,
     fn_name: str,
@@ -113,10 +122,7 @@ def cpp_logic_and_bridge_gen(
     print_latency: bool = False,
 ):
     typestr_fn = get_typestr_fn(flavor)
-    in_kif = map(max, zip(*map(_minimal_kif, sol.inp_qint)))
-    inp_type = typestr_fn(*in_kif)
-    out_kif = map(max, zip(*map(_minimal_kif, sol.out_qint)))
-    out_type = typestr_fn(*out_kif)
+    inp_t, out_t = get_io_types(sol, flavor)
 
     n_in, n_out = sol.shape
     template_def = 'template <typename inp_t, typename out_t>'
@@ -130,19 +136,35 @@ def cpp_logic_and_bridge_gen(
     base_indent = indent * n_base_indent
     body_indent = '\n' + base_indent + indent
     code = f"""{base_indent}{template_def}
-{base_indent}{fn_signature} {{ // {inp_type} -> {out_type}
-{body_indent}{body_indent.join(pragmas)}
+{base_indent}{fn_signature} {{ // {inp_t} -> {out_t}
+{base_indent + indent}{body_indent.join(pragmas)}
 {body_indent}{body_indent.join(ssa_lines)}
 {body_indent}{body_indent.join(output_lines)}
 {base_indent}}}
 """
-    bridge = f"""#include "bridge.h"
-#include "fn.h"
+    bridge = f"""#include "binder_util.hh"
+#include "{fn_name}.hh"
+
+struct {fn_name}_config {{
+    static const size_t N_inp = {n_in};
+    static const size_t N_out = {n_out};
+    typedef {inp_t} inp_t;
+    typedef {out_t} out_t;
+    constexpr static auto f = {fn_name}<inp_t, out_t>;
+}};
 
 extern "C" {{
-void bridge(double *inp, double *out, int size) {{
-    auto fn = {fn_name}<{inp_type}, {out_type}>;
-    vitis_bridge<{inp_type}, {out_type}, {n_in}, {n_out}>(fn, inp, out, size);
+
+bool openmp_enabled() {{
+    return _openmp;
+}}
+
+void inference_f64(double *inp, double *out, size_t size) {{
+    batch_inference<{fn_name}_config, double>(inp, out, size);
+}}
+
+void inference_f32(float *inp, float *out, size_t size) {{
+    batch_inference<{fn_name}_config, float>(inp, out, size);
 }}
 }}"""
     return code, bridge

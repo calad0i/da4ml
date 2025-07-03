@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from ... import codegen
 from ...cmvm.types import CascadedSolution, Solution, _minimal_kif
 from ...trace.pipeline import to_pipeline
-from . import comb_binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_binder_gen, pipeline_logic_gen
+from . import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
 
 
 def get_io_kifs(sol: Solution | CascadedSolution):
@@ -89,7 +89,7 @@ class VerilogModel:
                 f.write(xdc)
 
             # C++ binder w/ verilog wrapper for uniform bw
-            binder = pipeline_binder_gen(self._pipe, f'{self._prj_name}_wrapper', 1, self._register_layers)
+            binder = binder_gen(self._pipe, f'{self._prj_name}_wrapper', 1, self._register_layers)
 
             # Verilog IO wrapper (non-uniform bw to uniform one, clk passthrough)
             io_wrapper = generate_io_wrapper(self._pipe, self._prj_name, True)
@@ -105,7 +105,7 @@ class VerilogModel:
 
             # Verilog IO wrapper (non-uniform bw to uniform one, no clk)
             io_wrapper = generate_io_wrapper(self._solution, self._prj_name, False)
-            binder = comb_binder_gen(self._solution, f'{self._prj_name}_wrapper')
+            binder = binder_gen(self._solution, f'{self._prj_name}_wrapper')
 
         with open(self._path / f'{self._prj_name}_wrapper.v', 'w') as f:
             f.write(io_wrapper)
@@ -115,7 +115,8 @@ class VerilogModel:
         # Common resource copy
         shutil.copy(self.__src_root / 'verilog/source/shift_adder.v', self._path)
         shutil.copy(self.__src_root / 'verilog/source/build_binder.mk', self._path)
-        shutil.copy(self.__src_root / 'verilog/source/ioutils.hh', self._path)
+        shutil.copy(self.__src_root / 'verilog/source/ioutil.hh', self._path)
+        shutil.copy(self.__src_root / 'verilog/source/binder_util.hh', self._path)
         self._solution.save(self._path / 'model.json')
         with open(self._path / 'misc.json', 'w') as f:
             f.write(f'{{"cost": {self._solution.cost}}}')
@@ -195,7 +196,6 @@ class VerilogModel:
         """
         self.write()
         self._compile(verbose=verbose, openmp=openmp, o3=o3)
-        self._load_lib()
 
     def predict(self, data: NDArray[np.floating]):
         """Run the model on the input data.
@@ -261,7 +261,7 @@ Estimated cost: {cost} LUTs"""
 
         is_compiled = self._lib is not None
         if is_compiled:
-            openmp = 'with OpenMP' if self._lib.openmp_enabled else ''  # type: ignore
+            openmp = 'with OpenMP' if self._lib.openmp_enabled() else ''  # type: ignore
             spec += f'\nEmulator is compiled {openmp} ({self._uuid[-12:]})'
         else:
             spec += '\nEmulator is **not compiled**'

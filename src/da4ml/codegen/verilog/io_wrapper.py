@@ -106,150 +106,39 @@ endmodule
 """
 
 
-def comb_binder_gen(sol: Solution, module_name: str):
-    k_in, i_in, f_in = zip(*map(_minimal_kif, sol.inp_qint))
-    k_out, i_out, f_out = zip(*map(_minimal_kif, sol.out_qint))
-    max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)
-    max_out_bw = max(k + i for k, i in zip(k_out, i_out)) + max(f_out)
-
-    n_in, n_out = sol.shape
-    return f"""#include "V{module_name}.h"
-#include "ioutils.hh"
-#include <verilated.h>
-
-#ifdef _OPENMP
-#include <omp.h>
-constexpr bool _openmp = true;
-#else
-constexpr bool _openmp = false;
-#endif
-
-constexpr size_t N_inp = {n_in};
-constexpr size_t N_out = {n_out};
-constexpr size_t max_inp_bw = {max_inp_bw};
-constexpr size_t max_out_bw = {max_out_bw};
-typedef V{module_name} dut_t;
-
-extern "C" {{
-
-bool openmp_enabled() {{
-    return _openmp;
-}}
-
-void _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
-    dut_t *dut = new dut_t;
-
-    for (size_t i = 0; i < n_samples; ++i) {{
-        write_input<N_inp, max_inp_bw>(dut->inp, &c_inp[i * N_inp]);
-        dut->eval();
-        read_output<N_out, max_out_bw>(dut->out, &c_out[i * N_out]);
-    }}
-
-    dut->final();
-    delete dut;
-}}
-
-void inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
-    size_t n_max_threads = omp_get_max_threads();
-    size_t n_samples_per_thread = std::max<size_t>(n_samples / n_max_threads, 32);
-    size_t n_thread = n_samples / n_samples_per_thread;
-    n_thread += (n_samples % n_samples_per_thread) ? 1 : 0;
-
-    #ifdef _OPENMP
-    #pragma omp parallel for num_threads(n_thread) schedule(static)
-    for (size_t i = 0; i < n_thread; ++i) {{
-        size_t start = i * n_samples_per_thread;
-        size_t end = std::min<size_t>(start + n_samples_per_thread, n_samples);
-        size_t n_samples_this_thread = end - start;
-
-        _inference(&c_inp[start * N_inp], &c_out[start * N_out], n_samples_this_thread);
-    }}
-    #else
-    _inference(c_inp, c_out, n_samples);
-    #endif
-}}
-}}"""
-
-
-def pipeline_binder_gen(csol: CascadedSolution, module_name: str, II: int = 1, latency_multiplier: int = 1):
+def binder_gen(csol: CascadedSolution | Solution, module_name: str, II: int = 1, latency_multiplier: int = 1):
     k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
     k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
     max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)
     max_out_bw = max(k + i for k, i in zip(k_out, i_out)) + max(f_out)
 
-    latency = len(csol.solutions) * latency_multiplier
+    if isinstance(csol, Solution):
+        II = latency = 0
+    else:
+        latency = len(csol.solutions) * latency_multiplier
 
     n_in, n_out = csol.shape
-    return f"""#include "V{module_name}.h"
-#include "ioutils.hh"
-#include <verilated.h>
+    return f"""#include <cstddef>
+#include "binder_util.hh"
+#include "V{module_name}.h"
 
-#ifdef _OPENMP
-#include <omp.h>
-constexpr bool _openmp = true;
-#else
-constexpr bool _openmp = false;
-#endif
-
-constexpr size_t N_inp = {n_in};
-constexpr size_t N_out = {n_out};
-constexpr size_t max_inp_bw = {max_inp_bw};
-constexpr size_t max_out_bw = {max_out_bw};
-constexpr size_t II = {II};
-constexpr size_t latency = {latency};
-typedef V{module_name} dut_t;
+struct {module_name}_config {{
+    static const size_t N_inp = {n_in};
+    static const size_t N_out = {n_out};
+    static const size_t max_inp_bw = {max_inp_bw};
+    static const size_t max_out_bw = {max_out_bw};
+    static const size_t II = {II};
+    static const size_t latency = {latency};
+    typedef V{module_name} dut_t;
+}};
 
 extern "C" {{
-
 bool openmp_enabled() {{
     return _openmp;
 }}
 
-void _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
-    dut_t *dut = new dut_t;
-
-    size_t clk_req = n_samples * II + latency + 1;
-
-    for (size_t t_inp = 0; t_inp < clk_req; ++t_inp) {{
-        size_t t_out = t_inp - latency - 1;
-
-        if (t_inp < n_samples * II && t_inp % II == 0) {{
-            write_input<N_inp, max_inp_bw>(dut->inp, &c_inp[t_inp / II * N_inp]);
-        }}
-
-        dut->clk = 0;
-        dut->eval();
-
-        if (t_inp > latency && t_out % II == 0) {{
-            read_output<N_out, max_out_bw>(dut->out, &c_out[t_out / II * N_out]);
-        }}
-
-        dut->clk = 1;
-        dut->eval();
-    }}
-
-    dut->final();
-    delete dut;
-}}
-
 void inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {{
-#ifdef _OPENMP
-    size_t n_max_threads = omp_get_max_threads();
-    size_t n_samples_per_thread = std::max<size_t>(n_samples / n_max_threads, 32);
-    size_t n_thread = n_samples / n_samples_per_thread;
-    n_thread += (n_samples % n_samples_per_thread) ? 1 : 0;
-
-    #pragma omp parallel for num_threads(n_thread) schedule(static)
-    for (size_t i = 0; i < n_thread; ++i) {{
-        size_t start = i * n_samples_per_thread;
-        size_t end = std::min<size_t>(start + n_samples_per_thread, n_samples);
-        size_t n_samples_this_thread = end - start;
-
-        _inference(&c_inp[start * N_inp], &c_out[start * N_out], n_samples_this_thread);
-    }}
-#else
-    _inference(c_inp, c_out, n_samples);
-#endif
+    batch_inference<{module_name}_config>(c_inp, c_out, n_samples);
 }}
-
-}}"""
+}}
+"""

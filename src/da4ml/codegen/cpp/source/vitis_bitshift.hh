@@ -1,5 +1,5 @@
 #pragma once
-#include "ap_fixed.h"
+#include "ap_types/ap_fixed.h"
 
 template <int s, int b, int i, ap_q_mode Q, ap_o_mode O, int N> ap_fixed<b, i + s> bit_shift(ap_fixed<b, i, Q, O, N> x) {
 #pragma HLS INLINE
