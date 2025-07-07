@@ -42,13 +42,12 @@ def stride_arr(stride: int | tuple[int, ...], arr: np.ndarray):
 T = TypeVar('T', FixedVariableArray, NDArray[np.integer | np.floating])
 
 
-def conv(
+def _conv(
     x: T,
     kernel: NDArray[np.integer | np.floating],
     bias: NDArray[np.integer | np.floating] | None = None,
     strides: int | tuple[int, ...] = 1,
     padding: tuple[tuple[int, int], ...] | str = 'VALID',
-    format: str = 'channels_last',
 ):
     if isinstance(x, FixedVariableArray):
         solver_options = x.solver_options
@@ -63,10 +62,10 @@ def conv(
     ch_in, ch_out = kernel.shape[-2:]
     _ch_in = data.shape[-1]
     assert ch_in == _ch_in, f'Invalid input shape {data.shape} for kernel {kernel.shape}'
-    assert kernel.ndim == ndim + 1
-
-    assert format in ('channels_last', 'channels_first'), f'Invalid format {format}'
-
+    if kernel.ndim != ndim + 1:
+        if kernel.ndim == ndim:
+            raise ValueError('Inputs should not contain batch dimension')
+        raise ValueError(f'Invalid kernel shape {kernel.shape} for input with {ndim} dimensions')
     if isinstance(strides, int):
         strides = (strides,) * (ndim - 1)
     assert len(strides) == ndim - 1, f'Invalid stride {strides} for array with {ndim} dimensions'
@@ -97,8 +96,63 @@ def conv(
     data = stride_arr(strides, data)
     if bias is not None:
         data = data + bias
-    if format == 'channels_first':
-        data = np.moveaxis(data, -1, 1)
     if solver_options is not None:
         return FixedVariableArray(data, solver_options)
+    return data
+
+
+def conv(
+    x: T,
+    kernel: NDArray[np.integer | np.floating],
+    bias: NDArray[np.integer | np.floating] | None = None,
+    strides: int | tuple[int, ...] = 1,
+    padding: tuple[tuple[int, int], ...] | str = 'VALID',
+    format: str = 'channels_last',
+    groups: int | None = None,
+) -> T:
+    assert format in ('channels_last', 'channels_first'), f'Invalid format {format}'
+    if format == 'channels_first':
+        if isinstance(x, FixedVariableArray):
+            x = FixedVariableArray(np.moveaxis(x._vars, 0, -1), x.solver_options)  # type: ignore
+        else:
+            x = np.moveaxis(x, 0, -1)
+
+    *_, _ch_in, ch_out = kernel.shape
+    ch_in = x.shape[-1]
+    assert ch_in % _ch_in == 0, f'groups is not integer (total_ch_in={ch_in}, kernel_ch_in={_ch_in})'
+    if groups is None:
+        groups = ch_in // _ch_in
+    else:
+        assert (
+            groups == ch_in // _ch_in
+        ), f'groups {groups} does not match input channels {ch_in} and kernel input channels {_ch_in}'
+    assert ch_out % groups == 0, f'groups is not integer (total_ch_out={ch_out}, groups={groups})'
+    _ch_out = ch_out // groups
+
+    buf: list[T] = []
+    for gp in range(groups):
+        _kernel = kernel[..., gp * _ch_out : (gp + 1) * _ch_out]
+        _x = x[..., gp * _ch_in : (gp + 1) * _ch_in]
+        _buf = _conv(
+            _x,
+            _kernel,
+            strides=strides,
+            padding=padding,
+        )
+        buf.append(_buf)  # type: ignore
+
+    if isinstance(x, FixedVariableArray):
+        data = np.concatenate([b._vars for b in buf], axis=-1)  # type: ignore
+    else:
+        data = np.concatenate(buf, axis=-1)  # type: ignore
+
+    data = data + bias if bias is not None else data
+
+    if format == 'channels_first':
+        if isinstance(x, FixedVariableArray):
+            return FixedVariableArray(np.moveaxis(data, -1, 0), x.solver_options)
+        return np.moveaxis(data, -1, 0)
+
+    if isinstance(x, FixedVariableArray):
+        return FixedVariableArray(data, x.solver_options)
     return data
