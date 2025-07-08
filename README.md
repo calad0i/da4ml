@@ -4,7 +4,7 @@ This project performs Constant Matrix-Vector Multiplication (CMVM) with Distribu
 
 CMVM optimization is done through greedy CSE of two-term subexpressions, with possible Delay Constraints (DC). The optimization is done in jitted Python (Numba), and a list of optimized operations is generated as traced Python code.
 
-At the moment, the project only generates Vitis HLS C++ code for the FPGA implementation of the optimized CMVM kernel. HDL code generation is planned for the future. Currently, the major use of this repository is through the `distributed_arithmetic` strategy in the [`hls4ml`](https://github.com/fastmachinelearning/hls4ml/) project.
+The project generates Verilog or Vitis HLS code for the optimized CMVM operations. This project can be used in conjunction with [`hls4ml`](https://github.com/fastmachinelearning/hls4ml/) for optimizing the neural networks deployed on FPGAs. For a subset of neural networks, the full design can be generated standalone in Verilog or Vitis HLS.
 
 
 ## Installation
@@ -37,6 +37,48 @@ model_hls = hls4ml.converters.convert_from_keras_model(
 
 Currently, `Dense/Conv1D/Conv2D` layers are supported for both `io_parallel` and `io_stream` dataflows. However, notice that distributed arithmetic implies `reuse_factor=1`, as the whole kernel is implemented in combinational logic.
 
-### Notice
+## Standalone usage
 
-Currently, only the `da4ml-v3` branch of `hls4ml` supports the `distributed_arithmetic` strategy. The `da4ml-v3` branch is not yet merged into the `main` branch of `hls4ml`, so you need to install it from the GitHub repository.
+### `HGQ2`
+
+For some models trained with `HGQ2`, the `da4ml` can be used to generate the whole model in Verilog or Vitis HLS:
+
+```python
+from da4ml.codegen import HLSModel, VerilogModel
+from da4ml.converter.hgq2.parser import trace_model
+from da4ml.trace import comb_trace
+
+inp, out = trace_model(hgq2_model)
+comb_logic = comb_trace(inp[0], out[0]) # Currently, only models with 1 input and 1 output are supported
+
+# Pipelined Verilog model generation
+# `latency_cutoff` is used to control auto piplining behavior. To disable pipelining, set it to -1.
+verilog_model = VerilogModel(sol, prj_name='barbar', path='/tmp/barbar', latency_cutoff=5)
+verilog_model.compile() # write and verilator binding
+verilog_model.predict(inputs)
+
+vitis_hls_model = HLSModel(sol, prj_name='foo', path='/tmp/foo', flavor='vitis') # Only vitis is supported for now
+vitis_hls_model.compile() # write and hls binding
+vitis_hls_model.predict(inputs)
+```
+
+### Functional Definition
+For generic operations, one can define a combinational logic with the functional API:
+
+```python
+from da4ml.trace import FixedVariableArray, HWConfig, comb_trace
+from da4ml.trace.ops import einsum, relu, quantize, conv, pool
+
+# k, i, f are numpy arrays of integers: keep_negative (0/1), integer bits (excl. sign), fractional bits
+inp = FixedVariableArray.from_kif(k, i, f, HWConfig(1, -1, -1), solver_options={'hard_dc':2})
+out = inp @ kernel
+out = relu(out)
+out = einsum(equation, out, weights)
+...
+
+comb = comb_trace(inp, out)
+```
+
+`+`, `-`, `@` are supported as well as `einsum`, `relu`, `quantize` (WRAP, with TRN or RND), `conv`, `pool` (average only). For multiplications, only power-of-two multipliers are supported, otherwise use `einsum` or `@` operators.
+
+The `comb_trace` returns a `Solution` objects that contains a list of low-level operations that are used to implement the combinational logic, which in turn can be used to generate Verilog or Vitis HLS code.
