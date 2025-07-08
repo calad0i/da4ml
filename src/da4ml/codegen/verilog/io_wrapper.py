@@ -32,11 +32,16 @@ def hetero_io_map(qints: list[QInterval], merge: bool = False):
             copy_from = hetero[i][0] if ks[i] else -1
             pads.append((base + max_bw - 1, base + max_bw - bias_high, copy_from))
 
+    mask = list(high < low for high, low in hetero)
+    regular = [r for r, m in zip(regular, mask) if not m]
+    hetero = [h for h, m in zip(hetero, mask) if not m]
+
     if not merge:
         return regular, hetero, pads, (width_regular, width_packed)
 
     # Merging consecutive intervals when possible
-    for i in range(N - 2, -1, -1):
+    NN = len(regular) - 2
+    for i in range(NN, -1, -1):
         this_high = regular[i][0]
         next_low = regular[i + 1][1]
         if next_low - this_high != 1:

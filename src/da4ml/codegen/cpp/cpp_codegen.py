@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from ...cmvm.types import Op, QInterval, Solution, _minimal_kif
+from ...cmvm.types import QInterval, Solution, _minimal_kif
 from ...trace.fixed_variable import _const_f
 
 
@@ -27,13 +27,18 @@ def get_typestr_fn(flavor: str):
     return typestr_fn
 
 
-def ssa_gen(ops: list[Op], print_latency: bool, typestr_fn: Callable[[bool | int, int, int], str]):
+def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int, int, int], str]):
+    ops = sol.ops
     all_kifs = map(_minimal_kif, (op.qint for op in ops))
     all_types = list(map(lambda x: typestr_fn(*x), all_kifs))
 
     lines = []
-
+    ref_count = sol.ref_count
     for i, op in enumerate(ops):
+        if ref_count[i] == 0:
+            # Skip unused ops
+            continue
+
         _type = all_types[i]
 
         ref0 = f'v{op.id0}'
@@ -129,7 +134,7 @@ def cpp_logic_and_bridge_gen(
     fn_signature = f'void {fn_name}(inp_t inp[{n_in}], out_t out[{n_out}])'
     pragmas = pragmas or []
 
-    ssa_lines = ssa_gen(sol.ops, print_latency=print_latency, typestr_fn=typestr_fn)
+    ssa_lines = ssa_gen(sol, print_latency=print_latency, typestr_fn=typestr_fn)
     output_lines = output_gen(sol, typestr_fn=typestr_fn)
 
     indent = ' ' * n_indent

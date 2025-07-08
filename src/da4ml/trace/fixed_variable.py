@@ -43,7 +43,7 @@ class FixedVariable:
     ) -> None:
         assert low <= high, f'low {low} must be less than high {high}'
 
-        if low == high:
+        if low == high and opr != 'new':
             opr = 'const'
             _factor = 1.0
             _from = ()
@@ -185,7 +185,9 @@ class FixedVariable:
             hwconf=self.hwconf,
         )
 
-    def _const_add(self, other: float | Decimal):
+    def _const_add(self, other: float | Decimal | None):
+        if other is None:
+            return self
         if not isinstance(other, (int, float, Decimal)):
             other = float(other)  # direct numpy to decimal raises error
         other = Decimal(other)

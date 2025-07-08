@@ -443,6 +443,24 @@ class Solution(NamedTuple):
             data = json.load(f)
         return cls.deserialize(data)
 
+    @property
+    def ref_count(self) -> np.ndarray:
+        """The number of references to the output elements in the solution."""
+        ref_count = np.zeros(len(self.ops), dtype=np.uint64)
+        for op in self.ops:
+            if op.opcode == -1:
+                continue
+            id0, id1 = op.id0, op.id1
+            if id0 != -1:
+                ref_count[id0] += 1
+            if id1 != -1:
+                ref_count[id1] += 1
+        for i in self.out_idxs:
+            if i < 0:
+                continue
+            ref_count[i] += 1
+        return ref_count
+
 
 class CascadedSolution(NamedTuple):
     """A solution that implements cascaded matrix-vector multiplications through multiple CMVM stages.

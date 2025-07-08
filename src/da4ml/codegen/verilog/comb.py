@@ -2,10 +2,11 @@ from math import ceil, log2
 
 import numpy as np
 
-from da4ml.cmvm.types import Op, QInterval, Solution, _minimal_kif
+from da4ml.cmvm.types import QInterval, Solution, _minimal_kif
 
 
-def ssa_gen(ops: list[Op], print_latency: bool = False):
+def ssa_gen(sol: Solution, print_latency: bool = False):
+    ops = sol.ops
     kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     widths = list(map(sum, kifs))
     inp_kifs = [_minimal_kif(op.qint) for op in ops if op.opcode == -1]
@@ -14,8 +15,12 @@ def ssa_gen(ops: list[Op], print_latency: bool = False):
     inp_idxs = np.stack([_inp_widths[1:] - 1, _inp_widths[:-1]], axis=1)
 
     lines = []
+    ref_count = sol.ref_count
 
     for i, op in enumerate(ops):
+        if ref_count[i] == 0:
+            continue
+
         bw = widths[i]
         v = f'v{i}[{bw-1}:0]'
         _def = f'wire [{bw-1}:0] v{i};'
@@ -122,7 +127,7 @@ def comb_logic_gen(sol: Solution, fn_name: str, print_latency: bool = False, tim
         ');',
     ]
 
-    ssa_lines = ssa_gen(sol.ops, print_latency=print_latency)
+    ssa_lines = ssa_gen(sol, print_latency=print_latency)
     output_lines = output_gen(sol)
 
     indent = '    '

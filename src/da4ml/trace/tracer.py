@@ -101,8 +101,6 @@ def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray) -> Solut
 
 def comb_trace(inputs, outputs):
     inputs, outputs = list(np.ravel(inputs)), list(np.ravel(outputs))
-    # latency = max(v.latency if isinstance(v, FixedVariable) else 0 for v in outputs)
-    # outputs = [v if isinstance(v, FixedVariable) else FixedVariable(v,v,0, latency=latency, opr='const') for v in outputs]
     ops, out_index = _comb_trace(inputs, outputs)
     shape = len(inputs), len(outputs)
     inp_shift = [0] * shape[0]
@@ -110,7 +108,7 @@ def comb_trace(inputs, outputs):
     out_shift = [int(log2(abs(sf))) for sf in out_sf]
     out_neg = [sf < 0 for sf in out_sf]
 
-    return Solution(
+    sol = Solution(
         shape,
         inp_shift,
         out_index,
@@ -120,3 +118,12 @@ def comb_trace(inputs, outputs):
         outputs[0].hwconf.carry_size,
         outputs[0].hwconf.adder_size,
     )
+
+    ref_count = sol.ref_count
+
+    for i in range(len(ops)):
+        if ref_count[i] == 0:
+            op = ops[i]
+            sol.ops[i] = Op(-1, -1, op[2], 0, QInterval(0, 0, 1), op[5], op[6])
+
+    return sol
