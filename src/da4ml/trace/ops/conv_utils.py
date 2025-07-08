@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from math import prod
 from typing import TypeVar
 
 import numpy as np
@@ -155,4 +156,60 @@ def conv(
 
     if isinstance(x, FixedVariableArray):
         return FixedVariableArray(data, x.solver_options)
+    return data
+
+
+def pool(
+    x: T,
+    pool_size: Sequence[int],
+    strides: int | Sequence[int] | None = None,
+    padding: tuple[tuple[int, int], ...] | str = 'VALID',
+    pool_type: str = 'avg',
+) -> T:
+    if isinstance(x, FixedVariableArray):
+        solver_options = x.solver_options
+        data = x._vars
+    else:
+        solver_options = None
+        data = x
+
+    strides = strides or pool_size
+
+    assert pool_type in ('avg', 'max'), f'Invalid pool type {pool_type}'
+    ndim = data.ndim
+    if isinstance(strides, int):
+        strides = (strides,) * (ndim - 1)
+    assert len(strides) == ndim - 1, f'Invalid stride {strides} for array with {ndim} dimensions'
+
+    if isinstance(padding, str):
+        padding = padding.upper()
+        if padding == 'VALID':
+            padding = ((0, 0),) * (ndim - 1)
+        elif padding == 'SAME':
+            _padding = []
+            for i in range(ndim - 1):
+                pad0 = pool_size[i] // 2
+                pad1 = pool_size[i] - pad0 - 1
+                _padding.append((pad1, pad0))
+            padding = tuple(_padding)
+        else:
+            raise ValueError(f'Invalid padding {padding}')
+    assert len(padding) == ndim - 1, f'Invalid padding {padding} for array with {ndim} dimensions'
+    assert all(len(p) == 2 for p in padding), f'Invalid padding {padding} for array with {ndim} dimensions'
+
+    data = np.pad(data, padding + ((0, 0),), mode='constant', constant_values=-np.inf)
+    ch_in = data.shape[-1]
+    fake_kernel_shape = tuple(pool_size) + (ch_in, ch_in)
+    data = _im2col(fake_kernel_shape, data)
+    data = data.reshape(*data.shape[:-1], ch_in, prod(pool_size))
+    if pool_type == 'avg':
+        div = np.sum(data != -np.inf, axis=-2)
+        data = np.nan_to_num(data, neginf=0)
+        data = np.sum(data, axis=-2) * (1 / div)
+    else:
+        raise NotImplementedError(f'Pool type {pool_type} is not implemented')
+
+    data = stride_arr(tuple(strides), data)
+    if isinstance(x, FixedVariableArray):
+        return FixedVariableArray(data, solver_options)
     return data
