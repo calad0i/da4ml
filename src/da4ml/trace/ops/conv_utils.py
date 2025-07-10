@@ -1,11 +1,13 @@
-from collections.abc import Sequence
+import heapq
+import typing
+from collections.abc import Callable, Sequence
 from math import prod
 from typing import TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ..fixed_variable_array import FixedVariableArray
+from ..fixed_variable_array import FixedVariable, FixedVariableArray
 
 
 def r_im2col(kernel_size: Sequence[int], arr: np.ndarray, buffer: np.ndarray, axis: int):
@@ -40,16 +42,16 @@ def stride_arr(stride: int | tuple[int, ...], arr: np.ndarray):
     return arr[*_idx]
 
 
-T = TypeVar('T', FixedVariableArray, NDArray[np.integer | np.floating])
+TA = TypeVar('TA', FixedVariableArray, NDArray[np.integer | np.floating])
 
 
 def _conv(
-    x: T,
+    x: TA,
     kernel: NDArray[np.integer | np.floating],
     bias: NDArray[np.integer | np.floating] | None = None,
     strides: int | tuple[int, ...] = 1,
     padding: tuple[tuple[int, int], ...] | str = 'VALID',
-):
+) -> TA:
     if isinstance(x, FixedVariableArray):
         solver_options = x.solver_options
         data = x._vars
@@ -97,20 +99,20 @@ def _conv(
     data = stride_arr(strides, data)
     if bias is not None:
         data = data + bias
-    if solver_options is not None:
+    if isinstance(x, FixedVariableArray):
         return FixedVariableArray(data, solver_options)
     return data
 
 
 def conv(
-    x: T,
+    x: TA,
     kernel: NDArray[np.integer | np.floating],
     bias: NDArray[np.integer | np.floating] | None = None,
     strides: int | tuple[int, ...] = 1,
     padding: tuple[tuple[int, int], ...] | str = 'VALID',
     format: str = 'channels_last',
     groups: int | None = None,
-) -> T:
+) -> TA:
     assert format in ('channels_last', 'channels_first'), f'Invalid format {format}'
     if format == 'channels_first':
         if isinstance(x, FixedVariableArray):
@@ -130,7 +132,7 @@ def conv(
     assert ch_out % groups == 0, f'groups is not integer (total_ch_out={ch_out}, groups={groups})'
     _ch_out = ch_out // groups
 
-    buf: list[T] = []
+    buf: list[TA] = []
     for gp in range(groups):
         _kernel = kernel[..., gp * _ch_out : (gp + 1) * _ch_out]
         _x = x[..., gp * _ch_in : (gp + 1) * _ch_in]
@@ -159,13 +161,71 @@ def conv(
     return data
 
 
+T = typing.TypeVar('T', FixedVariable, float, np.floating)
+
+
+def _reduce(operator: Callable[[T, T], T], arr: Sequence[T]) -> T:
+    if isinstance(arr, np.ndarray):
+        arr = list(arr.ravel())
+    assert len(arr) > 0, 'Array must not be empty'
+    if len(arr) == 1:
+        return arr[0]
+    dtype = arr[0].__class__
+    if not issubclass(dtype, FixedVariable):
+        r = operator(arr[0], arr[1])
+        for i in range(2, len(arr)):
+            r = operator(r, arr[i])
+        return r
+
+    heap = [(v.latency, v._factor > 0, sum(v.kif[:-1]), v) for v in arr]  # type: ignore
+    heapq.heapify(heap)
+    while len(heap) > 1:
+        v1 = heapq.heappop(heap)[-1]
+        v2 = heapq.heappop(heap)[-1]
+        v = operator(v1, v2)
+        heapq.heappush(heap, (v.latency, v._factor > 0, sum(v.kif[:-1]), v))  # type: ignore
+    return heap[0][-1]
+
+
+def reduce(operator: Callable[[T, T], T], x: TA, axis: int | Sequence[int] | None = None, keepdims: bool = False) -> TA:
+    """
+    Reduce the array by summing over the specified axis.
+    """
+    if isinstance(x, FixedVariableArray):
+        solver_config = x.solver_options
+        arr = x._vars
+    else:
+        solver_config = None
+        arr = x
+    all_axis = tuple(range(arr.ndim))
+    axis = axis if axis is not None else all_axis
+    axis = (axis,) if isinstance(axis, int) else tuple(axis)
+    axis = tuple(a if a >= 0 else a + arr.ndim for a in axis)
+
+    xpose_axis = sorted(all_axis, key=lambda a: (a in axis) * 1000 + a)
+    if keepdims:
+        target_shape = tuple(d if ax not in axis else 1 for ax, d in enumerate(arr.shape))
+    else:
+        target_shape = tuple(d for ax, d in enumerate(arr.shape) if ax not in axis)
+
+    dim_contract = prod(arr.shape[a] for a in axis)
+    arr = np.transpose(arr, xpose_axis)  # type: ignore
+    _arr = arr.reshape(-1, dim_contract)
+    _arr = np.array([_reduce(operator, _arr[i]) for i in range(_arr.shape[0])])
+    r = _arr.reshape(target_shape)  # type: ignore
+
+    if isinstance(x, FixedVariableArray):
+        return FixedVariableArray(r, solver_config)
+    return r
+
+
 def pool(
-    x: T,
+    x: TA,
     pool_size: Sequence[int],
     strides: int | Sequence[int] | None = None,
     padding: tuple[tuple[int, int], ...] | str = 'VALID',
     pool_type: str = 'avg',
-) -> T:
+) -> TA:
     if isinstance(x, FixedVariableArray):
         solver_options = x.solver_options
         data = x._vars
@@ -205,7 +265,7 @@ def pool(
     if pool_type == 'avg':
         div = np.sum(data != -np.inf, axis=-2)
         data = np.nan_to_num(data, neginf=0)
-        data = np.sum(data, axis=-2) * (1 / div)
+        data = reduce(lambda x, y: x + y, data, axis=-2) * (1 / div)
     else:
         raise NotImplementedError(f'Pool type {pool_type} is not implemented')
 
