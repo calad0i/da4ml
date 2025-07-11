@@ -100,7 +100,7 @@ def resolve_dependency_relation(model: keras.Model):
 
 
 def _apply_nn(
-    model: keras.Model, dependency: dependency_t, inputs: FixedVariableArray | Sequence[FixedVariableArray]
+    model: keras.Model, dependency: dependency_t, inputs: FixedVariableArray | Sequence[FixedVariableArray], verbose: bool = False
 ) -> tuple[FixedVariableArray, ...]:
     """
     Apply a keras model to a fixed variable array or a sequence of fixed variable arrays.
@@ -138,6 +138,8 @@ def _apply_nn(
                 ), f'Output tensor {out_tensor_name} by layer {layer_name} already satisfied'
 
             layer: keras.Layer = model.get_layer(layer_name)
+            if verbose:
+                print(f'Processing layer {layer_name} ({layer.__class__.__name__})')
             mirror_layer = _registry[layer.__class__](layer)
             inp_tensors = tuple(satisfied[n] for n in in_tensor_names)
             outputs = mirror_layer(inp_tensors)
@@ -169,7 +171,8 @@ def get_inp_kif(model, dependency: dependency_t, _input: str, reshape_to: tuple[
                 )
 
             assert isinstance(q.quantizer, FixedPointQuantizerBase), 'Only fixed point quantizers are supported'
-            kif = np.array(q.quantizer.kif, dtype=np.int8)
+            kif = np.empty((3, 1) + dependency[-1][_input].shape[1:], dtype=np.int8)
+            kif[:] = np.array(q.quantizer.kif, dtype=np.int8)
             if q.quantizer.overflow_mode != 'WRAP':
                 warning(
                     f'Input {_input} is quantized with overflow mode {q.quantizer.overflow_mode}. However, WRAP overflow map happen at the inputs due to unknown external input wire width'
@@ -201,12 +204,12 @@ def get_inputs(
 
 
 def trace_model(
-    model: keras.Model, hwconf: HWConfig = HWConfig(1, -1, -1), solver_options: dict[str, Any] | None = None
+    model: keras.Model, hwconf: HWConfig = HWConfig(1, -1, -1), solver_options: dict[str, Any] | None = None, verbose=False
 ) -> tuple[tuple[FixedVariableArray, ...], tuple[FixedVariableArray, ...]]:
     assert isinstance(model, keras.Model), 'model must be a keras.Model instance'
     if isinstance(model, keras.Sequential):
         model = model._functional
     dependency = resolve_dependency_relation(model)
     inputs = get_inputs(model, dependency, hwconf, solver_options)
-    outputs = _apply_nn(model, dependency, inputs)
+    outputs = _apply_nn(model, dependency, inputs, verbose=verbose)
     return inputs, outputs
