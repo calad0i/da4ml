@@ -121,7 +121,7 @@ class VerilogModel:
         with open(self._path / 'misc.json', 'w') as f:
             f.write(f'{{"cost": {self._solution.cost}}}')
 
-    def _compile(self, verbose=False, openmp=True, o3: bool = False, clean=True):
+    def _compile(self, verbose=False, openmp=True, o3: bool = False, clean=None):
         """Same as compile, but will not write to the library
 
         Parameters
@@ -150,11 +150,15 @@ class VerilogModel:
         if o3:
             args.append('fast')
 
-        if clean:
+        if clean is not False:
             m = re.compile(r'^lib.*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.so$')
             for p in self._path.iterdir():
                 if not p.is_dir() and m.match(p.name):
                     p.unlink()
+        if clean:
+            subprocess.run(
+                ['make', '-f', 'build_binder.mk', 'clean'], env=env, cwd=self._path, check=True, capture_output=not verbose
+            )
 
         try:
             r = subprocess.run(args, env=env, check=True, cwd=self._path, capture_output=not verbose)
@@ -227,7 +231,7 @@ class VerilogModel:
         out_data = np.empty(n_sample * out_size, dtype=np.int32)
 
         # Convert to int32 matching the LSB position
-        inp_data[:] = data.ravel() * 2.0 ** np.max(f_in)
+        inp_data[:] = np.floor(data.ravel() * 2.0**f_in)
 
         inp_buf = inp_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
         out_buf = out_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
@@ -235,7 +239,7 @@ class VerilogModel:
 
         # Unscale the output int32 to recover fp values
         k, i, f = np.max(k_out), np.max(i_out), np.max(f_out)
-        a, b, c = 2.0 ** (k + i + f), 2.0 ** (i + f), 2.0**-f
+        a, b, c = 2.0 ** (k + i + f), k * 2.0 ** (i + f), 2.0**-f
         return ((out_data.reshape(n_sample, out_size) + b) % a - b) * c
 
     def __repr__(self):
