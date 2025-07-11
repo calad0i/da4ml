@@ -4,7 +4,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..fixed_variable_array import FixedVariable, FixedVariableArray
-from .conv_utils import conv, pool
+from .conv_utils import conv, pool, reduce
 from .einsum_utils import einsum
 
 T = TypeVar('T', FixedVariableArray, NDArray[np.floating], list[FixedVariable])
@@ -53,4 +53,5 @@ __all__ = [
     'relu',
     'quantize',
     'pool',
+    'reduce',
 ]

@@ -164,6 +164,21 @@ def conv(
 T = typing.TypeVar('T', FixedVariable, float, np.floating)
 
 
+class Packet(tuple):
+    def __gt__(self, other: 'Packet') -> bool:  # type: ignore
+        for a, b in zip(self, other):
+            if isinstance(a, FixedVariable) and isinstance(b, FixedVariable):
+                continue
+            if a > b:
+                return True
+            if a < b:
+                return False
+        return False
+
+    def __lt__(self, other: 'Packet') -> bool:  # type: ignore
+        return not self.__gt__(other)
+
+
 def _reduce(operator: Callable[[T, T], T], arr: Sequence[T]) -> T:
     if isinstance(arr, np.ndarray):
         arr = list(arr.ravel())
@@ -177,13 +192,13 @@ def _reduce(operator: Callable[[T, T], T], arr: Sequence[T]) -> T:
             r = operator(r, arr[i])
         return r
 
-    heap = [(v.latency, v._factor > 0, sum(v.kif[:-1]), v) for v in arr]  # type: ignore
+    heap = [Packet((v.latency, v._factor > 0, sum(v.kif[:-1]), v)) for v in arr]  # type: ignore
     heapq.heapify(heap)
     while len(heap) > 1:
         v1 = heapq.heappop(heap)[-1]
         v2 = heapq.heappop(heap)[-1]
         v = operator(v1, v2)
-        heapq.heappush(heap, (v.latency, v._factor > 0, sum(v.kif[:-1]), v))  # type: ignore
+        heapq.heappush(heap, Packet((v.latency, v._factor > 0, sum(v.kif[:-1]), v)))  # type: ignore
     return heap[0][-1]
 
 
@@ -263,9 +278,9 @@ def pool(
     data = _im2col(fake_kernel_shape, data)
     data = data.reshape(*data.shape[:-1], ch_in, prod(pool_size))
     if pool_type == 'avg':
-        div = np.sum(data != -np.inf, axis=-2)
+        div = np.sum(data != -np.inf, axis=-1)
         data = np.nan_to_num(data, neginf=0)
-        data = reduce(lambda x, y: x + y, data, axis=-2) * (1 / div)
+        data = reduce(lambda x, y: x + y, data, axis=-1) * (1 / div)
     else:
         raise NotImplementedError(f'Pool type {pool_type} is not implemented')
 

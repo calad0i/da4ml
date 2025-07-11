@@ -1,4 +1,5 @@
 import typing
+from math import prod
 
 import hgq
 import keras
@@ -16,9 +17,11 @@ from hgq.layers import (
 from hgq.layers.core.base import MultipleQuantizers, Quantizer
 from hgq.quantizer.internal import FixedPointQuantizerBase
 from keras.layers import ReLU
+from keras.src.layers.pooling.base_global_pooling import BaseGlobalPooling
+from keras.src.layers.pooling.base_pooling import BasePooling
 
 from ...trace import FixedVariableArray
-from ...trace.ops import conv, einsum, quantize, relu
+from ...trace.ops import conv, einsum, pool, quantize, reduce, relu
 
 
 def mirror_quantizer(q: Quantizer, v: FixedVariableArray) -> FixedVariableArray:
@@ -111,7 +114,7 @@ class MirrorQuantizer(MirrorOperationBase):
 
 
 class MirrorQDense(MirrorOperationBase):
-    handles = (QDense, QEinsumDense, QEinsumDenseBatchnorm, QBatchNormDense, QBatchNormalization)
+    handles = (QDense, QEinsumDense, QEinsumDenseBatchnorm, QBatchNormDense, QBatchNormalization, keras.layers.EinsumDense)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
         layer = self.layer
@@ -123,12 +126,16 @@ class MirrorQDense(MirrorOperationBase):
             qkernel = layer.qkernel
             qbias = layer.qbias
             eq = layer.equation
+        elif isinstance(layer, keras.layers.EinsumDense):
+            qkernel = layer.kernel
+            qbias = layer.bias
+            eq = layer.equation
         elif isinstance(layer, QBatchNormalization):
             qkernel, qbias = layer.qscaler_and_qoffset
             dim = inputs._vars.ndim
             axis = layer.axis
             idx = ''.join(chr(ord('a') + i) for i in range(dim))
-            eq = f'{idx,idx[axis]}->{idx}'
+            eq = f'...{idx},{idx[axis]}->...{idx}'
         else:
             raise TypeError(f'Unsupported layer type: {type(layer)}')
 
@@ -190,3 +197,73 @@ class MirrorMerge(MirrorOperationBase):
             return FixedVariableArray(data, inputs[0].solver_options)
         else:
             raise TypeError(f'Unsupported layer type: {type(layer)}')
+
+
+class MirrorPool(MirrorOperationBase):
+    handles = (
+        hgq.layers.QAvgPool1D,
+        hgq.layers.QAvgPool2D,
+        hgq.layers.QAvgPool3D,
+        hgq.layers.QMaxPool1D,
+        hgq.layers.QMaxPool2D,
+        hgq.layers.QMaxPool3D,
+        hgq.layers.QGlobalAveragePooling1D,
+        hgq.layers.QGlobalMaxPooling1D,
+        hgq.layers.QGlobalAveragePooling2D,
+        hgq.layers.QGlobalMaxPooling2D,
+        hgq.layers.QGlobalAveragePooling3D,
+        hgq.layers.QGlobalMaxPooling3D,
+        keras.layers.AveragePooling1D,
+        keras.layers.AveragePooling2D,
+        keras.layers.AveragePooling3D,
+        keras.layers.MaxPooling1D,
+        keras.layers.MaxPooling2D,
+        keras.layers.MaxPooling3D,
+        keras.layers.GlobalAveragePooling1D,
+        keras.layers.GlobalMaxPooling1D,
+        keras.layers.GlobalAveragePooling2D,
+        keras.layers.GlobalMaxPooling2D,
+        keras.layers.GlobalAveragePooling3D,
+        keras.layers.GlobalMaxPooling3D,
+    )
+
+    def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
+        cname = self.layer.__class__.__name__
+        if 'Max' in cname:
+            op = 'max'
+        else:
+            assert 'Average' in cname, f'Unsupported global pooling layer: {cname}'
+            op = 'avg'
+        assert op == 'avg', 'Only average pooling is supported now'
+
+        data_format = self.layer.data_format
+        if data_format == 'channels_first':
+            inputs = FixedVariableArray(np.moveaxis(inputs._vars, 1, -1), inputs.solver_options)
+
+        if isinstance(self.layer, BaseGlobalPooling):
+            pool_dim = self.layer.input_spec.ndim - 2
+            opr = lambda a, b: a + b
+            pool_size = prod(inputs.shape[:-1])
+            out = reduce(opr, inputs, axis=tuple(range(pool_dim)), keepdims=self.layer.keepdims)
+            if op == 'avg':
+                out = out * (1 / pool_size)
+        else:
+            assert isinstance(self.layer, BasePooling), f'Unsupported pooling layer: {type(self.layer)}'
+            pool_size = self.layer.pool_size
+            strides = self.layer.strides
+            padding = self.layer.padding
+            pool_dim = len(pool_size)
+            out = pool(
+                inputs,
+                pool_size=pool_size,
+                strides=strides,
+                padding=padding,
+                pool_type=op,
+            )
+            if op == 'avg':
+                out = out * (1 / prod(pool_size))
+
+        if data_format == 'channels_first':
+            out = FixedVariableArray(np.moveaxis(out._vars, -1, 1), out.solver_options)
+
+        return out
