@@ -6,7 +6,7 @@ from numba.typed import List as NumbaList
 from numpy.typing import NDArray
 
 from ..cmvm import solve
-from .fixed_variable import FixedVariable, HWConfig, QInterval
+from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, QInterval
 
 
 class FixedVariableArray:
@@ -185,3 +185,12 @@ class FixedVariableArray:
     @property
     def dtype(self):
         return self._vars.dtype
+
+
+class FixedVariableArrayInput(FixedVariableArray):
+    def __init__(self, shape: tuple[int, ...], hwconf: HWConfig, solver_options: dict[str, Any] | None = None, latency=0.0):
+        _vars = np.empty(shape, dtype=object)
+        _vars_f = _vars.ravel()
+        for i in range(_vars.size):
+            _vars_f[i] = FixedVariableInput(latency, hwconf)
+        super().__init__(_vars, solver_options)

@@ -1,5 +1,7 @@
 import typing
+from collections.abc import Sequence
 from math import prod
+from typing import Any
 
 import hgq
 import keras
@@ -52,27 +54,28 @@ class MirrorOperationMeta(type):
 class MirrorOperationBase(metaclass=MirrorOperationMeta):
     handles: tuple[type, ...] = ()
 
-    def __init__(self, layer: 'keras.Layer'):
+    def __init__(self, layer: 'keras.Operation'):
         assert isinstance(layer, self.handles)
-        self.layer = layer
+        self.op: Any = layer
 
     def call(self, inputs) -> tuple[FixedVariableArray, ...] | FixedVariableArray: ...
 
-    def __call__(self, inputs: tuple[FixedVariableArray, ...]) -> tuple[FixedVariableArray, ...]:
+    def __call__(self, *args, **kwargs) -> tuple[FixedVariableArray, ...]:
+        inputs = args[0] if len(args) == 1 else (args or kwargs.get('inputs', ()))
         _inputs = inputs[0] if len(inputs) == 1 else inputs
 
-        if not isinstance(self.layer, hgq.layers.QLayerBase):
+        if not isinstance(self.op, hgq.layers.QLayerBase):
             r = self.call(_inputs)
             return r if isinstance(r, tuple) else (r,)
 
-        layer: hgq.layers.QLayerBase = self.layer
+        layer: hgq.layers.QLayerBase = self.op
 
         if layer.enable_iq:
-            if isinstance(_inputs, tuple):
+            if isinstance(_inputs, Sequence):
                 assert isinstance(layer.iq, MultipleQuantizers)
                 _inputs = tuple(mirror_quantizer(q, v) for q, v in zip(layer.iq.quantizers, _inputs))
             else:
-                assert isinstance(layer.iq, Quantizer)
+                assert isinstance(layer.iq, Quantizer), f'Expected iq to be a Quantizer, got {type(layer.iq)}'
                 _inputs = mirror_quantizer(layer.iq, _inputs)
 
         outputs = self.call(_inputs)
@@ -105,39 +108,39 @@ class MirrorOperationBase(metaclass=MirrorOperationMeta):
 class MirrorQuantizer(MirrorOperationBase):
     handles = (Quantizer,)
 
-    def __init__(self, layer: 'Quantizer'):
-        super().__init__(layer)
-        assert isinstance(layer.quantizer, FixedPointQuantizerBase)
+    def __init__(self, op: 'Quantizer'):
+        super().__init__(op)
+        assert isinstance(op.quantizer, FixedPointQuantizerBase)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
-        return mirror_quantizer(self.layer, inputs)
+        return mirror_quantizer(self.op, inputs)
 
 
 class MirrorQDense(MirrorOperationBase):
     handles = (QDense, QEinsumDense, QEinsumDenseBatchnorm, QBatchNormDense, QBatchNormalization, keras.layers.EinsumDense)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
-        layer = self.layer
-        if isinstance(layer, (QDense, QBatchNormDense)):
-            qkernel = layer.qkernel
-            qbias = layer.qbias
+        op = self.op
+        if isinstance(op, (QDense, QBatchNormDense)):
+            qkernel = op.qkernel
+            qbias = op.qbias
             eq = '...c,cC->...C'
-        elif isinstance(layer, (QEinsumDense, QEinsumDenseBatchnorm)):
-            qkernel = layer.qkernel
-            qbias = layer.qbias
-            eq = layer.equation
-        elif isinstance(layer, keras.layers.EinsumDense):
-            qkernel = layer.kernel
-            qbias = layer.bias
-            eq = layer.equation
-        elif isinstance(layer, QBatchNormalization):
-            qkernel, qbias = layer.qscaler_and_qoffset
+        elif isinstance(op, (QEinsumDense, QEinsumDenseBatchnorm)):
+            qkernel = op.qkernel
+            qbias = op.qbias
+            eq = op.equation
+        elif isinstance(op, keras.layers.EinsumDense):
+            qkernel = op.kernel
+            qbias = op.bias
+            eq = op.equation
+        elif isinstance(op, QBatchNormalization):
+            qkernel, qbias = op.qscaler_and_qoffset
             dim = inputs._vars.ndim
-            axis = layer.axis
+            axis = op.axis
             idx = ''.join(chr(ord('a') + i) for i in range(dim))
             eq = f'...{idx},{idx[axis]}->...{idx}'
         else:
-            raise TypeError(f'Unsupported layer type: {type(layer)}')
+            raise TypeError(f'Unsupported layer type: {type(op)}')
 
         qkernel = np.array(qkernel)
         qbias = np.array(qbias) if qbias is not None else None
@@ -148,7 +151,7 @@ class MirrorQConv(MirrorOperationBase):
     handles = (QConv1D, QConv2D, QConv3D)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
-        layer: QConv1D = self.layer
+        layer: QConv1D | QConv2D | QConv3D = self.op
         qkernel = np.array(layer.qkernel)
         qbias = np.array(layer.qbias) if layer.qbias is not None else None
         strides = layer.strides
@@ -177,7 +180,7 @@ class MirrorReshape(MirrorOperationBase):
     handles = (keras.layers.Reshape, keras.layers.Flatten)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
-        layer: keras.layers.Reshape = self.layer
+        layer: keras.layers.Reshape = self.op
         if isinstance(layer, keras.layers.Flatten):
             return inputs.flatten()
         else:
@@ -188,15 +191,15 @@ class MirrorMerge(MirrorOperationBase):
     handles = (keras.layers.Add, keras.layers.Concatenate, hgq.layers.QAdd)
 
     def call(self, inputs: tuple[FixedVariableArray, FixedVariableArray]) -> FixedVariableArray:
-        layer: keras.layers.Layer = self.layer
-        if isinstance(layer, (keras.layers.Add, hgq.layers.QAdd)):
+        op: keras.Operation = self.op
+        if isinstance(op, (keras.layers.Add, hgq.layers.QAdd)):
             return inputs[0] + inputs[1]
-        elif isinstance(layer, keras.layers.Concatenate):
-            axis = layer.axis
+        elif isinstance(op, keras.layers.Concatenate):
+            axis = op.axis
             data = np.concatenate([v._vars for v in inputs], axis=axis)
             return FixedVariableArray(data, inputs[0].solver_options)
         else:
-            raise TypeError(f'Unsupported layer type: {type(layer)}')
+            raise TypeError(f'Unsupported layer type: {type(op)}')
 
 
 class MirrorPool(MirrorOperationBase):
@@ -228,7 +231,7 @@ class MirrorPool(MirrorOperationBase):
     )
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
-        cname = self.layer.__class__.__name__
+        cname = self.op.__class__.__name__
         if 'Max' in cname:
             op = 'max'
         else:
@@ -236,22 +239,22 @@ class MirrorPool(MirrorOperationBase):
             op = 'avg'
         assert op == 'avg', 'Only average pooling is supported now'
 
-        data_format = self.layer.data_format
+        data_format = self.op.data_format
         if data_format == 'channels_first':
             inputs = FixedVariableArray(np.moveaxis(inputs._vars, 1, -1), inputs.solver_options)
 
-        if isinstance(self.layer, BaseGlobalPooling):
-            pool_dim = self.layer.input_spec.ndim - 2
+        if isinstance(self.op, BaseGlobalPooling):
+            pool_dim = self.op.input_spec.ndim - 2  # type: ignore
             opr = lambda a, b: a + b
             pool_size = prod(inputs.shape[:-1])
-            out = reduce(opr, inputs, axis=tuple(range(pool_dim)), keepdims=self.layer.keepdims)
+            out = reduce(opr, inputs, axis=tuple(range(pool_dim)), keepdims=self.op.keepdims)
             if op == 'avg':
                 out = out * (1 / pool_size)
         else:
-            assert isinstance(self.layer, BasePooling), f'Unsupported pooling layer: {type(self.layer)}'
-            pool_size = self.layer.pool_size
-            strides = self.layer.strides
-            padding = self.layer.padding
+            assert isinstance(self.op, BasePooling), f'Unsupported pooling layer: {type(self.op)}'
+            pool_size = self.op.pool_size
+            strides = self.op.strides
+            padding = self.op.padding
             pool_dim = len(pool_size)
             out = pool(
                 inputs,
@@ -267,3 +270,13 @@ class MirrorPool(MirrorOperationBase):
             out = FixedVariableArray(np.moveaxis(out._vars, -1, 1), out.solver_options)
 
         return out
+
+
+class MirrorRepeatVector(MirrorOperationBase):
+    handles = (keras.layers.RepeatVector,)
+
+    def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
+        layer: keras.layers.RepeatVector = self.op
+        if layer.n == 1:
+            return inputs
+        return FixedVariableArray(np.repeat(inputs._vars, layer.n, axis=0), inputs.solver_options)

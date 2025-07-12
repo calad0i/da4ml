@@ -75,12 +75,12 @@ class FixedVariable:
     def get_cost_and_latency(self):
         if self.opr == 'const':
             return 0.0, 0.0
-        if self.opr in ('vadd', 'cadd'):
+        if self.opr in ('vadd', 'cadd', 'min', 'max'):
             adder_size = self.hwconf.adder_size
             carry_size = self.hwconf.carry_size
             latency_cutoff = self.hwconf.latency_cutoff
 
-            if self.opr == 'vadd':
+            if self.opr in ('min', 'max', 'vadd'):
                 assert len(self._from) == 2
                 v0, v1 = self._from
                 int0, int1 = v0.qint, v1.qint
@@ -89,8 +89,6 @@ class FixedVariable:
             else:
                 assert len(self._from) == 1
                 assert self._data is not None, 'cadd must have data'
-                # int0 = self._from[0].qint
-                # int1 = QInterval(float(self._data), float(self._data), float(self.step))
                 _f = _const_f(self._data)
                 _cost = float(ceil(log2(abs(self._data) + Decimal(2) ** -_f))) + _f
                 base_latency = self._from[0].latency
@@ -339,7 +337,7 @@ class FixedVariable:
             low, high = _low, _high
 
         if low > high:
-            return FixedVariable(0, 0, 1, hwconf=self.hwconf)
+            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
         return FixedVariable(
             low,
@@ -358,3 +356,120 @@ class FixedVariable:
         _high = Decimal(2) ** i
         low, high = k * _high, _high - step
         return cls(low, high, step, **kwargs)
+
+    def msb_mux(self, a: 'FixedVariable', b: 'FixedVariable', qint: QInterval):
+        assert isinstance(a, FixedVariable) and isinstance(b, FixedVariable), 'msb_mux requires two FixedVariables'
+
+    def max_of(self, other: 'FixedVariable'):
+        assert isinstance(other, FixedVariable), 'max_of requires another FixedVariable'
+        if self.high <= other.low:
+            return other
+        if other.high <= self.low:
+            return self
+        high = max(self.high, other.high)
+        low = max(self.low, other.low)
+        step = min(self.step, other.step)
+        factor = min(abs(self._factor), abs(other._factor))
+
+        return FixedVariable(
+            low,
+            high,
+            step,
+            _from=(self, other),
+            _factor=factor,
+            opr='max',
+            hwconf=self.hwconf,
+        )
+
+    def min_of(self, other: 'FixedVariable'):
+        assert isinstance(other, FixedVariable), 'min_of requires another FixedVariable'
+        if self.high <= other.low:
+            return self
+        if other.high <= self.low:
+            return other
+        high = min(self.high, other.high)
+        low = min(self.low, other.low)
+        step = min(self.step, other.step)
+        factor = min(abs(self._factor), abs(other._factor))
+
+        return FixedVariable(
+            low,
+            high,
+            step,
+            _from=(self, other),
+            _factor=factor,
+            opr='min',
+            hwconf=self.hwconf,
+        )
+
+
+class FixedVariableInput(FixedVariable):
+    def __init__(
+        self,
+        latency: float | None = None,
+        hwconf=HWConfig(-1, -1, -1),
+    ) -> None:
+        self.low = Decimal(1e10)
+        self.high = Decimal(-1e10)
+        self.step = Decimal(1e10)
+        self._factor = Decimal(1)
+        self._from: tuple[FixedVariable, ...] = ()
+        self.opr = 'new'
+        self._data = None
+        self.id = uuid4()
+        self.hwconf = hwconf
+
+        self.latency = latency if latency is not None else 0.0
+        self.cost = 0.0
+
+    def __add__(self, other):
+        raise ValueError('Cannot operate on unquantized input variable')
+
+    def __sub__(self, other):
+        raise ValueError('Cannot operate on unquantized input variable')
+
+    def __neg__(self):
+        raise ValueError('Cannot negate unquantized input variable')
+
+    def relu(self, *args, **kwargs):
+        raise ValueError('Cannot apply relu on unquantized input variable')
+
+    def max_of(self, other):
+        raise ValueError('Cannot apply max_of on unquantized input variable')
+
+    def min_of(self, other):
+        raise ValueError('Cannot apply min_of on unquantized input variable')
+
+    def quantize(
+        self,
+        k: int | bool,
+        i: int,
+        f: int,
+        overflow_mode: str = 'WRAP',
+        round_mode: str = 'TRN',
+    ):
+        assert overflow_mode == 'WRAP'
+
+        if k + i + f <= 0:
+            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
+
+        if round_mode == 'RND':
+            return (self.quantize(k, i, f + 1) + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
+
+        step = Decimal(2) ** -f
+        _high = Decimal(2) ** i
+        low, high = -_high * k, _high - step
+        self.high = max(self.high, high)
+        self.low = min(self.low, low)
+        self.step = min(self.step, step)
+
+        return FixedVariable(
+            low,
+            high,
+            step,
+            _from=(self,),
+            _factor=self._factor,
+            opr='wrap',
+            latency=self.latency,
+            hwconf=self.hwconf,
+        )
