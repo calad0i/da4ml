@@ -21,6 +21,7 @@ from hgq.quantizer.internal import FixedPointQuantizerBase
 from keras.layers import ReLU
 from keras.src.layers.pooling.base_global_pooling import BaseGlobalPooling
 from keras.src.layers.pooling.base_pooling import BasePooling
+from keras.src.ops.numpy import Add, Concatenate, GetItem, Moveaxis, Repeat, Subtract, Transpose
 
 from ...trace import FixedVariableArray
 from ...trace.ops import conv, einsum, pool, quantize, reduce, relu
@@ -58,14 +59,16 @@ class MirrorOperationBase(metaclass=MirrorOperationMeta):
         assert isinstance(layer, self.handles)
         self.op: Any = layer
 
-    def call(self, inputs) -> tuple[FixedVariableArray, ...] | FixedVariableArray: ...
+    def call(self, *args, **kwargs) -> tuple[FixedVariableArray, ...] | FixedVariableArray: ...
 
     def __call__(self, *args, **kwargs) -> tuple[FixedVariableArray, ...]:
-        inputs = args[0] if len(args) == 1 else (args or kwargs.get('inputs', ()))
+        assert all(not isinstance(a, FixedVariableArray) for a in kwargs.values())
+        assert all(isinstance(a, FixedVariableArray) or isinstance(a, Sequence) for a in args)
+        inputs = args[0] if len(args) == 1 else args
         _inputs = inputs[0] if len(inputs) == 1 else inputs
 
         if not isinstance(self.op, hgq.layers.QLayerBase):
-            r = self.call(_inputs)
+            r = self.call(*args, **kwargs)
             return r if isinstance(r, tuple) else (r,)
 
         layer: hgq.layers.QLayerBase = self.op
@@ -78,7 +81,7 @@ class MirrorOperationBase(metaclass=MirrorOperationMeta):
                 assert isinstance(layer.iq, Quantizer), f'Expected iq to be a Quantizer, got {type(layer.iq)}'
                 _inputs = mirror_quantizer(layer.iq, _inputs)
 
-        outputs = self.call(_inputs)
+        outputs = self.call(_inputs, **kwargs)
 
         activation = getattr(layer, 'activation', keras.activations.linear)
         if activation is not keras.activations.linear:
@@ -280,3 +283,59 @@ class MirrorRepeatVector(MirrorOperationBase):
         if layer.n == 1:
             return inputs
         return FixedVariableArray(np.repeat(inputs._vars, layer.n, axis=0), inputs.solver_options)
+
+
+class MirrorGetItem(MirrorOperationBase):
+    handles = (GetItem,)
+
+    def call(self, x: FixedVariableArray, key):
+        if isinstance(key, list):
+            key = tuple(key)
+        return x[None][key][0]
+
+
+class MirrorAdd(MirrorOperationBase):
+    handles = (Add,)
+
+    def call(self, x1: FixedVariableArray, x2: FixedVariableArray):
+        return x1 + x2
+
+
+class MirrorSubtract(MirrorOperationBase):
+    handles = (Subtract,)
+
+    def call(self, x1: FixedVariableArray, x2: FixedVariableArray):
+        return x1 - x2
+
+
+class MirrorConcatenate(MirrorOperationBase):
+    handles = (Concatenate,)
+
+    def call(self, xs: Sequence[FixedVariableArray]):
+        axis = self.op.axis
+        # return backend.numpy.concatenate(xs, axis=self.axis)
+        return FixedVariableArray(np.concatenate([x._vars[None] for x in xs], axis=axis)[0], xs[0].solver_options)
+
+
+class MirrorRepeat(MirrorOperationBase):
+    handles = (Repeat,)
+
+    def call(self, x: FixedVariableArray):
+        repeats, axis = self.op.repeats, self.op.axis
+        return FixedVariableArray(np.repeat(x._vars[None], repeats, axis=axis)[0], x.solver_options)
+
+
+class MirrorTranspose(MirrorOperationBase):
+    handles = (Transpose,)
+
+    def call(self, x: FixedVariableArray):
+        axes = self.op.axes
+        return FixedVariableArray(np.transpose(x._vars[None], axes)[0], x.solver_options)
+
+
+class MirrorMoveaxis(MirrorOperationBase):
+    handles = (Moveaxis,)
+
+    def call(self, x: FixedVariableArray):
+        source, destination = self.op.source, self.op.destination
+        return FixedVariableArray(np.moveaxis(x._vars[None], source, destination)[0], x.solver_options)
