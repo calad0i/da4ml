@@ -15,13 +15,28 @@ from hgq.layers import (
     QDense,
     QEinsumDense,
     QEinsumDenseBatchnorm,
+    QSum,
 )
 from hgq.layers.core.base import MultipleQuantizers, Quantizer
 from hgq.quantizer.internal import FixedPointQuantizerBase
 from keras.layers import ReLU
 from keras.src.layers.pooling.base_global_pooling import BaseGlobalPooling
 from keras.src.layers.pooling.base_pooling import BasePooling
-from keras.src.ops.numpy import Add, Concatenate, GetItem, Moveaxis, Ravel, Repeat, Reshape, Subtract, Transpose
+from keras.src.ops.numpy import (
+    Add,
+    Concatenate,
+    Divide,
+    GetItem,
+    Moveaxis,
+    Multiply,
+    Ravel,
+    Repeat,
+    Reshape,
+    Subtract,
+    Sum,
+    Transpose,
+    TrueDivide,
+)
 
 from ...trace import FixedVariableArray
 from ...trace.ops import conv, einsum, pool, quantize, reduce, relu
@@ -297,18 +312,37 @@ class MirrorGetItem(MirrorOperationBase):
         return x[None][key][0]
 
 
-class MirrorAdd(MirrorOperationBase):
-    handles = (Add,)
+class MirrorSum(MirrorOperationBase):
+    handles = (Sum,)
+
+    def call(self, x: FixedVariableArray, axis=None, keepdims=False):
+        return np.sum(x[None], axis=axis, keepdims=keepdims)[0]  # type: ignore
+
+
+class MirrorQSum(MirrorOperationBase):
+    handles = (QSum,)
+
+    def call(self, x: FixedVariableArray):
+        layer: QSum = self.op
+        axes, scale, keepdims = layer.axes, layer.scale, layer.keepdims
+        return np.sum(x[None], axis=axes, keepdims=keepdims) * scale  # type: ignore
+
+
+class MirrorArithmetic(MirrorOperationBase):
+    handles = (Add, Subtract, Multiply, TrueDivide, Divide)
 
     def call(self, x1: FixedVariableArray, x2: FixedVariableArray):
-        return x1 + x2
-
-
-class MirrorSubtract(MirrorOperationBase):
-    handles = (Subtract,)
-
-    def call(self, x1: FixedVariableArray, x2: FixedVariableArray):
-        return x1 - x2
+        match self.op.__class__.__name__:
+            case 'Add':
+                return x1 + x2
+            case 'Subtract':
+                return x1 - x2
+            case 'Multiply':
+                return x1 * x2
+            case 'TrueDivide' | 'Divide':
+                return x1 / x2
+            case _:
+                raise TypeError(f'Unsupported arithmetic operation: {type(self.op)}')
 
 
 class MirrorConcatenate(MirrorOperationBase):
