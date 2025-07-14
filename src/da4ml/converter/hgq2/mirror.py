@@ -21,7 +21,7 @@ from hgq.quantizer.internal import FixedPointQuantizerBase
 from keras.layers import ReLU
 from keras.src.layers.pooling.base_global_pooling import BaseGlobalPooling
 from keras.src.layers.pooling.base_pooling import BasePooling
-from keras.src.ops.numpy import Add, Concatenate, GetItem, Moveaxis, Repeat, Subtract, Transpose
+from keras.src.ops.numpy import Add, Concatenate, GetItem, Moveaxis, Ravel, Repeat, Reshape, Subtract, Transpose
 
 from ...trace import FixedVariableArray
 from ...trace.ops import conv, einsum, pool, quantize, reduce, relu
@@ -65,7 +65,6 @@ class MirrorOperationBase(metaclass=MirrorOperationMeta):
         assert all(not isinstance(a, FixedVariableArray) for a in kwargs.values())
         assert all(isinstance(a, FixedVariableArray) or isinstance(a, Sequence) for a in args)
         inputs = args[0] if len(args) == 1 else args
-        _inputs = inputs[0] if len(inputs) == 1 else inputs
 
         if not isinstance(self.op, hgq.layers.QLayerBase):
             r = self.call(*args, **kwargs)
@@ -74,14 +73,14 @@ class MirrorOperationBase(metaclass=MirrorOperationMeta):
         layer: hgq.layers.QLayerBase = self.op
 
         if layer.enable_iq:
-            if isinstance(_inputs, Sequence):
+            if isinstance(inputs, Sequence):
                 assert isinstance(layer.iq, MultipleQuantizers)
-                _inputs = tuple(mirror_quantizer(q, v) for q, v in zip(layer.iq.quantizers, _inputs))
+                inputs = tuple(mirror_quantizer(q, v) for q, v in zip(layer.iq.quantizers, inputs))
             else:
                 assert isinstance(layer.iq, Quantizer), f'Expected iq to be a Quantizer, got {type(layer.iq)}'
-                _inputs = mirror_quantizer(layer.iq, _inputs)
+                inputs = mirror_quantizer(layer.iq, inputs)
 
-        outputs = self.call(_inputs, **kwargs)
+        outputs = self.call(inputs, **kwargs)
 
         activation = getattr(layer, 'activation', keras.activations.linear)
         if activation is not keras.activations.linear:
@@ -180,14 +179,17 @@ class MirrorReLU(MirrorOperationBase):
 
 
 class MirrorReshape(MirrorOperationBase):
-    handles = (keras.layers.Reshape, keras.layers.Flatten)
+    handles = (keras.layers.Reshape, keras.layers.Flatten, Reshape, Ravel)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
-        layer: keras.layers.Reshape = self.op
-        if isinstance(layer, keras.layers.Flatten):
-            return inputs.flatten()
+        if isinstance(self.op, (keras.layers.Flatten, Ravel)):
+            return inputs.ravel()
+        elif isinstance(self.op, keras.layers.Reshape):
+            return inputs.reshape(self.op.target_shape)
+        elif isinstance(self.op, Reshape):
+            return inputs.reshape(self.op.newshape[1:])
         else:
-            return inputs.reshape(layer.target_shape)
+            raise TypeError(f'Unsupported layer type: {type(self.op)}')
 
 
 class MirrorMerge(MirrorOperationBase):
