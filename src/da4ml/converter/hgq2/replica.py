@@ -325,7 +325,7 @@ class MirrorQSum(MirrorOperationBase):
     def call(self, x: FixedVariableArray):
         layer: QSum = self.op
         axes, scale, keepdims = layer.axes, layer.scale, layer.keepdims
-        return np.sum(x[None], axis=axes, keepdims=keepdims) * scale  # type: ignore
+        return np.sum(x[None], axis=axes, keepdims=keepdims)[0] * scale  # type: ignore
 
 
 class MirrorArithmetic(MirrorOperationBase):
