@@ -7,7 +7,7 @@ from keras import KerasTensor, Operation
 
 from ...trace import FixedVariableArray, HWConfig
 from ...trace.fixed_variable_array import FixedVariableArrayInput
-from .mirror import _registry
+from .replica import _registry
 
 
 @dataclass

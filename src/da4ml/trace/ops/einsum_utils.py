@@ -1,10 +1,11 @@
 from math import prod
-from typing import TypedDict, overload
+from typing import TYPE_CHECKING, TypedDict, overload
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ..fixed_variable_array import FixedVariableArray
+if TYPE_CHECKING:
+    from ..fixed_variable_array import FixedVariableArray
 
 
 class EinsumRecipe(TypedDict):
@@ -105,7 +106,7 @@ def _validate_einsum_expr(fn: str, shape0: tuple[int, ...], shape1: tuple[int, .
         # Axes expansion in input0 or input1 only
         if '0' in sax_in0:
             if len(sax_in0) - 1 > len(shape0):
-                raise ValueError(f'Input0 requires at least {len(sax_in0)-1} dimensions, but only {len(shape0)} given')
+                raise ValueError(f'Input0 requires at least {len(sax_in0) - 1} dimensions, but only {len(shape0)} given')
             # Replace auto expansion indices with free indices
             n_broadcast = len(shape0) - len(sax_in0) + 1
             in0 = in0.replace('0', free_indices[:n_broadcast])
@@ -118,7 +119,7 @@ def _validate_einsum_expr(fn: str, shape0: tuple[int, ...], shape1: tuple[int, .
 
         if '0' in sax_in1:
             if len(sax_in1) - 1 > len(shape1):
-                raise ValueError(f'Input1 requires at least {len(sax_in1)-1} dimensions, but only {len(shape1)} given')
+                raise ValueError(f'Input1 requires at least {len(sax_in1) - 1} dimensions, but only {len(shape1)} given')
             # Replace expansion indices with free indices
             n_broadcast = len(shape1) - len(sax_in1) + 1
             in1 = in1.replace('0', free_indices[:n_broadcast])
@@ -271,11 +272,11 @@ def _einsum(fn: str, input0, input1) -> np.ndarray:
 
 
 @overload
-def einsum(fn: str, input0: FixedVariableArray, input1: NDArray[np.integer | np.floating]) -> FixedVariableArray: ...
+def einsum(fn: str, input0: 'FixedVariableArray', input1: NDArray[np.integer | np.floating]) -> 'FixedVariableArray': ...
 
 
 @overload
-def einsum(fn: str, input0: NDArray[np.integer | np.floating], input1: FixedVariableArray) -> FixedVariableArray: ...
+def einsum(fn: str, input0: NDArray[np.integer | np.floating], input1: 'FixedVariableArray') -> 'FixedVariableArray': ...
 
 
 @overload
@@ -285,6 +286,8 @@ def einsum(
 
 
 def einsum(fn: str, input0, input1):
+    from ..fixed_variable_array import FixedVariableArray
+
     fg0 = isinstance(input0, FixedVariableArray)
     fg1 = isinstance(input1, FixedVariableArray)
     if fg0 and fg1:

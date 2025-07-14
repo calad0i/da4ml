@@ -1,16 +1,21 @@
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ..fixed_variable_array import FixedVariable, FixedVariableArray
+from ..fixed_variable_array import FixedVariable
 from .conv_utils import conv, pool, reduce
 from .einsum_utils import einsum
 
-T = TypeVar('T', FixedVariableArray, NDArray[np.floating], list[FixedVariable])
+if TYPE_CHECKING:
+    from ..fixed_variable_array import FixedVariableArray
+
+T = TypeVar('T', 'FixedVariableArray', NDArray[np.floating], list[FixedVariable])
 
 
 def relu(x: T, i: NDArray[np.integer] | None = None, f: NDArray[np.integer] | None = None, round_mode: str = 'TRN') -> T:
+    from ..fixed_variable_array import FixedVariableArray
+
     if isinstance(x, FixedVariableArray):
         return x.relu(i=i, f=f, round_mode=round_mode)
     elif isinstance(x, list):
@@ -35,6 +40,8 @@ def quantize(
     overflow_mode: str = 'WRAP',
     round_mode: str = 'TRN',
 ) -> T:
+    from ..fixed_variable_array import FixedVariableArray
+
     assert overflow_mode.upper() == 'WRAP', 'Only WRAP overflow mode is supported'
     if isinstance(x, FixedVariableArray):
         return x.quantize(k=k, i=i, f=f, overflow_mode=overflow_mode, round_mode=round_mode)

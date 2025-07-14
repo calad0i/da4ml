@@ -246,7 +246,7 @@ class MirrorPool(MirrorOperationBase):
 
         data_format = self.op.data_format
         if data_format == 'channels_first':
-            inputs = FixedVariableArray(np.moveaxis(inputs._vars, 1, -1), inputs.solver_options)
+            inputs = np.moveaxis(inputs, 1, -1)  # type: ignore
 
         if isinstance(self.op, BaseGlobalPooling):
             pool_dim = self.op.input_spec.ndim - 2  # type: ignore
@@ -272,7 +272,7 @@ class MirrorPool(MirrorOperationBase):
                 out = out * (1 / prod(pool_size))
 
         if data_format == 'channels_first':
-            out = FixedVariableArray(np.moveaxis(out._vars, -1, 1), out.solver_options)
+            out: FixedVariableArray = np.moveaxis(out._vars, -1, 1)  # type: ignore
 
         return out
 
@@ -284,7 +284,8 @@ class MirrorRepeatVector(MirrorOperationBase):
         layer: keras.layers.RepeatVector = self.op
         if layer.n == 1:
             return inputs
-        return FixedVariableArray(np.repeat(inputs._vars, layer.n, axis=0), inputs.solver_options)
+        # return FixedVariableArray(np.repeat(inputs._vars, layer.n, axis=0), inputs.solver_options)
+        return np.repeat(inputs[None], layer.n, axis=0)[0]  # type: ignore
 
 
 class MirrorGetItem(MirrorOperationBase):
@@ -316,7 +317,8 @@ class MirrorConcatenate(MirrorOperationBase):
     def call(self, xs: Sequence[FixedVariableArray]):
         axis = self.op.axis
         # return backend.numpy.concatenate(xs, axis=self.axis)
-        return FixedVariableArray(np.concatenate([x._vars[None] for x in xs], axis=axis)[0], xs[0].solver_options)
+        # return FixedVariableArray(np.concatenate([x._vars[None] for x in xs], axis=axis)[0], xs[0].solver_options)
+        return np.concatenate([x[None] for x in xs], axis=axis)[0]  # type: ignore
 
 
 class MirrorRepeat(MirrorOperationBase):
@@ -324,7 +326,8 @@ class MirrorRepeat(MirrorOperationBase):
 
     def call(self, x: FixedVariableArray):
         repeats, axis = self.op.repeats, self.op.axis
-        return FixedVariableArray(np.repeat(x._vars[None], repeats, axis=axis)[0], x.solver_options)
+        # return FixedVariableArray(np.repeat(x._vars[None], repeats, axis=axis)[0], x.solver_options)
+        return np.repeat(x[None], repeats, axis=axis)[0]  # type: ignore
 
 
 class MirrorTranspose(MirrorOperationBase):
@@ -332,7 +335,7 @@ class MirrorTranspose(MirrorOperationBase):
 
     def call(self, x: FixedVariableArray):
         axes = self.op.axes
-        return FixedVariableArray(np.transpose(x._vars[None], axes)[0], x.solver_options)
+        return np.transpose(x, axes)  # type: ignore
 
 
 class MirrorMoveaxis(MirrorOperationBase):
@@ -340,4 +343,4 @@ class MirrorMoveaxis(MirrorOperationBase):
 
     def call(self, x: FixedVariableArray):
         source, destination = self.op.source, self.op.destination
-        return FixedVariableArray(np.moveaxis(x._vars[None], source, destination)[0], x.solver_options)
+        return np.moveaxis(x[None], source, destination)[0]  # type: ignore

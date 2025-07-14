@@ -7,7 +7,8 @@ from typing import TypeVar
 import numpy as np
 from numpy.typing import NDArray
 
-from ..fixed_variable_array import FixedVariable, FixedVariableArray
+if typing.TYPE_CHECKING:
+    from ..fixed_variable_array import FixedVariable, FixedVariableArray
 
 
 def r_im2col(kernel_size: Sequence[int], arr: np.ndarray, buffer: np.ndarray, axis: int):
@@ -42,7 +43,7 @@ def stride_arr(stride: int | tuple[int, ...], arr: np.ndarray):
     return arr[*_idx]
 
 
-TA = TypeVar('TA', FixedVariableArray, NDArray[np.integer | np.floating])
+TA = TypeVar('TA', 'FixedVariableArray', NDArray[np.integer | np.floating])
 
 
 def _conv(
@@ -52,6 +53,8 @@ def _conv(
     strides: int | tuple[int, ...] = 1,
     padding: tuple[tuple[int, int], ...] | str = 'VALID',
 ) -> TA:
+    from ..fixed_variable_array import FixedVariableArray
+
     if isinstance(x, FixedVariableArray):
         solver_options = x.solver_options
         data = x._vars
@@ -113,6 +116,8 @@ def conv(
     format: str = 'channels_last',
     groups: int | None = None,
 ) -> TA:
+    from ..fixed_variable_array import FixedVariableArray
+
     assert format in ('channels_last', 'channels_first'), f'Invalid format {format}'
     if format == 'channels_first':
         if isinstance(x, FixedVariableArray):
@@ -161,11 +166,13 @@ def conv(
     return data
 
 
-T = typing.TypeVar('T', FixedVariable, float, np.floating)
+T = typing.TypeVar('T', 'FixedVariable', float, np.floating)
 
 
 class Packet(tuple):
     def __gt__(self, other: 'Packet') -> bool:  # type: ignore
+        from ..fixed_variable_array import FixedVariable
+
         for a, b in zip(self, other):
             if isinstance(a, FixedVariable) and isinstance(b, FixedVariable):
                 continue
@@ -180,6 +187,8 @@ class Packet(tuple):
 
 
 def _reduce(operator: Callable[[T, T], T], arr: Sequence[T]) -> T:
+    from ..fixed_variable_array import FixedVariable
+
     if isinstance(arr, np.ndarray):
         arr = list(arr.ravel())
     assert len(arr) > 0, 'Array must not be empty'
@@ -206,6 +215,8 @@ def reduce(operator: Callable[[T, T], T], x: TA, axis: int | Sequence[int] | Non
     """
     Reduce the array by summing over the specified axis.
     """
+    from ..fixed_variable_array import FixedVariableArray
+
     if isinstance(x, FixedVariableArray):
         solver_config = x.solver_options
         arr = x._vars
@@ -241,6 +252,8 @@ def pool(
     padding: tuple[tuple[int, int], ...] | str = 'VALID',
     pool_type: str = 'avg',
 ) -> TA:
+    from ..fixed_variable_array import FixedVariableArray
+
     if isinstance(x, FixedVariableArray):
         solver_options = x.solver_options
         data = x._vars

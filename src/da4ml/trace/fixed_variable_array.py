@@ -1,5 +1,5 @@
 from inspect import signature
-from typing import Any
+from typing import Any, TypeVar
 
 import numpy as np
 from numba.typed import List as NumbaList
@@ -7,9 +7,62 @@ from numpy.typing import NDArray
 
 from ..cmvm import solve
 from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, QInterval
+from .ops import einsum, reduce
+
+T = TypeVar('T')
+
+
+def to_raw_arr(obj: T) -> T:
+    if isinstance(obj, tuple):
+        return tuple(to_raw_arr(x) for x in obj)
+    elif isinstance(obj, list):
+        return [to_raw_arr(x) for x in obj]
+    elif isinstance(obj, dict):
+        return {k: to_raw_arr(v) for k, v in obj.items()}
+
+    if isinstance(obj, FixedVariableArray):
+        return obj._vars
+    return obj
 
 
 class FixedVariableArray:
+    __array_priority__ = 100
+
+    def __array_function__(self, func, types, args, kwargs):
+        if func is np.matmul:
+            if len(args) == 1 and isinstance(args[0], np.ndarray):
+                return self.__matmul__(args[0])
+            elif len(args) == 2 and isinstance(args[0], np.ndarray) and isinstance(args[1], np.ndarray):
+                return self.__rmatmul__(args[1])
+
+        if func in (np.mean, np.sum):
+            match func:
+                case np.mean:
+                    _x = reduce(lambda x, y: x + y, self, *args[1:], **kwargs)
+                    return _x * (_x.size / self._vars.size)
+                case np.sum:
+                    return reduce(lambda x, y: x + y, self, *args[1:], **kwargs)
+                case _:
+                    raise NotImplementedError(f'Unsupported function: {func}')
+
+        if func is np.einsum:
+            # assert len(args) == 2
+            sig = signature(np.einsum)
+            bind = sig.bind(*args, **kwargs)
+            eq = args[0]
+            operands = bind.arguments['operands']
+            if isinstance(operands[0], str):
+                operands = operands[1:]
+            assert len(operands) == 2, 'Einsum on FixedVariableArray requires exactly two operands'
+            assert bind.arguments.get('out', None) is None, 'Output argument is not supported'
+            return einsum(eq, *operands)
+
+        args, kwargs = to_raw_arr(args), to_raw_arr(kwargs)
+        return FixedVariableArray(
+            func(*args, **kwargs),
+            self.solver_options,
+        )
+
     def __init__(
         self,
         vars: NDArray,
@@ -185,6 +238,10 @@ class FixedVariableArray:
     @property
     def dtype(self):
         return self._vars.dtype
+
+    @property
+    def size(self):
+        return self._vars.size
 
 
 class FixedVariableArrayInput(FixedVariableArray):
