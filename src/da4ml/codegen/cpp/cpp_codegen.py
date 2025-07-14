@@ -29,7 +29,7 @@ def get_typestr_fn(flavor: str):
 
 def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int, int, int], str]):
     ops = sol.ops
-    all_kifs = map(_minimal_kif, (op.qint for op in ops))
+    all_kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     all_types = list(map(lambda x: typestr_fn(*x), all_kifs))
 
     lines = []
@@ -47,12 +47,10 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
             case -1:
                 # Input marker
                 val = f'inp[{ops[op.id0].id0}]'
-
             case 0 | 1:
                 # Common a+/-b<<shift op
                 ref1 = f'bit_shift<{op.data}>(v{op.id1})' if op.data != 0 else f'v{op.id1}'
                 val = f'{ref0} {"-" if op.opcode == 1 else "+"} {ref1}'
-
             case 2 | -2:
                 if op.opcode == 2:  # relu(inp)
                     if ops[op.id0].qint.min < 0:
@@ -64,11 +62,9 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
                         val = f'{ref0} > 0 ? {_type}(0) : {_type}(-{ref0})'
                     else:
                         val = f'-{ref0}'
-
             case 3 | -3:
                 # Explicit quantization op, done implicitly via assignment
                 val = ref0 if op.opcode == 3 else f'-{ref0}'
-
             case 4:
                 # Constant addition
                 _number = op.data * op.qint.step
@@ -76,10 +72,16 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
                 f = _const_f(mag)
                 const_type_str = typestr_fn(*_minimal_kif(QInterval(mag, mag, 2.0**-f)))
                 val = f'{ref0} {sign} {const_type_str}({mag})'
-
             case 5:
+                # Define constant
                 _number = op.data * op.qint.step
                 val = f'{_number}'
+            case 6:
+                # MSB Mux
+                bw_k = sum(all_kifs[op.data])
+                ref_k = f'v{op.data}[{bw_k-1}]'
+                ref1 = f'v{op.id1}'
+                val = f'{ref_k} ? {_type}({ref0}) : {_type}({ref1})'
 
             case _:
                 raise ValueError(f'Unsupported opcode: {op.opcode}')

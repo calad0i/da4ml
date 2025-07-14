@@ -1,15 +1,15 @@
 `timescale 1ns / 1ps
 
 
-module shift_adder #(
+module mux #(
     parameter BW_INPUT0 = 32,
     parameter BW_INPUT1 = 32,
     parameter SIGNED0 = 0,
     parameter SIGNED1 = 0,
     parameter BW_OUT = 32,
-    parameter SHIFT1 = 0,
-    parameter IS_SUB = 0
+    parameter SHIFT1 = 0
 ) (
+    input key,
     input [BW_INPUT0-1:0] in0,
     input [BW_INPUT1-1:0] in1,
     output [BW_OUT-1:0] out
@@ -17,18 +17,17 @@ module shift_adder #(
 
   localparam IN0_NEED_BITS = (SHIFT1 < 0) ? BW_INPUT0 - SHIFT1 : BW_INPUT0;
   localparam IN1_NEED_BITS = (SHIFT1 > 0) ? BW_INPUT1 + SHIFT1 : BW_INPUT1;
-  localparam EXTRA_PAD = (SIGNED0 != SIGNED1) ? IS_SUB + 1 : IS_SUB + 0;
-  localparam BW_ADD = (IN0_NEED_BITS > IN1_NEED_BITS) ? IN0_NEED_BITS + EXTRA_PAD + 1 : IN1_NEED_BITS + EXTRA_PAD + 1;
-  localparam IN0_PAD_LEFT = (SHIFT1 < 0) ? BW_ADD - BW_INPUT0 + SHIFT1 : BW_ADD - BW_INPUT0;
+  localparam EXTRA_PAD = (SIGNED0 != SIGNED1) ? 1 : 0;
+  localparam BW_BUF = (IN0_NEED_BITS > IN1_NEED_BITS) ? IN0_NEED_BITS + EXTRA_PAD : IN1_NEED_BITS + EXTRA_PAD;
+  localparam IN0_PAD_LEFT = (SHIFT1 < 0) ? BW_BUF - BW_INPUT0 + SHIFT1 : BW_BUF - BW_INPUT0;
   localparam IN0_PAD_RIGHT = (SHIFT1 < 0) ? -SHIFT1 : 0;
-  localparam IN1_PAD_LEFT = (SHIFT1 > 0) ? BW_ADD - BW_INPUT1 - SHIFT1 : BW_ADD - BW_INPUT1;
+  localparam IN1_PAD_LEFT = (SHIFT1 > 0) ? BW_BUF - BW_INPUT1 - SHIFT1 : BW_BUF - BW_INPUT1;
   localparam IN1_PAD_RIGHT = (SHIFT1 > 0) ? SHIFT1 : 0;
 
-  wire [BW_ADD-1:0] in0_ext;
-  wire [BW_ADD-1:0] in1_ext;
 
   // verilator lint_off UNUSEDSIGNAL
-  wire [BW_ADD-1:0] accum;
+  wire [BW_BUF-1:0] in0_ext;
+  wire [BW_BUF-1:0] in1_ext;
   // verilator lint_on UNUSEDSIGNAL
 
   generate
@@ -47,13 +46,6 @@ module shift_adder #(
     end
   endgenerate
 
-  generate
-    if (IS_SUB == 1) begin : is_sub
-      assign accum = in0_ext - in1_ext;
-    end else begin : is_add
-      assign accum = in0_ext + in1_ext;
-    end
-  endgenerate
-  assign out = accum[BW_OUT-1:0];
+  assign out = (key) ? in0_ext[BW_OUT-1:0] : in1_ext[BW_OUT-1:0];
 
 endmodule

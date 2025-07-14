@@ -136,6 +136,13 @@ class FixedVariable:
         k = self.low < 0
         return k, i, f
 
+    @classmethod
+    def from_const(cls, const: float | Decimal, hwconf: HWConfig):
+        const = Decimal(const)
+        f = _const_f(const)
+        step = Decimal(2) ** -f
+        return cls(const, const, step, hwconf=hwconf, opr='const', _factor=1)
+
     def __repr__(self) -> str:
         if self._factor == 1:
             return f'FixedVariable({self.low}, {self.high}, {self.step})'
@@ -357,50 +364,66 @@ class FixedVariable:
         low, high = k * _high, _high - step
         return cls(low, high, step, **kwargs)
 
-    def msb_mux(self, a: 'FixedVariable', b: 'FixedVariable', qint: QInterval):
+    def msb_mux(self, a: 'FixedVariable', b: 'FixedVariable', qint: tuple[Decimal, Decimal, Decimal] | None = None):
         assert isinstance(a, FixedVariable) and isinstance(b, FixedVariable), 'msb_mux requires two FixedVariables'
+        if self._factor < 0:
+            return (-self).msb_mux(b, a, qint)
 
-    def max_of(self, other: 'FixedVariable'):
-        assert isinstance(other, FixedVariable), 'max_of requires another FixedVariable'
+        _factor = min(a._factor, abs(b._factor))
+
+        if qint is None:
+            qint = (min(a.low, b.low), max(a.high, b.high), min(a.step, b.step))
+
+        dlat, dcost = cost_add(a.qint, b.qint, 0, False, self.hwconf.adder_size, self.hwconf.carry_size)
+        return FixedVariable(
+            *qint,
+            _from=(self, a, b),
+            _factor=_factor,
+            opr='msb_mux',
+            latency=max(a.latency, b.latency, self.latency) + dlat,
+            hwconf=self.hwconf,
+            cost=dcost,
+        )
+
+    def max_of(self, other):
+        if other == 0:
+            return self.relu()
+        if not isinstance(other, FixedVariable):
+            other = FixedVariable.from_const(other, hwconf=self.hwconf)
+
+        if self.low >= other.high:
+            return self
         if self.high <= other.low:
             return other
-        if other.high <= self.low:
-            return self
-        high = max(self.high, other.high)
-        low = max(self.low, other.low)
-        step = min(self.step, other.step)
-        factor = min(abs(self._factor), abs(other._factor))
 
-        return FixedVariable(
-            low,
-            high,
-            step,
-            _from=(self, other),
-            _factor=factor,
-            opr='max',
-            hwconf=self.hwconf,
-        )
+        if self._factor < 0:
+            if other._factor > 0:
+                return other.max_of(self)
+            else:
+                return -self.min_of(-other)
+
+        qint = (max(self.low, other.low), max(self.high, other.high), min(self.step, other.step))
+        return (self - other).msb_mux(other, self, qint=qint)
 
     def min_of(self, other: 'FixedVariable'):
-        assert isinstance(other, FixedVariable), 'min_of requires another FixedVariable'
+        if other == 0:
+            return (-self).relu()
+        if not isinstance(other, FixedVariable):
+            other = FixedVariable.from_const(other, hwconf=self.hwconf)
+
         if self.high <= other.low:
             return self
-        if other.high <= self.low:
+        if self.low >= other.high:
             return other
-        high = min(self.high, other.high)
-        low = min(self.low, other.low)
-        step = min(self.step, other.step)
-        factor = min(abs(self._factor), abs(other._factor))
 
-        return FixedVariable(
-            low,
-            high,
-            step,
-            _from=(self, other),
-            _factor=factor,
-            opr='min',
-            hwconf=self.hwconf,
-        )
+        if self._factor < 0:
+            if other._factor > 0:
+                return other.min_of(self)
+            else:
+                return -self.max_of(-other)
+
+        qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
+        return (self - other).msb_mux(self, other, qint=qint)
 
 
 class FixedVariableInput(FixedVariable):

@@ -14,14 +14,13 @@ T = TypeVar('T')
 
 def to_raw_arr(obj: T) -> T:
     if isinstance(obj, tuple):
-        return tuple(to_raw_arr(x) for x in obj)
+        return tuple(to_raw_arr(x) for x in obj)  # type: ignore
     elif isinstance(obj, list):
-        return [to_raw_arr(x) for x in obj]
+        return [to_raw_arr(x) for x in obj]  # type: ignore
     elif isinstance(obj, dict):
-        return {k: to_raw_arr(v) for k, v in obj.items()}
-
+        return {k: to_raw_arr(v) for k, v in obj.items()}  # type: ignore
     if isinstance(obj, FixedVariableArray):
-        return obj._vars
+        return obj._vars  # type: ignore
     return obj
 
 
@@ -245,7 +244,7 @@ class FixedVariableArray:
 
 
 class FixedVariableArrayInput(FixedVariableArray):
-    def __init__(self, shape: tuple[int, ...], hwconf: HWConfig, solver_options: dict[str, Any] | None = None, latency=0.0):
+    def __init__(self, shape: tuple[int, ...] | int, hwconf: HWConfig, solver_options: dict[str, Any] | None = None, latency=0.0):
         _vars = np.empty(shape, dtype=object)
         _vars_f = _vars.ravel()
         for i in range(_vars.size):

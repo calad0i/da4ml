@@ -22,8 +22,8 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
             continue
 
         bw = widths[i]
-        v = f'v{i}[{bw-1}:0]'
-        _def = f'wire [{bw-1}:0] v{i};'
+        v = f'v{i}[{bw - 1}:0]'
+        _def = f'wire [{bw - 1}:0] v{i};'
 
         match op.opcode:
             case -1:  # Input marker
@@ -40,11 +40,11 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
                     _min, _max, step = ops[op.id0].qint
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
                     lines.append(
-                        f'wire [{bw_neg-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg-1}:0] = -{v0_name}[{bw0-1}:0];'
+                        f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
                     )
                     v0_name = f'v{op.id0}_neg'
                 if ops[op.id0].qint.min < 0:
-                    line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0-1}]}}}};'
+                    line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0 - 1}]}}}};'
                 else:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
             case 3 | -3:  # Explicit quantization
@@ -57,7 +57,7 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
                     _min, _max, step = ops[op.id0].qint
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
                     lines.append(
-                        f'wire [{bw_neg-1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg-1}:0] = -{v0_name}[{bw0-1}:0];'
+                        f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
                     )
                     v0_name = f'v{op.id0}_neg'
 
@@ -65,11 +65,10 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
             case 4:  # constant addition
                 num = op.data
                 sign, mag = int(num < 0), abs(num)
-                line = f"{_def} assign {v} = '{bin(mag)[1:]};"
                 bw1 = ceil(log2(mag + 1))
                 bw0 = widths[op.id0]
                 s0 = int(kifs[op.id0][0])
-                v0 = f'v{op.id0}[{bw0-1}:0]'
+                v0 = f'v{op.id0}[{bw0 - 1}:0]'
                 v1 = f"'{bin(mag)[1:]}"
                 shift = int(log2(op.qint.step / ops[op.id0].qint.step))
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, {shift}, {sign}) op_{i} ({v0}, {v1}, {v});'
@@ -85,9 +84,19 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
                 bw0, bw1 = widths[op.id0], widths[op.id1]  # width
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
                 shift = op.data + f0 - f1
-                v0, v1 = f'v{op.id0}[{bw0-1}:0]', f'v{op.id1}[{bw1-1}:0]'
+                v0, v1 = f'v{op.id0}[{bw0 - 1}:0]', f'v{op.id1}[{bw1 - 1}:0]'
 
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {op.opcode}) op_{i} ({v0}, {v1}, {v});'
+
+            case 6:  # MSB Muxing
+                k, a, b = op.data, op.id0, op.id1
+                p0, p1 = kifs[a], kifs[b]
+                bwk, bw0, bw1 = widths[k], widths[a], widths[b]
+                s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
+                shift = f0 - f1
+                vk, v0, v1 = f'v{k}[{bwk-1}]', f'v{a}[{bw0 - 1}:0]', f'v{b}[{bw1 - 1}:0]'
+
+                line = f'{_def} mux #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}) op_{i} ({vk}, {v0}, {v1}, {v});'
             case _:
                 raise ValueError(f'Unknown opcode {op.opcode} for operation {i} ({op})')
 
@@ -109,10 +118,10 @@ def output_gen(sol: Solution):
         bw = widths[i]
         bw0 = sum(_minimal_kif(sol.ops[idx].qint))
         if sol.out_negs[i]:
-            lines.append(f'wire [{bw-1}:0] out_neg{i}; assign out_neg{i} = -v{idx}[{bw0-1}:0];')
-            lines.append(f'assign out[{i0}:{i1}] = out_neg{i}[{bw-1}:0];')
+            lines.append(f'wire [{bw - 1}:0] out_neg{i}; assign out_neg{i} = -v{idx}[{bw0 - 1}:0];')
+            lines.append(f'assign out[{i0}:{i1}] = out_neg{i}[{bw - 1}:0];')
         else:
-            lines.append(f'assign out[{i0}:{i1}] = v{idx}[{bw-1}:0];')
+            lines.append(f'assign out[{i0}:{i1}] = v{idx}[{bw - 1}:0];')
     return lines
 
 
@@ -122,8 +131,8 @@ def comb_logic_gen(sol: Solution, fn_name: str, print_latency: bool = False, tim
 
     fn_signature = [
         f'module {fn_name} (',
-        f'    input [{inp_bits-1}:0] inp,',
-        f'    output [{out_bits-1}:0] out',
+        f'    input [{inp_bits - 1}:0] inp,',
+        f'    output [{out_bits - 1}:0] out',
         ');',
     ]
 

@@ -114,6 +114,7 @@ class VerilogModel:
 
         # Common resource copy
         shutil.copy(self.__src_root / 'verilog/source/shift_adder.v', self._path)
+        shutil.copy(self.__src_root / 'verilog/source/mux.v', self._path)
         shutil.copy(self.__src_root / 'verilog/source/build_binder.mk', self._path)
         shutil.copy(self.__src_root / 'verilog/source/ioutil.hh', self._path)
         shutil.copy(self.__src_root / 'verilog/source/binder_util.hh', self._path)

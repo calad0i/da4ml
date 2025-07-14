@@ -12,7 +12,7 @@ from .fixed_variable_array import FixedVariableArray
 
 
 def _recursive_trace(v: FixedVariable, gathered: dict[UUID, FixedVariable]):
-    if v in gathered:
+    if v.id in gathered:
         return
     assert v._from is not None
     for _v in v._from:
@@ -85,6 +85,15 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 qint = QInterval(qint.min, qint.min, step)
                 data = qint.min / step
                 ops.append(Op(-1, -1, 5, int(data), qint, v.latency, v.cost))
+            case 'msb_mux':
+                qint = v.unscaled.qint
+                key, in0, in1 = v._from
+                idk, id0, id1 = index[key.id], index[in0.id], index[in1.id]
+                assert idk < i and id0 < i and id1 < i
+                assert key._factor > 0, f'Cannot mux on v{key.id} with negative factor {key._factor}'
+                op = Op(id0, id1, 6, idk, qint, v.latency, v.cost)
+                ops.append(op)
+
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
     out_index = [index[v.id] for v in outputs]
