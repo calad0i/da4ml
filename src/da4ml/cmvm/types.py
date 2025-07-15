@@ -321,15 +321,18 @@ class Solution(NamedTuple):
                 case 5:
                     buf[i] = op.data * op.qint.step  # const definition
                 case 6 | -6:  # MSB Mux
-                    k, v0, v1 = buf[op.data], buf[op.id0], buf[op.id1]
+                    id_c = op.data & 0xFFFFFFFF
+                    k, v0, v1 = buf[id_c], buf[op.id0], buf[op.id1]
+                    shift = (op.data >> 32) & 0xFFFFFFFF
+                    shift = shift if shift < 0x80000000 else shift - 0x100000000
                     if op.opcode == -6:
                         v1 = -v1
-                    qint_k = self.ops[op.data].qint
+                    qint_k = self.ops[id_c].qint
                     if qint_k.min < 0:
-                        buf[i] = v0 if k < 0 else v1
+                        buf[i] = v0 if k < 0 else v1 * 2.0**shift
                     else:
                         _k, _i, _f = _minimal_kif(qint_k)
-                        buf[i] = v0 if k >= 2.0 ** (_i - 1) else v1
+                        buf[i] = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
                 case _:
                     raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
@@ -467,7 +470,7 @@ class Solution(NamedTuple):
                 ref_count[id1] += 1
             if op.opcode in (6, -6):
                 # msb_mux operation
-                ref_count[op.data] += 1
+                ref_count[op.data & 0xFFFFFFFF] += 1
         for i in self.out_idxs:
             if i < 0:
                 continue

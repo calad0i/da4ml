@@ -25,7 +25,7 @@ Each operation is reqpresented as a `Op` object, consists of the following compo
     - The operation code, see [OpCode](#opcode).
 - `id0`, `id1`: int
     - The first and second operand indices in the buffer. Unused operands must be set to `-1`.
-- `data`: int
+- `data`: int64
     - Extra integer data for the operation, functionality depends on the opcode.
 - `dtype`: tuple<float, float, float> OR tuple<int/bool, int, int>
     - Annotates the datatype of the output buffer as a quantization interval.
@@ -54,7 +54,7 @@ The operation codes are defined as follows:
 - `5`: Define a constant
   - `buf[i] = data * qint.step`
 - `6/-6`: Mux by MSB
-  - `buf[i] = MSB(buf[data]) ? buf[id0] : +/- buf[id1]`
+  - `buf[i] = MSB(buf[int32(data.bits[:32])]) ? buf[id0] : +/- buf[id1] * 2^int32(data.bits[32:])`
 - `*`: Multiplication (**NOT IMPLEMENTED**)
   - `buf[i] = buf[id0] * buf[id1]`
 
@@ -62,17 +62,17 @@ In all cases, unused id0 or id1 **must** be set to `-1`; id0, id1 (and data for 
 
 ### Binary Representation
 The binary representation of the program is as follows, in order:
-- `shape`: uint32[2]
+- `shape`: int32[2]
 - `inp_shift`: int32[shape[0]]
 - `out_idxs`: int32[shape[1]]
 - `out_shifts`: int32[shape[1]]
 - `out_negs`: int8[shape[1]]
-- `len(ops)`: uint32
+- `len(ops)`: int32
 - `ops`: Op[len(ops)]
     - `opcode`: int32
     - `id0`: int32
     - `id1`: int32
-    - `data`: int32
+    - `data`: int64
     - `dtype`: int32[3] (only (signed, integer_bits, fractional_bits) format for binary representation)
 
 In execution, the internal buffer **must** have larger bitwidth than the maximum bitwidth appears in any of the operations. When an operation implies quantization, the program **must** apply the quantization explicitly. When an operation does not imply quantization, the program **may** apply quantization and verify no value change is incurred as a result.

@@ -70,7 +70,7 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
                 s0 = int(kifs[op.id0][0])
                 v0 = f'v{op.id0}[{bw0 - 1}:0]'
                 v1 = f"'{bin(mag)[1:]}"
-                shift = int(log2(op.qint.step / ops[op.id0].qint.step))
+                shift = kifs[op.id0][2] - kifs[i][2]
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, {shift}, {sign}) op_{i} ({v0}, {v1}, {v});'
             case 5:  # constant
                 num = op.data
@@ -89,13 +89,15 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {op.opcode}) op_{i} ({v0}, {v1}, {v});'
 
             case 6 | -6:  # MSB Muxing
-                k, a, b = op.data, op.id0, op.id1
+                k, a, b = op.data & 0xFFFFFFFF, op.id0, op.id1
                 p0, p1 = kifs[a], kifs[b]
                 inv = '1' if op.opcode == -6 else '0'
                 bwk, bw0, bw1 = widths[k], widths[a], widths[b]
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
-                shift = f0 - f1
-                vk, v0, v1 = f'v{k}[{bwk-1}]', f'v{a}[{bw0 - 1}:0]', f'v{b}[{bw1 - 1}:0]'
+                _shift = (op.data >> 32) & 0xFFFFFFFF
+                _shift = _shift if _shift < 0x80000000 else _shift - 0x100000000
+                shift = f0 - f1 + _shift
+                vk, v0, v1 = f'v{k}[{bwk - 1}]', f'v{a}[{bw0 - 1}:0]', f'v{b}[{bw1 - 1}:0]'
 
                 line = f'{_def} mux #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {inv}) op_{i} ({vk}, {v0}, {v1}, {v});'
             case _:

@@ -78,10 +78,13 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
                 val = f'{_number}'
             case 6 | -6:
                 # MSB Mux
-                bw_k = sum(all_kifs[op.data])
-                ref_k = f'v{op.data}[{bw_k - 1}]'
+                id_c = op.data & 0xFFFFFFFF
+                bw_k = sum(all_kifs[id_c])
+                shift = (op.data >> 32) & 0xFFFFFFFF
+                shift = shift if shift < 0x80000000 else shift - 0x100000000
+                ref_k = f'v{id_c}[{bw_k - 1}]'
                 sign = '-' if op.opcode == -6 else ''
-                ref1 = f'v{op.id1}'
+                ref1 = f'v{op.id1}' if shift == 0 else f'bit_shift<{shift}>(v{op.id1})'
                 val = f'{ref_k} ? {_type}({ref0}) : {_type}({sign}{ref1})'
 
             case _:
