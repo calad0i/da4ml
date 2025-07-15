@@ -88,10 +88,11 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
             case 'msb_mux':
                 qint = v.unscaled.qint
                 key, in0, in1 = v._from
+                opcode = 6 if in1._factor > 0 else -6
                 idk, id0, id1 = index[key.id], index[in0.id], index[in1.id]
                 assert idk < i and id0 < i and id1 < i
                 assert key._factor > 0, f'Cannot mux on v{key.id} with negative factor {key._factor}'
-                op = Op(id0, id1, 6, idk, qint, v.latency, v.cost)
+                op = Op(id0, id1, opcode, idk, qint, v.latency, v.cost)
                 ops.append(op)
 
             case _:

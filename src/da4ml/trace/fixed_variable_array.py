@@ -24,6 +24,24 @@ def to_raw_arr(obj: T) -> T:
     return obj
 
 
+def _max_of(a, b):
+    if isinstance(a, FixedVariable):
+        return a.max_of(b)
+    elif isinstance(b, FixedVariable):
+        return b.max_of(a)
+    else:
+        return max(a, b)
+
+
+def _min_of(a, b):
+    if isinstance(a, FixedVariable):
+        return a.min_of(b)
+    elif isinstance(b, FixedVariable):
+        return b.min_of(a)
+    else:
+        return min(a, b)
+
+
 class FixedVariableArray:
     __array_priority__ = 100
 
@@ -34,15 +52,27 @@ class FixedVariableArray:
             elif len(args) == 2 and isinstance(args[0], np.ndarray) and isinstance(args[1], np.ndarray):
                 return self.__rmatmul__(args[1])
 
-        if func in (np.mean, np.sum):
+        if func in (np.mean, np.sum, np.amax, np.amin, np.max, np.min):
             match func:
                 case np.mean:
                     _x = reduce(lambda x, y: x + y, self, *args[1:], **kwargs)
                     return _x * (_x.size / self._vars.size)
                 case np.sum:
                     return reduce(lambda x, y: x + y, self, *args[1:], **kwargs)
+                case np.max | np.amax:
+                    return reduce(_max_of, self, *args[1:], **kwargs)
+                case np.min | np.amin:
+                    return reduce(_min_of, self, *args[1:], **kwargs)
                 case _:
                     raise NotImplementedError(f'Unsupported function: {func}')
+
+        if func is np.clip:
+            assert len(args) == 3, 'Clip function requires exactly three arguments'
+            x, low, high = args
+            _x, low, high = np.broadcast_arrays(x, low, high)
+            x = FixedVariableArray(_x, self.solver_options)
+            x = np.amax(np.stack((x, low), axis=-1), axis=-1)  # type: ignore
+            return np.amin(np.stack((x, high), axis=-1), axis=-1)
 
         if func is np.einsum:
             # assert len(args) == 2
@@ -173,9 +203,13 @@ class FixedVariableArray:
         return self._vars.shape
 
     def __add__(self, other):
+        if isinstance(other, FixedVariableArray):
+            return FixedVariableArray(self._vars + other._vars, self.solver_options)
         return FixedVariableArray(self._vars + other, self.solver_options)
 
     def __sub__(self, other):
+        if isinstance(other, FixedVariableArray):
+            return FixedVariableArray(self._vars - other._vars, self.solver_options)
         return FixedVariableArray(self._vars - other, self.solver_options)
 
     def __mul__(self, other):
@@ -201,7 +235,7 @@ class FixedVariableArray:
         i = np.broadcast_to(i, shape) if i is not None else np.full(shape, None)
         f = np.broadcast_to(f, shape) if f is not None else np.full(shape, None)
         ret = []
-        for v, i, f in zip(self._vars.ravel(), i.ravel(), f.ravel()):
+        for v, i, f in zip(self._vars.ravel(), i.ravel(), f.ravel()):  # type: ignore
             ret.append(v.relu(i=i, f=f, round_mode=round_mode))
         return FixedVariableArray(np.array(ret).reshape(shape), self.solver_options)
 
@@ -218,7 +252,7 @@ class FixedVariableArray:
         i = np.broadcast_to(i, shape) if i is not None else np.full(shape, None)
         f = np.broadcast_to(f, shape) if f is not None else np.full(shape, None)
         ret = []
-        for v, k, i, f in zip(self._vars.ravel(), k.ravel(), i.ravel(), f.ravel()):
+        for v, k, i, f in zip(self._vars.ravel(), k.ravel(), i.ravel(), f.ravel()):  # type: ignore
             ret.append(v.quantize(k=k, i=i, f=f, overflow_mode=overflow_mode, round_mode=round_mode))
         return FixedVariableArray(np.array(ret).reshape(shape), self.solver_options)
 

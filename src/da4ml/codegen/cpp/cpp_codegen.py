@@ -7,13 +7,13 @@ from ...trace.fixed_variable import _const_f
 def kif_to_vitis_type(k: bool | int = 1, i: int = 0, f: int = 0):
     if k == i == f == 0:
         f = 1
-    return f'ap_{"" if k else "u"}fixed<{k+i+f},{k+i}>'
+    return f'ap_{"" if k else "u"}fixed<{k + i + f},{k + i}>'
 
 
 def kif_to_hlslib_type(k: bool | int = 1, i: int = 0, f: int = 0):
     if k == i == f == 0:
         f = 1
-    return f'ac_fixed<{int(k)},{k+i+f},{k+i}>'
+    return f'ac_fixed<{int(k)},{k + i + f},{k + i}>'
 
 
 def get_typestr_fn(flavor: str):
@@ -76,12 +76,13 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
                 # Define constant
                 _number = op.data * op.qint.step
                 val = f'{_number}'
-            case 6:
+            case 6 | -6:
                 # MSB Mux
                 bw_k = sum(all_kifs[op.data])
-                ref_k = f'v{op.data}[{bw_k-1}]'
+                ref_k = f'v{op.data}[{bw_k - 1}]'
+                sign = '-' if op.opcode == -6 else ''
                 ref1 = f'v{op.id1}'
-                val = f'{ref_k} ? {_type}({ref0}) : {_type}({ref1})'
+                val = f'{ref_k} ? {_type}({ref0}) : {_type}({sign}{ref1})'
 
             case _:
                 raise ValueError(f'Unsupported opcode: {op.opcode}')

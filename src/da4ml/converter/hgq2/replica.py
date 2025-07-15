@@ -39,7 +39,7 @@ from keras.src.ops.numpy import (
 )
 
 from ...trace import FixedVariableArray
-from ...trace.ops import conv, einsum, pool, quantize, reduce, relu
+from ...trace.ops import conv, einsum, pool, quantize, relu
 
 
 def mirror_quantizer(q: Quantizer, v: FixedVariableArray) -> FixedVariableArray:
@@ -265,11 +265,14 @@ class MirrorPool(MirrorOperationBase):
 
         if isinstance(self.op, BaseGlobalPooling):
             pool_dim = self.op.input_spec.ndim - 2  # type: ignore
-            opr = lambda a, b: a + b
-            pool_size = prod(inputs.shape[:-1])
-            out = reduce(opr, inputs, axis=tuple(range(pool_dim)), keepdims=self.op.keepdims)
-            if op == 'avg':
-                out = out * (1 / pool_size)
+            axis = tuple(range(pool_dim))
+            keepdims = self.op.keepdims
+
+            if op == 'max':
+                out = np.amax(inputs, axis=axis, keepdims=keepdims)  # type: ignore
+            elif op == 'avg':
+                pool_size = prod(inputs.shape[:-1])
+                out = np.sum(inputs, axis=axis, keepdims=keepdims) / pool_size  # type: ignore
         else:
             assert isinstance(self.op, BasePooling), f'Unsupported pooling layer: {type(self.op)}'
             pool_size = self.op.pool_size
@@ -287,9 +290,9 @@ class MirrorPool(MirrorOperationBase):
                 out = out * (1 / prod(pool_size))
 
         if data_format == 'channels_first':
-            out: FixedVariableArray = np.moveaxis(out._vars, -1, 1)  # type: ignore
+            out = np.moveaxis(out, -1, 1)  # type: ignore
 
-        return out
+        return out  # type: ignore
 
 
 class MirrorRepeatVector(MirrorOperationBase):

@@ -2,7 +2,7 @@ from math import ceil, log2
 
 import numpy as np
 
-from da4ml.cmvm.types import QInterval, Solution, _minimal_kif
+from ...cmvm.types import QInterval, Solution, _minimal_kif
 
 
 def ssa_gen(sol: Solution, print_latency: bool = False):
@@ -88,15 +88,16 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
 
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {op.opcode}) op_{i} ({v0}, {v1}, {v});'
 
-            case 6:  # MSB Muxing
+            case 6 | -6:  # MSB Muxing
                 k, a, b = op.data, op.id0, op.id1
                 p0, p1 = kifs[a], kifs[b]
+                inv = '1' if op.opcode == -6 else '0'
                 bwk, bw0, bw1 = widths[k], widths[a], widths[b]
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
                 shift = f0 - f1
                 vk, v0, v1 = f'v{k}[{bwk-1}]', f'v{a}[{bw0 - 1}:0]', f'v{b}[{bw1 - 1}:0]'
 
-                line = f'{_def} mux #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}) op_{i} ({vk}, {v0}, {v1}, {v});'
+                line = f'{_def} mux #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {inv}) op_{i} ({vk}, {v0}, {v1}, {v});'
             case _:
                 raise ValueError(f'Unknown opcode {op.opcode} for operation {i} ({op})')
 
@@ -116,9 +117,8 @@ def output_gen(sol: Solution):
             continue
         i0, i1 = out_idxs[i]
         bw = widths[i]
-        bw0 = sum(_minimal_kif(sol.ops[idx].qint))
         if sol.out_negs[i]:
-            lines.append(f'wire [{bw - 1}:0] out_neg{i}; assign out_neg{i} = -v{idx}[{bw0 - 1}:0];')
+            lines.append(f'wire [{bw - 1}:0] out_neg{i}; assign out_neg{i} = -v{idx}[{bw - 1}:0];')
             lines.append(f'assign out[{i0}:{i1}] = out_neg{i}[{bw - 1}:0];')
         else:
             lines.append(f'assign out[{i0}:{i1}] = v{idx}[{bw - 1}:0];')

@@ -320,8 +320,10 @@ class Solution(NamedTuple):
                     buf[i] = buf[op.id0] + bias
                 case 5:
                     buf[i] = op.data * op.qint.step  # const definition
-                case 6:
+                case 6 | -6:  # MSB Mux
                     k, v0, v1 = buf[op.data], buf[op.id0], buf[op.id1]
+                    if op.opcode == -6:
+                        v1 = -v1
                     qint_k = self.ops[op.data].qint
                     if qint_k.min < 0:
                         buf[i] = v0 if k < 0 else v1
@@ -341,24 +343,22 @@ class Solution(NamedTuple):
                 match op.opcode:
                     case -1:
                         op_str = 'inp'
-                    case 0:
-                        op_str = f'buf[{op.id0}] + buf[{op.id1}]<<{op.data}'
-                    case 1:
-                        op_str = f'buf[{op.id0}] - buf[{op.id1}]<<{op.data}'
-                    case 2:
-                        op_str = f'relu(buf[{op.id0}])'
-                    case -2:
-                        op_str = f'relu(-buf[{op.id0}])'
-                    case 3:
-                        op_str = f'quantize(buf[{op.id0}])'
-                    case -3:
-                        op_str = f'quantize(-buf[{op.id0}])'
+                    case 0 | 1:
+                        _sign = '-' if op.opcode == 1 else '+'
+                        op_str = f'buf[{op.id0}] {_sign} buf[{op.id1}]<<{op.data}'
+                    case 2 | -2:
+                        _sign = '' if op.opcode == 2 else '-'
+                        op_str = f'relu({_sign}buf[{op.id0}])'
+                    case 3 | -3:
+                        _sign = '' if op.opcode == 3 else '-'
+                        op_str = f'quantize({_sign}buf[{op.id0}])'
                     case 4:
                         op_str = f'buf[{op.id0}] + {op.data * op.qint.step}'
                     case 5:
                         op_str = f'const {op.data * op.qint.step}'
-                    case 6:
-                        op_str = f'msb(buf[{op.data}]) ? buf[{op.id0}] : buf[{op.id1}]'
+                    case 6 | -6:
+                        _sign = '-' if op.opcode == -6 else ''
+                        op_str = f'msb(buf[{op.data}]) ? buf[{op.id0}] : {_sign}buf[{op.id1}]'
                     case _:
                         raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
@@ -465,7 +465,7 @@ class Solution(NamedTuple):
                 ref_count[id0] += 1
             if id1 != -1:
                 ref_count[id1] += 1
-            if op.opcode == 6:
+            if op.opcode in (6, -6):
                 # msb_mux operation
                 ref_count[op.data] += 1
         for i in self.out_idxs:

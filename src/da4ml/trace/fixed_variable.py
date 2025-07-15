@@ -45,7 +45,7 @@ class FixedVariable:
 
         if low == high and opr != 'new':
             opr = 'const'
-            _factor = 1.0
+            _factor = _factor
             _from = ()
 
         low, high, step = Decimal(low), Decimal(high), Decimal(step)
@@ -71,6 +71,12 @@ class FixedVariable:
 
         self.latency = _latency
         self.cost = _cost
+
+        # Update latency for constant variables to match the current variable for piplining
+
+        for v in self._from:
+            if v.opr == 'const':
+                v.latency = self.latency
 
     def get_cost_and_latency(self):
         if self.opr == 'const':
@@ -137,11 +143,10 @@ class FixedVariable:
         return k, i, f
 
     @classmethod
-    def from_const(cls, const: float | Decimal, hwconf: HWConfig):
-        const = Decimal(const)
+    def from_const(cls, const: float | Decimal, hwconf: HWConfig, latency: float, _factor: float | Decimal):
         f = _const_f(const)
         step = Decimal(2) ** -f
-        return cls(const, const, step, hwconf=hwconf, opr='const', _factor=1)
+        return cls(const, const, step, hwconf=hwconf, opr='const', _factor=_factor, latency=latency)
 
     def __repr__(self) -> str:
         if self._factor == 1:
@@ -288,6 +293,10 @@ class FixedVariable:
                 low = Decimal(0)
                 high = _high
         _factor = self._factor
+
+        if self.low == low and self.high == high and self.step == step:
+            return self
+
         return FixedVariable(
             low,
             high,
@@ -308,7 +317,7 @@ class FixedVariable:
         round_mode: str = 'TRN',
     ):
         overflow_mode, round_mode = overflow_mode.upper(), round_mode.upper()
-        assert overflow_mode in ('WRAP', 'SAT')
+        assert overflow_mode in ('WRAP', 'SAT', 'SAT_SM')
         assert round_mode in ('TRN', 'RND')
 
         _k, _i, _f = self.kif
@@ -318,6 +327,13 @@ class FixedVariable:
 
         if f < _f and round_mode == 'RND':
             return (self + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
+
+        if overflow_mode in ('SAT', 'SAT_SM'):
+            step = Decimal(2) ** -f
+            _high = Decimal(2) ** i
+            high = _high - step
+            low = -_high * k if overflow_mode == 'SAT' else -high * k
+            return self.max_of(low).min_of(high).quantize(k, i, f, 'WRAP', round_mode)
 
         if self.low == self.high:
             val = self.low
@@ -352,7 +368,7 @@ class FixedVariable:
             step,
             _from=(self,),
             _factor=abs(self._factor),
-            opr='wrap' if overflow_mode == 'WRAP' else 'sat',
+            opr='wrap',
             latency=self.latency,
             hwconf=self.hwconf,
         )
@@ -369,7 +385,11 @@ class FixedVariable:
         if self._factor < 0:
             return (-self).msb_mux(b, a, qint)
 
-        _factor = min(a._factor, abs(b._factor))
+        if a._factor < 0:
+            qint = (-qint[1], -qint[0], qint[2]) if qint else None
+            return -(self.msb_mux(-a, -b, qint=qint))
+
+        _factor = a._factor
 
         if qint is None:
             qint = (min(a.low, b.low), max(a.high, b.high), min(a.step, b.step))
@@ -389,38 +409,26 @@ class FixedVariable:
         if other == 0:
             return self.relu()
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf)
+            other = FixedVariable.from_const(other, hwconf=self.hwconf, latency=self.latency, _factor=abs(self._factor))
 
         if self.low >= other.high:
             return self
         if self.high <= other.low:
             return other
-
-        if self._factor < 0:
-            if other._factor > 0:
-                return other.max_of(self)
-            else:
-                return -self.min_of(-other)
 
         qint = (max(self.low, other.low), max(self.high, other.high), min(self.step, other.step))
         return (self - other).msb_mux(other, self, qint=qint)
 
-    def min_of(self, other: 'FixedVariable'):
+    def min_of(self, other):
         if other == 0:
             return (-self).relu()
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf)
+            other = FixedVariable.from_const(other, hwconf=self.hwconf, latency=self.latency, _factor=(self._factor))
 
         if self.high <= other.low:
             return self
         if self.low >= other.high:
             return other
-
-        if self._factor < 0:
-            if other._factor > 0:
-                return other.min_of(self)
-            else:
-                return -self.max_of(-other)
 
         qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
         return (self - other).msb_mux(self, other, qint=qint)

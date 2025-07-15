@@ -7,7 +7,8 @@ module mux #(
     parameter SIGNED0 = 0,
     parameter SIGNED1 = 0,
     parameter BW_OUT = 32,
-    parameter SHIFT1 = 0
+    parameter SHIFT1 = 0,
+    parameter INVERT1 = 0
 ) (
     input key,
     input [BW_INPUT0-1:0] in0,
@@ -17,7 +18,7 @@ module mux #(
 
   localparam IN0_NEED_BITS = (SHIFT1 < 0) ? BW_INPUT0 - SHIFT1 : BW_INPUT0;
   localparam IN1_NEED_BITS = (SHIFT1 > 0) ? BW_INPUT1 + SHIFT1 : BW_INPUT1;
-  localparam EXTRA_PAD = (SIGNED0 != SIGNED1) ? 1 : 0;
+  localparam EXTRA_PAD = (SIGNED0 != SIGNED1) ? INVERT1 + 1 : INVERT1 + 0;
   localparam BW_BUF = (IN0_NEED_BITS > IN1_NEED_BITS) ? IN0_NEED_BITS + EXTRA_PAD : IN1_NEED_BITS + EXTRA_PAD;
   localparam IN0_PAD_LEFT = (SHIFT1 < 0) ? BW_BUF - BW_INPUT0 + SHIFT1 : BW_BUF - BW_INPUT0;
   localparam IN0_PAD_RIGHT = (SHIFT1 < 0) ? -SHIFT1 : 0;
@@ -46,6 +47,12 @@ module mux #(
     end
   endgenerate
 
-  assign out = (key) ? in0_ext[BW_OUT-1:0] : in1_ext[BW_OUT-1:0];
+  generate
+    if (INVERT1 == 1) begin : is_invert
+      assign out = (key) ? in0_ext[BW_OUT-1:0] : -in1_ext[BW_OUT-1:0];
+    end else begin : is_not_invert
+      assign out = (key) ? in0_ext[BW_OUT-1:0] : in1_ext[BW_OUT-1:0];
+    end
+  endgenerate
 
 endmodule

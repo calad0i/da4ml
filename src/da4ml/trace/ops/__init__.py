@@ -4,8 +4,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..fixed_variable_array import FixedVariable
-from .conv_utils import conv, pool, reduce
+from .conv_utils import conv, pool
 from .einsum_utils import einsum
+from .reduce_utils import reduce
 
 if TYPE_CHECKING:
     from ..fixed_variable_array import FixedVariableArray
@@ -42,12 +43,17 @@ def quantize(
 ) -> T:
     from ..fixed_variable_array import FixedVariableArray
 
-    assert overflow_mode.upper() == 'WRAP', 'Only WRAP overflow mode is supported'
     if isinstance(x, FixedVariableArray):
         return x.quantize(k=k, i=i, f=f, overflow_mode=overflow_mode, round_mode=round_mode)
     else:
+        if overflow_mode in ('SAT', 'SAT_SM'):
+            step = 2.0**-f
+            _high = 2.0**i
+            high = _high - step
+            low = -_high * k if overflow_mode == 'SAT' else -high * k
+            x = np.clip(x, low, high)  # type: ignore
         if round_mode.upper() == 'RND':
-            x += 2.0 ** (-f - 1)
+            x += 2.0 ** (-f - 1)  # type: ignore
         b = k + i + f
         bias = 2.0 ** (b - 1) * k
         eps = 2.0**-f
