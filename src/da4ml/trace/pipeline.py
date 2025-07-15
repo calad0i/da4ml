@@ -112,7 +112,7 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
 
         p0_idx = _get_new_idx(op.id0, locator, opd, out_idxd, ops, stage, latency_cutoff)
         p1_idx = _get_new_idx(op.id1, locator, opd, out_idxd, ops, stage, latency_cutoff)
-        if op.opcode == 6:
+        if op.opcode in (6, -6):
             data = _get_new_idx(op.data, locator, opd, out_idxd, ops, stage, latency_cutoff)
         else:
             data = op.data
