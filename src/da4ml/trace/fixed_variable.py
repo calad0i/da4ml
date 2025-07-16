@@ -234,7 +234,7 @@ class FixedVariable:
         other: 'float|Decimal',
     ):
         if other == 0:
-            return FixedVariable(0, 0, 1, hwconf=self.hwconf)
+            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
         assert log2(abs(other)) % 1 == 0, 'Only support pow2 multiplication'
 
@@ -279,7 +279,7 @@ class FixedVariable:
             i = ceil(log2(val + step)) if not i else i
             eps = step / 2 if round_mode == 'RND' else 0
             val = (floor(val / step + eps) * step) % (Decimal(2) ** i)
-            return FixedVariable(val, val, step, hwconf=self.hwconf)
+            return FixedVariable(val, val, step, hwconf=self.hwconf, opr='const')
 
         step = max(Decimal(2) ** -f, self.step) if f is not None else self.step
         if step > self.step and round_mode == 'RND':
@@ -341,7 +341,7 @@ class FixedVariable:
             _high = Decimal(2) ** i
             high, low = _high - step, -_high * k
             val = (floor(val / step) * step - low) % (2 * _high) + low
-            return FixedVariable(val, val, step, hwconf=self.hwconf)
+            return FixedVariable(val, val, step, hwconf=self.hwconf, opr='const')
 
         # TODO: corner cases exists (e.g., overflow to negative, or negative overflow to high value)
         # bit-exactness will be lost in these cases, but they should never happen (quantizers are used in a weird way)

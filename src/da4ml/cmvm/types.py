@@ -341,6 +341,7 @@ class Solution(NamedTuple):
         out_idx = np.array(self.out_idxs)
         mask = np.where(out_idx < 0, 0, 1)
         if debug:
+            operands = []
             for i, v in enumerate(buf):
                 op = self.ops[i]
                 match op.opcode:
@@ -365,7 +366,11 @@ class Solution(NamedTuple):
                     case _:
                         raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
-                print(f'{op_str:24} |-> buf[{i}] = {v}')
+                result = f'|-> buf[{i}] = {v}'
+                operands.append((op_str, result))
+            max_len = max(len(op[0]) for op in operands)
+            for op_str, result in operands:
+                print(f'{op_str:<{max_len}} {result}')
 
         if dump:
             return buf

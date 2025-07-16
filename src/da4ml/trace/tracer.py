@@ -11,20 +11,20 @@ from .fixed_variable import FixedVariable, _const_f
 from .fixed_variable_array import FixedVariableArray
 
 
-def _recursive_trace(v: FixedVariable, gathered: dict[UUID, FixedVariable]):
+def _recursive_gather(v: FixedVariable, gathered: dict[UUID, FixedVariable]):
     if v.id in gathered:
         return
     assert v._from is not None
     for _v in v._from:
         if _v.id not in gathered:
-            _recursive_trace(_v, gathered)
+            _recursive_gather(_v, gathered)
     gathered[v.id] = v
 
 
 def gather_variables(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
     gathered = {v.id: v for v in inputs}
     for o in outputs:
-        _recursive_trace(o, gathered)
+        _recursive_gather(o, gathered)
 
     variables = list(gathered.values())
 
