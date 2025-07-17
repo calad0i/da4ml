@@ -336,9 +336,9 @@ class Solution(NamedTuple):
                 case _:
                     raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
-        sf = 2.0 ** np.array(self.out_shifts)
+        sf = 2.0 ** np.array(self.out_shifts, dtype=np.float64)
         sign = np.where(self.out_negs, -1, 1)
-        out_idx = np.array(self.out_idxs)
+        out_idx = np.array(self.out_idxs, dtype=np.int32)
         mask = np.where(out_idx < 0, 0, 1)
         if debug:
             operands = []
@@ -481,6 +481,40 @@ class Solution(NamedTuple):
                 continue
             ref_count[i] += 1
         return ref_count
+
+    def to_binary(self):
+        n_in, n_out = self.shape
+        header_size_i32 = 2 + n_in + n_out * 3 + 1
+
+        header = np.concatenate(
+            [
+                [n_in, n_out, len(self.ops)],
+                self.inp_shift,
+                self.out_idxs,
+                self.out_shifts,
+                self.out_negs,
+            ],
+            axis=0,
+            dtype=np.int32,
+        )
+        assert len(header) == header_size_i32, f'Header size mismatch: {len(header)} != {header_size_i32}'
+        code = np.empty((len(self.ops), 8), dtype=np.int32)
+        for i, op in enumerate(self.ops):
+            buf = code[i]
+            buf[0] = op.opcode
+            buf[1] = op.id0
+            buf[2] = op.id1
+            buf[5:] = _minimal_kif(op.qint)
+            buf_i64 = buf[3:5].view(np.int64)
+            buf_i64[0] = op.data
+        data = np.concatenate([header, code.flatten()])
+        return data
+
+    def save_binary(self, path: str | Path):
+        """Dump the solution to a binary file."""
+        data = self.to_binary()
+        with open(path, 'wb') as f:
+            data.tofile(f)
 
 
 class CascadedSolution(NamedTuple):
