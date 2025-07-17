@@ -67,7 +67,7 @@ The binary representation of the program is as follows, in order:
 - `inp_shift`: int32[shape[0]]
 - `out_idxs`: int32[shape[1]]
 - `out_shifts`: int32[shape[1]]
-- `out_negs`: int8[shape[1]]
+- `out_negs`: int32[shape[1]]
 - `ops`: Op[len(ops)]
     - `opcode`: int32
     - `id0`: int32
