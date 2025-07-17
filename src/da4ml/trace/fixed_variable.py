@@ -350,17 +350,20 @@ class FixedVariable:
         k = min(k, _k) if i >= _i else k
         i = min(i, _i)
 
-        step = max(Decimal(2) ** -f, self.step)
+        if i + k + f <= 0:
+            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
+
+        step = Decimal(2) ** -f
 
         low = -k * Decimal(2) ** i
+
         high = Decimal(2) ** i - step
         _low, _high = self.low, self.high
 
         if _low >= low and _high <= high:
             low, high = _low, _high
-
-        if low > high:
-            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
+            low = floor(low / step) * step
+            high = ceil(high / step) * step
 
         return FixedVariable(
             low,
