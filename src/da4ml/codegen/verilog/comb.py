@@ -16,6 +16,7 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
 
     lines = []
     ref_count = sol.ref_count
+    neg_defined = set()
 
     for i, op in enumerate(ops):
         if ref_count[i] == 0:
@@ -39,9 +40,11 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
                 if op.opcode == -2:
                     _min, _max, step = ops[op.id0].qint
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
-                    lines.append(
-                        f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
-                    )
+                    if v0_name not in neg_defined:
+                        neg_defined.add(v0_name)
+                        lines.append(
+                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
+                        )
                     v0_name = f'v{op.id0}_neg'
                 if ops[op.id0].qint.min < 0:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0 - 1}]}}}};'
@@ -56,9 +59,11 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
                 if op.opcode == -3:
                     _min, _max, step = ops[op.id0].qint
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
-                    lines.append(
-                        f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
-                    )
+                    if v0_name not in neg_defined:
+                        neg_defined.add(v0_name)
+                        lines.append(
+                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
+                        )
                     v0_name = f'v{op.id0}_neg'
 
                 line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'

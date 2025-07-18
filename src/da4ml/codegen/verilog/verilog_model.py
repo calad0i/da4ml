@@ -59,6 +59,7 @@ class VerilogModel:
             self._latency_cutoff = latency_cutoff
 
         self._lib = None
+        self._uuid = None
 
     def write(self):
         self._path.mkdir(parents=True, exist_ok=True)
@@ -122,7 +123,7 @@ class VerilogModel:
         with open(self._path / 'misc.json', 'w') as f:
             f.write(f'{{"cost": {self._solution.cost}}}')
 
-    def _compile(self, verbose=False, openmp=True, o3: bool = False, clean=None):
+    def _compile(self, verbose=False, openmp=True, nproc=None, o3: bool = False, clean=True):
         """Same as compile, but will not write to the library
 
         Parameters
@@ -131,6 +132,9 @@ class VerilogModel:
             Verbose output, by default False
         openmp : bool, optional
             Enable openmp, by default True
+        nproc : int | None, optional
+            Number of processes to use for compilation, by default None
+            If None, will use the number of CPU cores, but not more than 32.
         o3 : bool | None, optional
             Turn on -O3 flag, by default False
         clean : bool, optional
@@ -148,6 +152,8 @@ class VerilogModel:
         env['VM_PREFIX'] = f'{self._prj_name}_wrapper'
         env['STAMP'] = self._uuid
         env['EXTRA_CXXFLAGS'] = '-fopenmp' if openmp else ''
+        if nproc is not None:
+            env['N_JOBS'] = str(nproc)
         if o3:
             args.append('fast')
 
@@ -176,13 +182,19 @@ class VerilogModel:
 
     def _load_lib(self, uuid: str | None = None):
         uuid = uuid if uuid is not None else self._uuid
+        if uuid is None:
+            # load .so if there is only one, otherwise raise an error
+            libs = list(self._path.glob(f'lib{self._prj_name}_wrapper_*.so'))
+            if len(libs) != 1:
+                raise RuntimeError(f'Cannot load library, found {len(libs)} libraries in {self._path}')
+            uuid = libs[0].name.split('_')[-1].split('.', 1)[0]
         self._uuid = uuid
         lib_path = self._path / f'lib{self._prj_name}_wrapper_{uuid}.so'
         if not lib_path.exists():
             raise RuntimeError(f'Library {lib_path} does not exist')
         self._lib = ctypes.CDLL(str(lib_path))
 
-    def compile(self, verbose=False, openmp=True, o3: bool = False):
+    def compile(self, verbose=False, openmp=True, nproc: int | None = None, o3: bool = False, clean=True):
         """Compile the generated code to a emulator for logic simulation.
 
         Parameters
@@ -191,8 +203,13 @@ class VerilogModel:
             Verbose output, by default False
         openmp : bool, optional
             Enable openmp, by default True
+        nproc : int | None, optional
+            Number of processes to use for compilation, by default None
+            If None, will use the number of CPU cores, but not more than 32.
         o3 : bool | None, optional
             Turn on -O3 flag, by default False
+        clean : bool, optional
+            Remove obsolete shared object files, by default True
 
         Raises
         ------
@@ -200,7 +217,7 @@ class VerilogModel:
             If compilation fails
         """
         self.write()
-        self._compile(verbose=verbose, openmp=openmp, o3=o3)
+        self._compile(verbose=verbose, openmp=openmp, nproc=nproc, o3=o3, clean=clean)
 
     def predict(self, data: NDArray[np.floating]):
         """Run the model on the input data.
