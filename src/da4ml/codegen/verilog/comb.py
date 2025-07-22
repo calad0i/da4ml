@@ -5,7 +5,7 @@ import numpy as np
 from ...cmvm.types import QInterval, Solution, _minimal_kif
 
 
-def ssa_gen(sol: Solution, print_latency: bool = False):
+def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
     ops = sol.ops
     kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     widths = list(map(sum, kifs))
@@ -16,7 +16,6 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
 
     lines = []
     ref_count = sol.ref_count
-    neg_defined = set()
 
     for i, op in enumerate(ops):
         if ref_count[i] == 0:
@@ -25,6 +24,8 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
         bw = widths[i]
         v = f'v{i}[{bw - 1}:0]'
         _def = f'wire [{bw - 1}:0] v{i};'
+        if bw == 0:
+            continue
 
         match op.opcode:
             case -1:  # Input marker
@@ -40,10 +41,11 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
                 if op.opcode == -2:
                     _min, _max, step = ops[op.id0].qint
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
-                    if v0_name not in neg_defined:
-                        neg_defined.add(v0_name)
+                    if op.id0 not in neg_defined:
+                        neg_defined.add(op.id0)
+                        was_negatve = int(kifs[op.id0][0] < 0)
                         lines.append(
-                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
+                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_negatve}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
                         )
                     v0_name = f'v{op.id0}_neg'
                 if ops[op.id0].qint.min < 0:
@@ -58,11 +60,18 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
 
                 if op.opcode == -3:
                     _min, _max, step = ops[op.id0].qint
+                    lines.append('/* verilator lint_off WIDTHTRUNC */')
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
-                    if v0_name not in neg_defined:
-                        neg_defined.add(v0_name)
+                    if op.id0 not in neg_defined:
+                        neg_defined.add(op.id0)
+                        # lines.append('/* verilator lint_off WIDTHTRUNC */')
+                        # lines.append(
+                        #     f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
+                        # )
+                        # lines.append('/* verilator lint_on WIDTHTRUNC */')
+                        was_signed = int(kifs[op.id0][0] < 0)
                         lines.append(
-                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
+                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
                         )
                     v0_name = f'v{op.id0}_neg'
 
@@ -114,7 +123,7 @@ def ssa_gen(sol: Solution, print_latency: bool = False):
     return lines
 
 
-def output_gen(sol: Solution):
+def output_gen(sol: Solution, neg_defined: set[int]):
     lines = []
     widths = list(map(sum, map(_minimal_kif, sol.out_qint)))
     _widths = np.cumsum([0] + widths)
@@ -123,10 +132,19 @@ def output_gen(sol: Solution):
         if idx < 0:
             continue
         i0, i1 = out_idxs[i]
+        if i0 == i1 - 1:
+            continue
         bw = widths[i]
         if sol.out_negs[i]:
-            lines.append(f'wire [{bw - 1}:0] out_neg{i}; assign out_neg{i} = -v{idx}[{bw - 1}:0];')
-            lines.append(f'assign out[{i0}:{i1}] = out_neg{i}[{bw - 1}:0];')
+            if idx not in neg_defined:
+                neg_defined.add(idx)
+                bw0 = sum(_minimal_kif(sol.ops[idx].qint))
+                was_signed = int(sol.ops[idx].qint[0] < 0)
+                lines.append(
+                    f'wire [{bw - 1}:0] v{idx}_neg; negative #({bw0}, {bw}, {was_signed}) op_neg_{idx} (v{idx}, v{idx}_neg);'
+                )
+            lines.append(f'assign out[{i0}:{i1}] = v{idx}_neg[{bw - 1}:0];')
+
         else:
             lines.append(f'assign out[{i0}:{i1}] = v{idx}[{bw - 1}:0];')
     return lines
@@ -143,8 +161,9 @@ def comb_logic_gen(sol: Solution, fn_name: str, print_latency: bool = False, tim
         ');',
     ]
 
-    ssa_lines = ssa_gen(sol, print_latency=print_latency)
-    output_lines = output_gen(sol)
+    neg_defined = set()
+    ssa_lines = ssa_gen(sol, neg_defined=neg_defined, print_latency=print_latency)
+    output_lines = output_gen(sol, neg_defined)
 
     indent = '    '
     base_indent = '\n'

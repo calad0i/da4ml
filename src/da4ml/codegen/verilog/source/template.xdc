@@ -27,3 +27,6 @@ set_clock_uncertainty -setup $uncertainty_setup [get_clocks sys_clk]
 set_clock_uncertainty -hold $uncertainty_hold [get_clocks sys_clk]
 
 set_property HD.CLK_SRC BUFG_X0Y0 [get_ports clk]
+
+set_property retiming_forward 1 [get_cells {stage[*]_inp}]
+set_property retiming_backward 1 [get_cells {stage[*]_inp}]

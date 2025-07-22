@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from decimal import Decimal
+from itertools import chain
 from math import log2
 from typing import overload
 from uuid import UUID
@@ -114,6 +115,15 @@ def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray) -> Solut
 
 def comb_trace(inputs, outputs):
     inputs, outputs = list(np.ravel(inputs)), list(np.ravel(outputs))
+
+    if any(not isinstance(v, FixedVariable) for v in outputs):
+        hwconf = inputs[0].hwconf
+        latency = max(v.latency for v in chain(inputs, outputs) if isinstance(v, FixedVariable))
+        outputs = list(outputs)
+        for i, v in enumerate(outputs):
+            if not isinstance(v, FixedVariable):
+                outputs[i] = FixedVariable.from_const(v, hwconf, latency, 1)
+
     ops, out_index = _comb_trace(inputs, outputs)
     shape = len(inputs), len(outputs)
     inp_shift = [0] * shape[0]

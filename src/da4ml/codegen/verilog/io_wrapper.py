@@ -70,6 +70,8 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
     _out_assignment: list[tuple[int, str]] = []
 
     for i, ((ih, jh), (ir, jr)) in enumerate(zip(het_out, reg_out)):
+        if ih == jh - 1:
+            continue
         _out_assignment.append((ih, f'assign out[{ir}:{jr}] = packed_out[{ih}:{jh}];'))
 
     for i, (i, j, copy_from) in enumerate(pad_out):

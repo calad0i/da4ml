@@ -86,6 +86,8 @@ class MirrorOperationBase(metaclass=MirrorOperationMeta):
             return r if isinstance(r, tuple) else (r,)
 
         layer: hgq.layers.QLayerBase = self.op
+        assert kwargs.pop('training', False) is False, 'Training mode is not supported in mirror operation'
+        assert kwargs.pop('mask', None) is None, 'Masking is not supported in mirror operation'
 
         if layer.enable_iq:
             if isinstance(inputs, Sequence):
@@ -154,6 +156,8 @@ class MirrorQDense(MirrorOperationBase):
             qkernel, qbias = op.qscaler_and_qoffset
             dim = inputs._vars.ndim
             axis = op.axis
+            assert axis != 0, 'Cannot normalizing on batch axis'
+            axis -= 1
             idx = ''.join(chr(ord('a') + i) for i in range(dim))
             eq = f'...{idx},{idx[axis]}->...{idx}'
         else:
@@ -257,7 +261,6 @@ class MirrorPool(MirrorOperationBase):
         else:
             assert 'Average' in cname, f'Unsupported global pooling layer: {cname}'
             op = 'avg'
-        assert op == 'avg', 'Only average pooling is supported now'
 
         data_format = self.op.data_format
         if data_format == 'channels_first':

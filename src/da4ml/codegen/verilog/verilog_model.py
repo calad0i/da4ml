@@ -116,6 +116,7 @@ class VerilogModel:
         # Common resource copy
         shutil.copy(self.__src_root / 'verilog/source/shift_adder.v', self._path)
         shutil.copy(self.__src_root / 'verilog/source/mux.v', self._path)
+        shutil.copy(self.__src_root / 'verilog/source/negative.v', self._path)
         shutil.copy(self.__src_root / 'verilog/source/build_binder.mk', self._path)
         shutil.copy(self.__src_root / 'verilog/source/ioutil.hh', self._path)
         shutil.copy(self.__src_root / 'verilog/source/binder_util.hh', self._path)
@@ -185,7 +186,7 @@ class VerilogModel:
         if uuid is None:
             # load .so if there is only one, otherwise raise an error
             libs = list(self._path.glob(f'lib{self._prj_name}_wrapper_*.so'))
-            if len(libs) != 1:
+            if len(libs) == 0:
                 raise RuntimeError(f'Cannot load library, found {len(libs)} libraries in {self._path}')
             uuid = libs[0].name.split('_')[-1].split('.', 1)[0]
         self._uuid = uuid
