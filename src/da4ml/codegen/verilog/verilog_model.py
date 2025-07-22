@@ -284,6 +284,7 @@ Estimated cost: {cost} LUTs"""
 
         is_compiled = self._lib is not None
         if is_compiled:
+            assert self._uuid is not None
             openmp = 'with OpenMP' if self._lib.openmp_enabled() else ''  # type: ignore
             spec += f'\nEmulator is compiled {openmp} ({self._uuid[-12:]})'
         else:

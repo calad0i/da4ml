@@ -7,7 +7,7 @@ def hetero_io_map(qints: list[QInterval], merge: bool = False):
     N = len(qints)
     ks, _is, fs = zip(*map(_minimal_kif, qints))
     Is = [_i + _k for _i, _k in zip(_is, ks)]
-    max_I, max_f = max(Is), max(fs)
+    max_I, max_f = max(_is) + max(ks), max(fs)
     max_bw = max_I + max_f
     width_regular, width_packed = max_bw * N, sum(Is) + sum(fs)
 
@@ -93,12 +93,12 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
 
 module {module_name}_wrapper ({clk_and_rst_inp}
     // verilator lint_off UNUSEDSIGNAL
-    input [{w_reg_in-1}:0] inp,
+    input [{w_reg_in - 1}:0] inp,
     // verilator lint_on UNUSEDSIGNAL
-    output [{w_reg_out-1}:0] out
+    output [{w_reg_out - 1}:0] out
 );
-    wire [{w_het_in-1}:0] packed_inp;
-    wire [{w_het_out-1}:0] packed_out;
+    wire [{w_het_in - 1}:0] packed_inp;
+    wire [{w_het_out - 1}:0] packed_out;
 
     {inp_assignment_str}
 
@@ -116,9 +116,8 @@ endmodule
 def binder_gen(csol: CascadedSolution | Solution, module_name: str, II: int = 1, latency_multiplier: int = 1):
     k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
     k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
-    max_inp_bw = max(k + i for k, i in zip(k_in, i_in)) + max(f_in)
-    max_out_bw = max(k + i for k, i in zip(k_out, i_out)) + max(f_out)
-
+    max_inp_bw = max(k_in) + max(i_in) + max(f_in)
+    max_out_bw = max(k_out) + max(i_out) + max(f_out)
     if isinstance(csol, Solution):
         II = latency = 0
     else:

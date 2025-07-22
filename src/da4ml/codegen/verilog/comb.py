@@ -43,10 +43,11 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
                     if op.id0 not in neg_defined:
                         neg_defined.add(op.id0)
-                        was_negatve = int(kifs[op.id0][0] < 0)
+                        was_signed = int(kifs[op.id0][0])
                         lines.append(
-                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_negatve}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
+                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
                         )
+                        bw0 = bw_neg
                     v0_name = f'v{op.id0}_neg'
                 if ops[op.id0].qint.min < 0:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0 - 1}]}}}};'
@@ -69,7 +70,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                         #     f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
                         # )
                         # lines.append('/* verilator lint_on WIDTHTRUNC */')
-                        was_signed = int(kifs[op.id0][0] < 0)
+                        was_signed = int(kifs[op.id0][0])
                         lines.append(
                             f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
                         )

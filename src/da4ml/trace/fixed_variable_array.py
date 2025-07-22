@@ -276,6 +276,12 @@ class FixedVariableArray:
     def size(self):
         return self._vars.size
 
+    @property
+    def kif(self):
+        shape = self._vars.shape
+        kif = np.array([v.kif for v in self._vars.ravel()]).reshape(*shape, 3)
+        return np.moveaxis(kif, -1, 0)
+
 
 class FixedVariableArrayInput(FixedVariableArray):
     def __init__(self, shape: tuple[int, ...] | int, hwconf: HWConfig, solver_options: dict[str, Any] | None = None, latency=0.0):
