@@ -289,9 +289,6 @@ class MirrorPool(MirrorOperationBase):
                 padding=padding,
                 pool_type=op,
             )
-            if op == 'avg':
-                out = out * (1 / prod(pool_size))
-
         if data_format == 'channels_first':
             out = np.moveaxis(out, -1, 1)  # type: ignore
 

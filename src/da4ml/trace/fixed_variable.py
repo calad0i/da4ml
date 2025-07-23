@@ -411,6 +411,10 @@ class FixedVariable:
     def max_of(self, other):
         if other == 0:
             return self.relu()
+        if other == -float('inf'):
+            return self
+        if other == float('inf'):
+            raise ValueError('Cannot apply max_of with inf')
         if not isinstance(other, FixedVariable):
             other = FixedVariable.from_const(other, hwconf=self.hwconf, latency=self.latency, _factor=abs(self._factor))
 
@@ -425,6 +429,10 @@ class FixedVariable:
     def min_of(self, other):
         if other == 0:
             return (-self).relu()
+        if other == float('inf'):
+            return self
+        if other == -float('inf'):
+            raise ValueError('Cannot apply min_of with -inf')
         if not isinstance(other, FixedVariable):
             other = FixedVariable.from_const(other, hwconf=self.hwconf, latency=self.latency, _factor=(self._factor))
 

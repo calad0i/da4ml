@@ -291,6 +291,9 @@ class Solution(NamedTuple):
             The output data after applying the operations defined in the solution.
 
         """
+
+        from ..trace.fixed_variable import FixedVariable
+
         buf = np.empty(len(self.ops), dtype=object)
         inp = np.asarray(inp)
 
@@ -327,12 +330,16 @@ class Solution(NamedTuple):
                     shift = shift if shift < 0x80000000 else shift - 0x100000000
                     if op.opcode == -6:
                         v1 = -v1
-                    qint_k = self.ops[id_c].qint
-                    if qint_k.min < 0:
-                        buf[i] = v0 if k < 0 else v1 * 2.0**shift
+
+                    if isinstance(k, FixedVariable):
+                        buf[i] = k.msb_mux(v0, v1 * 2**shift)
                     else:
-                        _k, _i, _f = _minimal_kif(qint_k)
-                        buf[i] = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
+                        qint_k = self.ops[id_c].qint
+                        if qint_k.min < 0:
+                            buf[i] = v0 if k < 0 else v1 * 2.0**shift
+                        else:
+                            _k, _i, _f = _minimal_kif(qint_k)
+                            buf[i] = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
                 case _:
                     raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 

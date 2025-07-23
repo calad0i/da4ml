@@ -1,6 +1,6 @@
 import typing
 from collections.abc import Sequence
-from math import prod
+from math import ceil, prod
 from typing import TypeVar
 
 import numpy as np
@@ -38,7 +38,6 @@ def stride_arr(stride: int | tuple[int, ...], arr: np.ndarray):
     ndim = arr.ndim
     if isinstance(stride, int):
         stride = (stride,) * (ndim - 1)
-    assert len(stride) == ndim - 1, f'Invalid stride {stride} for array with {ndim} dimensions'
 
     _idx = tuple(slice(None, None, st) for st in stride)
     return arr[*_idx]
@@ -95,12 +94,12 @@ def _conv(
 
     data = np.pad(data, padding + ((0, 0),), mode='constant', constant_values=0.0)
     data = _im2col(kernel.shape, data)
+    data = stride_arr(strides, data)
     if is_symbolic:
         _data = FixedVariableArray(data, solver_options) @ kernel.reshape(-1, ch_out)
         data = _data._vars
     else:
         data = data @ kernel.reshape(-1, ch_out)
-    data = stride_arr(strides, data)
     if bias is not None:
         data = data + bias
     if isinstance(x, FixedVariableArray):
@@ -121,10 +120,7 @@ def conv(
 
     assert format in ('channels_last', 'channels_first'), f'Invalid format {format}'
     if format == 'channels_first':
-        if isinstance(x, FixedVariableArray):
-            x = FixedVariableArray(np.moveaxis(x._vars, 0, -1), x.solver_options)  # type: ignore
-        else:
-            x = np.moveaxis(x, 0, -1)
+        x = np.moveaxis(x, 0, -1)  # type: ignore
 
     *_, _ch_in, ch_out = kernel.shape
     ch_in = x.shape[-1]
@@ -158,9 +154,7 @@ def conv(
     data = data + bias if bias is not None else data
 
     if format == 'channels_first':
-        if isinstance(x, FixedVariableArray):
-            return FixedVariableArray(np.moveaxis(data, -1, 0), x.solver_options)
-        return np.moveaxis(data, -1, 0)
+        return np.moveaxis(data, -1, 0)  # type: ignore
 
     if isinstance(x, FixedVariableArray):
         return FixedVariableArray(data, x.solver_options)
@@ -173,7 +167,9 @@ def pool(
     strides: int | Sequence[int] | None = None,
     padding: tuple[tuple[int, int], ...] | str = 'VALID',
     pool_type: str = 'avg',
+    format: str = 'channels_last',
 ) -> TA:
+    from ..fixed_variable import FixedVariable
     from ..fixed_variable_array import FixedVariableArray
 
     if isinstance(x, FixedVariableArray):
@@ -182,6 +178,9 @@ def pool(
     else:
         solver_options = None
         data = x
+
+    if format == 'channels_first':
+        data = np.moveaxis(data, 0, -1)
 
     strides = strides or pool_size
 
@@ -198,9 +197,10 @@ def pool(
         elif padding == 'SAME':
             _padding = []
             for i in range(ndim - 1):
-                pad0 = pool_size[i] // 2
-                pad1 = pool_size[i] - pad0 - 1
-                _padding.append((pad1, pad0))
+                n_pad = ceil(data.shape[i] / strides[i]) * strides[i] + (pool_size[i] - strides[i]) - data.shape[i]
+                pad0 = n_pad // 2
+                pad1 = n_pad - pad0
+                _padding.append((pad0, pad1))
             padding = tuple(_padding)
         else:
             raise ValueError(f'Invalid padding {padding}')
@@ -211,15 +211,26 @@ def pool(
     ch_in = data.shape[-1]
     fake_kernel_shape = tuple(pool_size) + (ch_in, ch_in)
     data = _im2col(fake_kernel_shape, data)
-    data = data.reshape(*data.shape[:-1], ch_in, prod(pool_size))
-    if pool_type == 'avg':
-        div = np.sum(data != -np.inf, axis=-1)
-        data = np.nan_to_num(data, neginf=0)
-        data = reduce(lambda x, y: x + y, data, axis=-1) * (1 / div)
-    else:
-        data = reduce(lambda x, y: x.max_of(y), data, axis=-1)
-
+    data = data.reshape(*data.shape[:-1], prod(pool_size), ch_in)
     data = stride_arr(tuple(strides), data)
+    if pool_type == 'avg':
+        div = np.sum(data != -np.inf, axis=-2)
+        data = np.where(data == -np.inf, 0, data)
+        data = reduce(lambda x, y: x + y, data, axis=-2) * (1 / div)
+    else:
+
+        def max_of(a, b):
+            if isinstance(a, FixedVariable):
+                return a.max_of(b)
+            if isinstance(b, FixedVariable):
+                return b.max_of(a)
+            return max(a, b)
+
+        data = reduce(lambda x, y: max_of(x, y), data, axis=-2)
+
+    if format == 'channels_first':
+        data = np.moveaxis(data, -1, 0)
+
     if isinstance(x, FixedVariableArray):
         return FixedVariableArray(data, solver_options)
     return data
