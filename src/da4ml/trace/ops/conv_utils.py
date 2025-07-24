@@ -40,7 +40,7 @@ def stride_arr(stride: int | tuple[int, ...], arr: np.ndarray):
         stride = (stride,) * (ndim - 1)
 
     _idx = tuple(slice(None, None, st) for st in stride)
-    return arr[*_idx]
+    return arr[_idx]
 
 
 TA = TypeVar('TA', 'FixedVariableArray', NDArray[np.integer | np.floating])
