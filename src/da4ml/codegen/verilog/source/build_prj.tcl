@@ -1,7 +1,7 @@
 set project_name "${PROJECT_NAME}"
 set device "${DEVICE}"
 
-set top_module "${project_name}_wrapper"
+set top_module "${project_name}"
 set output_dir "./output_${project_name}"
 
 create_project $project_name "${output_dir}/$project_name" -force -part $device
@@ -9,9 +9,10 @@ create_project $project_name "${output_dir}/$project_name" -force -part $device
 set_property TARGET_LANGUAGE Verilog [current_project]
 set_property DEFAULT_LIB work [current_project]
 
-read_verilog "${project_name}_wrapper.v"
 read_verilog "${project_name}.v"
 read_verilog "shift_adder.v"
+read_verilog "negative.v"
+read_verilog "mux.v"
 foreach file [glob -nocomplain "${project_name}_stage*.v"] {
     read_verilog $file
 }
