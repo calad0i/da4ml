@@ -26,8 +26,7 @@ file mkdir "${output_dir}/reports"
 
 # synth
 synth_design -top $top_module -mode out_of_context -retiming \
-    -flatten_hierarchy rebuilt -resource_sharing auto \
-    -directive AlternateRoutability
+    -flatten_hierarchy full -resource_sharing auto
 
 write_checkpoint -force "${output_dir}/${project_name}_post_synth.dcp"
 
@@ -35,15 +34,13 @@ report_timing_summary -file "${output_dir}/reports/${project_name}_post_synth_ti
 report_power -file "${output_dir}/reports/${project_name}_post_synth_power.rpt"
 report_utilization -file "${output_dir}/reports/${project_name}_post_synth_util.rpt"
 
-# set_property CARRY_REMAP 3 [get_cells -hier -filter {ref_name == CARRY8}]
-
-opt_design -directive ExploreSequentialArea
+# opt_design -directive ExploreSequentialArea
 opt_design -directive ExploreWithRemap
 
 report_design_analysis -congestion -file "${output_dir}/reports/${project_name}_post_opt_congestion.rpt"
 
 # place
-place_design -directive AltSpreadLogic_high -fanout_opt
+place_design -directive SSI_HighUtilSLRs -fanout_opt
 report_design_analysis -congestion -file "${output_dir}/reports/${project_name}_post_place_congestion_initial.rpt"
 
 phys_opt_design -directive AggressiveExplore
