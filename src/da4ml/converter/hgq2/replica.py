@@ -157,7 +157,7 @@ class MirrorQDense(MirrorOperationBase):
             dim = inputs._vars.ndim
             axis = op.axis
             assert axis != 0, 'Cannot normalizing on batch axis'
-            axis -= 1
+            axis = axis - 1 if axis >= 0 else dim + axis
             idx = ''.join(chr(ord('a') + i) for i in range(dim))
             eq = f'...{idx},{idx[axis]}->...{idx}'
         else:
