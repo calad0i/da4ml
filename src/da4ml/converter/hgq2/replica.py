@@ -381,3 +381,17 @@ class MirrorMoveaxis(MirrorOperationBase):
     def call(self, x: FixedVariableArray):
         source, destination = self.op.source, self.op.destination
         return np.moveaxis(x[None], source, destination)[0]  # type: ignore
+
+
+noop_layers = []
+for k, v in keras.layers.__dict__.items():
+    name = k.lower()
+    if 'dropout' in name or 'random' in name or 'noise' in name:
+        noop_layers.append(v)
+
+
+class MirrorNoOp(MirrorOperationBase):
+    handles = tuple(noop_layers)
+
+    def call(self, x: FixedVariableArray) -> FixedVariableArray:
+        return x
