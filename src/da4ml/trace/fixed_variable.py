@@ -317,7 +317,7 @@ class FixedVariable:
         round_mode: str = 'TRN',
     ):
         overflow_mode, round_mode = overflow_mode.upper(), round_mode.upper()
-        assert overflow_mode in ('WRAP', 'SAT', 'SAT_SM')
+        assert overflow_mode in ('WRAP', 'SAT', 'SAT_SYM')
         assert round_mode in ('TRN', 'RND')
 
         _k, _i, _f = self.kif
@@ -328,7 +328,7 @@ class FixedVariable:
         if f < _f and round_mode == 'RND':
             return (self + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
 
-        if overflow_mode in ('SAT', 'SAT_SM'):
+        if overflow_mode in ('SAT', 'SAT_SYM'):
             step = Decimal(2) ** -f
             _high = Decimal(2) ** i
             high = _high - step

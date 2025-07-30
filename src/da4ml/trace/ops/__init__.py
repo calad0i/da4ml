@@ -47,7 +47,7 @@ def quantize(
         return x.quantize(k=k, i=i, f=f, overflow_mode=overflow_mode, round_mode=round_mode)
     else:
         x = x.copy()
-        if overflow_mode in ('SAT', 'SAT_SM'):
+        if overflow_mode in ('SAT', 'SAT_SYM'):
             step = 2.0**-f
             _high = 2.0**i
             high = _high - step
