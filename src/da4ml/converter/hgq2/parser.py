@@ -1,11 +1,12 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, overload
 
 import keras
+import numpy as np
 from keras import KerasTensor, Operation
 
-from ...trace import FixedVariableArray, HWConfig
+from ...trace import FixedVariableArray, HWConfig, comb_trace
 from ...trace.fixed_variable_array import FixedVariableArrayInput
 from .replica import _registry
 
@@ -49,9 +50,22 @@ def replace_tensors(tensor_map: dict[KerasTensor, FixedVariableArray], obj: Any)
     return obj
 
 
+def _flatten_arr(args: Any) -> FixedVariableArray:
+    if isinstance(args, FixedVariableArray):
+        return np.ravel(args)  # type: ignore
+    if not isinstance(args, Sequence):
+        return None  # type: ignore
+    args = [_flatten_arr(a) for a in args]
+    args = [a for a in args if a is not None]
+    return np.concatenate(args)  # type: ignore
+
+
 def _apply_nn(
-    model: keras.Model, inputs: FixedVariableArray | Sequence[FixedVariableArray], verbose: bool = False
-) -> tuple[FixedVariableArray, ...]:
+    model: keras.Model,
+    inputs: FixedVariableArray | Sequence[FixedVariableArray],
+    verbose: bool = False,
+    dump: bool = False,
+) -> tuple[FixedVariableArray, ...] | dict[str, FixedVariableArray]:
     """
     Apply a keras model to a fixed variable array or a sequence of fixed variable arrays.
 
@@ -73,6 +87,7 @@ def _apply_nn(
     assert len(model.inputs) == len(inputs), f'Model has {len(model.inputs)} inputs, got {len(inputs)}'
     tensor_map = {keras_tensor: da_tensor for keras_tensor, da_tensor in zip(model.inputs, inputs)}
 
+    _inputs = _flatten_arr(inputs)
     for ops in parse_model(model):
         for op in ops:
             assert all(t in tensor_map for t in op.requires)
@@ -82,24 +97,58 @@ def _apply_nn(
                 continue
             mirror_op = _registry[op.operation.__class__](op.operation)
             if verbose:
-                print(f'Processing operation {op.operation.name} ({op.operation.__class__.__name__})')
+                print(f'Processing operation {op.operation.name} ({op.operation.__class__.__name__})', end='')
             outputs = mirror_op(*args, **kwargs)
             for keras_tensor, da_tensor in zip(op.produces, outputs):
                 tensor_map[keras_tensor] = da_tensor
+            if verbose:
+                _inp = _flatten_arr(args)
+                _out = _flatten_arr(outputs)
+                cost = comb_trace(_inputs, _out).cost - comb_trace(_inputs, _flatten_arr(_inp)).cost
+                print(f' cost: {cost}')
 
-    return tuple(tensor_map[keras_tensor] for keras_tensor in model.outputs)
+    if not dump:
+        return tuple(tensor_map[keras_tensor] for keras_tensor in model.outputs)
+    else:
+        return {k.name: v for k, v in tensor_map.items()}
 
 
-def trace_model(
+@overload
+def trace_model(  # type: ignore
     model: keras.Model,
     hwconf: HWConfig = HWConfig(1, -1, -1),
     solver_options: dict[str, Any] | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | None = None,
-) -> tuple[tuple[FixedVariableArray, ...], tuple[FixedVariableArray, ...]]:
+    dump: Literal[False] = False,
+) -> tuple[FixedVariableArray, FixedVariableArray]: ...
+
+
+@overload
+def trace_model(  # type: ignore
+    model: keras.Model,
+    hwconf: HWConfig = HWConfig(1, -1, -1),
+    solver_options: dict[str, Any] | None = None,
+    verbose: bool = False,
+    inputs: tuple[FixedVariableArray, ...] | None = None,
+    dump: Literal[True] = False,  # type: ignore
+) -> dict[str, FixedVariableArray]: ...
+
+
+def trace_model(  # type: ignore
+    model: keras.Model,
+    hwconf: HWConfig = HWConfig(1, -1, -1),
+    solver_options: dict[str, Any] | None = None,
+    verbose: bool = False,
+    inputs: tuple[FixedVariableArray, ...] | None = None,
+    dump=False,
+):
     if inputs is None:
         inputs = tuple(
             FixedVariableArrayInput(inp.shape[1:], hwconf=hwconf, solver_options=solver_options) for inp in model.inputs
         )
-    outputs = _apply_nn(model, inputs, verbose=verbose)
-    return inputs, outputs
+    outputs = _apply_nn(model, inputs, verbose=verbose, dump=dump)
+    if not dump:
+        return _flatten_arr(inputs), _flatten_arr(outputs)
+    else:
+        return {k: _flatten_arr(v) for k, v in outputs.items()}  # type: ignore
