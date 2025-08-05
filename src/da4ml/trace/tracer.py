@@ -17,8 +17,7 @@ def _recursive_gather(v: FixedVariable, gathered: dict[UUID, FixedVariable]):
         return
     assert v._from is not None
     for _v in v._from:
-        if _v.id not in gathered:
-            _recursive_gather(_v, gathered)
+        _recursive_gather(_v, gathered)
     gathered[v.id] = v
 
 
@@ -26,13 +25,24 @@ def gather_variables(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVar
     gathered = {v.id: v for v in inputs}
     for o in outputs:
         _recursive_gather(o, gathered)
-
     variables = list(gathered.values())
 
     N = len(variables)
     _index = sorted(list(range(N)), key=lambda i: variables[i].latency * N + i)
     variables = [variables[i] for i in _index]
-    index = {variables[i].id: i for i in range(N)}
+
+    # Remove variables with 0 refcount
+    refcount = {v.id: 0 for v in variables}
+    for v in variables:
+        if v in inputs:
+            continue
+        for _v in v._from:
+            refcount[_v.id] += 1
+    for v in outputs:
+        refcount[v.id] += 1
+
+    variables = [v for v in variables if refcount[v.id] > 0]
+    index = {variables[i].id: i for i in range(len(variables))}
 
     return variables, index
 
@@ -44,7 +54,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     for i, v in enumerate(variables):
         if v.id in inp_uuids and v.opr != 'const':
             id0 = inp_uuids[v.id]
-            ops.append(Op(id0, -1, -1, 0, v.unscaled.qint, v.latency, v.cost))
+            ops.append(Op(id0, -1, -1, 0, v.unscaled.qint, v.latency, 0.0))
             continue
         if v.opr == 'new':
             raise NotImplementedError('Operation "new" is only expected in the input list')
@@ -147,6 +157,6 @@ def comb_trace(inputs, outputs):
     for i in range(len(ops)):
         if ref_count[i] == 0:
             op = ops[i]
-            sol.ops[i] = Op(-1, -1, op[2], 0, QInterval(0, 0, 1), op[5], op[6])
+            sol.ops[i] = Op(-1, -1, 5, 0, QInterval(0, 0, 1), op[5], 0.0)
 
     return sol

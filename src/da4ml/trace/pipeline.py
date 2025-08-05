@@ -38,7 +38,7 @@ def _get_new_idx(
     out_idxd: dict[int, list[int]],
     ops: list[Op],
     stage: int,
-    latency_cutoff: int,
+    latency_cutoff: float,
 ):
     if idx < 0:
         return idx
@@ -60,7 +60,7 @@ def _get_new_idx(
     return p0_idx
 
 
-def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True) -> CascadedSolution:
+def to_pipeline(sol: Solution, latency_cutoff: float, retiming=True, verbose=True) -> CascadedSolution:
     """Split the record into multiple stages based on the latency of the operations.
     Only useful for HDL generation.
 
@@ -68,7 +68,7 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
     ----------
     sol : Solution
         The solution to be split into multiple stages.
-    latency_cutoff : int
+    latency_cutoff : float
         The latency cutoff for splitting the operations.
     retiming : bool
         Whether to retime the solution after splitting. Default is True.
@@ -126,10 +126,10 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
             locator.append({stage: len(opd[stage]) - 1})
     sols = []
     max_stage = max(opd.keys())
+    n_in = sol.shape[0]
     for i, stage in enumerate(opd.keys()):
         _ops = opd[stage]
         _out_idx = out_idxd[stage]
-        n_in = sum(op.opcode == -1 for op in _ops)
         n_out = len(_out_idx)
 
         if i == max_stage:
@@ -150,6 +150,8 @@ def to_pipeline(sol: Solution, latency_cutoff: int, retiming=True, verbose=True)
             adder_size=sol.adder_size,
         )
         sols.append(_sol)
+
+        n_in = n_out
     csol = CascadedSolution(tuple(sols))
 
     if retiming:

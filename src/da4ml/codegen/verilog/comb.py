@@ -9,7 +9,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
     ops = sol.ops
     kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     widths = list(map(sum, kifs))
-    inp_kifs = [_minimal_kif(op.qint) for op in ops if op.opcode == -1]
+    inp_kifs = [_minimal_kif(qint) for qint in sol.inp_qint]
     inp_widths = list(map(sum, inp_kifs))
     _inp_widths = np.cumsum([0] + inp_widths)
     inp_idxs = np.stack([_inp_widths[1:] - 1, _inp_widths[:-1]], axis=1)

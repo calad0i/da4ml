@@ -154,6 +154,7 @@ class FixedVariable:
         return f'({self._factor}) FixedVariable({self.low}, {self.high}, {self.step})'
 
     def __neg__(self):
+        opr = self.opr if self.low != self.high else 'const'
         return FixedVariable(
             -self.high,
             -self.low,
@@ -162,7 +163,7 @@ class FixedVariable:
             _factor=-self._factor,
             latency=self.latency,
             cost=self.cost,
-            opr=self.opr,
+            opr=opr,
             _id=self.id,
             _data=self._data,
             hwconf=self.hwconf,
@@ -244,14 +245,14 @@ class FixedVariable:
         high = max(self.low * other, self.high * other)
         step = abs(self.step * other)
         _factor = self._factor * other
-
+        opr = self.opr if low != high else 'const'
         return FixedVariable(
             low,
             high,
             step,
             _from=self._from,
             _factor=_factor,
-            opr=self.opr,
+            opr=opr,
             latency=self.latency,
             cost=self.cost,
             _id=self.id,
@@ -465,13 +466,35 @@ class FixedVariableInput(FixedVariable):
         self.cost = 0.0
 
     def __add__(self, other):
+        if other == 0:
+            return self
         raise ValueError('Cannot operate on unquantized input variable')
 
     def __sub__(self, other):
+        if other == 0:
+            return self
         raise ValueError('Cannot operate on unquantized input variable')
 
     def __neg__(self):
         raise ValueError('Cannot negate unquantized input variable')
+
+    def __mul__(self, other):
+        if other == 1:
+            return self
+        raise ValueError('Cannot multiply unquantized input variable')
+
+    def __rmul__(self, other):
+        if other == 1:
+            return self
+        raise ValueError('Cannot multiply unquantized input variable')
+
+    def __radd__(self, other):
+        if other == 0:
+            return self
+        raise ValueError('Cannot add unquantized input variable')
+
+    def __rsub__(self, other):
+        raise ValueError('Cannot subtract unquantized input variable')
 
     def relu(self, *args, **kwargs):
         raise ValueError('Cannot apply relu on unquantized input variable')
