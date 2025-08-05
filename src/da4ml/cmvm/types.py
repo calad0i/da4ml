@@ -321,7 +321,7 @@ class Solution(NamedTuple):
                 case 4:  # const addition
                     bias = op.data * op.qint.step
                     buf[i] = buf[op.id0] + bias
-                case 5:
+                case 5:  # const definition
                     buf[i] = op.data * op.qint.step  # const definition
                 case 6 | -6:  # MSB Mux
                     id_c = op.data & 0xFFFFFFFF
@@ -436,7 +436,12 @@ class Solution(NamedTuple):
     @property
     def inp_qint(self):
         """Quantization intervals of the input elements."""
-        return [op.qint for op in self.ops if op.opcode == -1]
+        qints = [QInterval(0.0, 0.0, 1.0) for _ in range(self.shape[0])]
+        for op in self.ops:
+            if op.opcode != -1:
+                continue
+            qints[op.id0] = op.qint
+        return qints
 
     def save(self, path: str | Path):
         """Save the solution to a file."""
