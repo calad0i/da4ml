@@ -1,10 +1,13 @@
+import random
 from decimal import Decimal
 from math import ceil, floor, log2
 from typing import NamedTuple
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from ..cmvm.core import cost_add
 from ..cmvm.types import QInterval
+
+rd = random.SystemRandom()
 
 
 class HWConfig(NamedTuple):
@@ -43,13 +46,15 @@ class FixedVariable:
     ) -> None:
         assert low <= high, f'low {low} must be less than high {high}'
 
+        if low != high and opr == 'const':
+            raise ValueError('Constant variable must have low == high')
+
         if low == high and opr != 'new':
             opr = 'const'
             _factor = _factor
             _from = ()
 
         low, high, step = Decimal(low), Decimal(high), Decimal(step)
-        low, high = floor(low / step) * step, ceil(high / step) * step
         self.low = low
         self.high = high
         self.step = step
@@ -58,7 +63,7 @@ class FixedVariable:
         opr = opr
         self.opr = opr
         self._data = _data
-        self.id = _id or uuid4()
+        self.id = _id or UUID(int=rd.getrandbits(128), version=4)
         self.hwconf = hwconf
 
         if opr == 'cadd':
@@ -321,10 +326,13 @@ class FixedVariable:
         assert overflow_mode in ('WRAP', 'SAT', 'SAT_SYM')
         assert round_mode in ('TRN', 'RND')
 
+        if k + i + f <= 0:
+            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
         _k, _i, _f = self.kif
 
         if k >= _k and i >= _i and f >= _f:
-            return self
+            if overflow_mode != 'SAT_SYM' or i > _i:
+                return self
 
         if f < _f and round_mode == 'RND':
             return (self + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
@@ -459,7 +467,7 @@ class FixedVariableInput(FixedVariable):
         self._from: tuple[FixedVariable, ...] = ()
         self.opr = 'new'
         self._data = None
-        self.id = uuid4()
+        self.id = UUID(int=rd.getrandbits(128), version=4)
         self.hwconf = hwconf
 
         self.latency = latency if latency is not None else 0.0

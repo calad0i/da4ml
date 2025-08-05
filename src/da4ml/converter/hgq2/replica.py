@@ -393,5 +393,6 @@ for k, v in keras.layers.__dict__.items():
 class MirrorNoOp(MirrorOperationBase):
     handles = tuple(noop_layers)
 
-    def call(self, x: FixedVariableArray) -> FixedVariableArray:
+    def call(self, x: FixedVariableArray, training=False) -> FixedVariableArray:
+        assert not training, 'Training mode is not supported in mirror operation'
         return x

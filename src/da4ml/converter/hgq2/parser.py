@@ -88,6 +88,7 @@ def _apply_nn(
     tensor_map = {keras_tensor: da_tensor for keras_tensor, da_tensor in zip(model.inputs, inputs)}
 
     _inputs = _flatten_arr(inputs)
+
     for ops in parse_model(model):
         for op in ops:
             assert all(t in tensor_map for t in op.requires)
@@ -102,10 +103,8 @@ def _apply_nn(
             for keras_tensor, da_tensor in zip(op.produces, outputs):
                 tensor_map[keras_tensor] = da_tensor
             if verbose:
-                _inp = _flatten_arr(args)
-                _out = _flatten_arr(outputs)
-                cost = comb_trace(_inputs, _out).cost - comb_trace(_inputs, _flatten_arr(_inp)).cost
-                print(f' cost: {cost}')
+                cost = comb_trace(_inputs, _flatten_arr(outputs)).cost
+                print(f' cumcost: {cost}')
 
     if not dump:
         return tuple(tensor_map[keras_tensor] for keras_tensor in model.outputs)
