@@ -10,7 +10,7 @@ constexpr bool _openmp = false;
 
 template <typename CONFIG_T>
 std::enable_if_t<CONFIG_T::II != 0> _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
-    typename CONFIG_T::dut_t *dut = new typename CONFIG_T::dut_t;
+    auto dut = std::make_unique<typename CONFIG_T::dut_t>();
 
     size_t clk_req = n_samples * CONFIG_T::II + CONFIG_T::latency + 1;
 
@@ -18,14 +18,18 @@ std::enable_if_t<CONFIG_T::II != 0> _inference(int32_t *c_inp, int32_t *c_out, s
         size_t t_out = t_inp - CONFIG_T::latency - 1;
 
         if (t_inp < n_samples * CONFIG_T::II && t_inp % CONFIG_T::II == 0) {
-            write_input<CONFIG_T::N_inp, CONFIG_T::max_inp_bw>(dut->inp, &c_inp[t_inp / CONFIG_T::II * CONFIG_T::N_inp]);
+            write_input<CONFIG_T::N_inp, CONFIG_T::max_inp_bw>(
+                dut->inp, &c_inp[t_inp / CONFIG_T::II * CONFIG_T::N_inp]
+            );
         }
 
         dut->clk = 0;
         dut->eval();
 
         if (t_inp > CONFIG_T::latency && t_out % CONFIG_T::II == 0) {
-            read_output<CONFIG_T::N_out, CONFIG_T::max_out_bw>(dut->out, &c_out[t_out / CONFIG_T::II * CONFIG_T::N_out]);
+            read_output<CONFIG_T::N_out, CONFIG_T::max_out_bw>(
+                dut->out, &c_out[t_out / CONFIG_T::II * CONFIG_T::N_out]
+            );
         }
 
         dut->clk = 1;
@@ -33,12 +37,11 @@ std::enable_if_t<CONFIG_T::II != 0> _inference(int32_t *c_inp, int32_t *c_out, s
     }
 
     dut->final();
-    delete dut;
 }
 
 template <typename CONFIG_T>
 std::enable_if_t<CONFIG_T::II == 0> _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
-    typename CONFIG_T::dut_t *dut = new typename CONFIG_T::dut_t;
+    auto dut = std::make_unique<typename CONFIG_T::dut_t>();
 
     for (size_t i = 0; i < n_samples; ++i) {
         write_input<CONFIG_T::N_inp, CONFIG_T::max_inp_bw>(dut->inp, &c_inp[i * CONFIG_T::N_inp]);
@@ -47,7 +50,6 @@ std::enable_if_t<CONFIG_T::II == 0> _inference(int32_t *c_inp, int32_t *c_out, s
     }
 
     dut->final();
-    delete dut;
 }
 
 template <typename CONFIG_T> void batch_inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {

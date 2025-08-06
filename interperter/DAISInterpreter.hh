@@ -5,11 +5,9 @@
 #include <string>
 #include <vector>
 
-namespace dais
-{
+namespace dais {
 
-    struct DType
-    {
+    struct DType {
         int32_t is_signed;
         int32_t integers;
         int32_t fractionals;
@@ -19,8 +17,7 @@ namespace dais
         int32_t int_min() const { return is_signed ? -(1 << (width() - 1)) : 0; }
     };
 
-    struct alignas(4) Op
-    {
+    struct alignas(4) Op {
         int32_t opcode;
         int32_t id0;
         int32_t id1;
@@ -29,15 +26,14 @@ namespace dais
         DType dtype; // (signed, integer_bits, fractional_bits)
     };
 
-    class DAISInterpreter
-    {
+    class DAISInterpreter {
       private:
         int32_t n_in, n_out, n_ops;
         int32_t max_ops_width = 0, max_inp_width = 0, max_out_width = 0;
         std::vector<int32_t> inp_shift;
         std::vector<int32_t> out_idxs;
         std::vector<int32_t> out_shifts;
-        std::vector<int8_t> out_negs;
+        std::vector<int32_t> out_negs;
         std::vector<Op> ops;
 
         void validate() const;
