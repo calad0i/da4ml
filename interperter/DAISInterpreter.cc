@@ -4,7 +4,10 @@
 #include <fstream>
 #include <iostream>
 #include <cmath>
+
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 
 namespace dais {
 
@@ -281,6 +284,7 @@ extern "C"
         }
     }
 
+#ifdef _OPENMP
     void run_interp_openmp(const int32_t *data, double *inputs, double *outputs, size_t n_samples) {
         int32_t n_in = data[0];
         int32_t n_out = data[1];
@@ -302,4 +306,5 @@ extern "C"
             run_interp(data, &inputs[offset_in], &outputs[offset_out], n_samples_this_thread);
         }
     }
+#endif
 }
