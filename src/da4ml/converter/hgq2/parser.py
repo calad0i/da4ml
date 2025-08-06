@@ -118,7 +118,7 @@ def trace_model(  # type: ignore
     hwconf: HWConfig = HWConfig(1, -1, -1),
     solver_options: dict[str, Any] | None = None,
     verbose: bool = False,
-    inputs: tuple[FixedVariableArray, ...] | None = None,
+    inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
     dump: Literal[False] = False,
 ) -> tuple[FixedVariableArray, FixedVariableArray]: ...
 
@@ -129,7 +129,7 @@ def trace_model(  # type: ignore
     hwconf: HWConfig = HWConfig(1, -1, -1),
     solver_options: dict[str, Any] | None = None,
     verbose: bool = False,
-    inputs: tuple[FixedVariableArray, ...] | None = None,
+    inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
     dump: Literal[True] = False,  # type: ignore
 ) -> dict[str, FixedVariableArray]: ...
 
