@@ -213,6 +213,8 @@ class FixedVariableArray:
         return FixedVariableArray(self._vars - other, self.solver_options)
 
     def __mul__(self, other):
+        if isinstance(other, FixedVariableArray):
+            return FixedVariableArray(self._vars * other._vars, self.solver_options)
         return FixedVariableArray(self._vars * other, self.solver_options)
 
     def __truediv__(self, other):
@@ -241,9 +243,9 @@ class FixedVariableArray:
 
     def quantize(
         self,
-        k: NDArray[np.integer] | None = None,
-        i: NDArray[np.integer] | None = None,
-        f: NDArray[np.integer] | None = None,
+        k: NDArray[np.integer] | np.integer | int | None = None,
+        i: NDArray[np.integer] | np.integer | int | None = None,
+        f: NDArray[np.integer] | np.integer | int | None = None,
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
     ):

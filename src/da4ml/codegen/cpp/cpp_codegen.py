@@ -86,7 +86,10 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
                 sign = '-' if op.opcode == -6 else ''
                 ref1 = f'v{op.id1}' if shift == 0 else f'bit_shift<{shift}>(v{op.id1})'
                 val = f'{ref_k} ? {_type}({ref0}) : {_type}({sign}{ref1})'
-
+            case 7:
+                # Multiplication
+                ref1 = f'v{op.id1}'
+                val = f'{ref0} * {ref1}'
             case _:
                 raise ValueError(f'Unsupported opcode: {op.opcode}')
 

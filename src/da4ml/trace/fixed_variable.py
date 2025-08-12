@@ -1,4 +1,5 @@
 import random
+from collections.abc import Generator
 from decimal import Decimal
 from math import ceil, floor, log2
 from typing import NamedTuple
@@ -29,6 +30,23 @@ def _const_f(const: float | Decimal):
     return _high
 
 
+def to_csd_powers(x: float) -> Generator[float, None, None]:
+    if x == 0:
+        return
+    f = _const_f(abs(x))
+    x = x * 2**f
+    s = 2**-f
+    N = ceil(log2(abs(x) * 1.5 + 1e-19))
+    for n in range(N - 1, -1, -1):
+        _2pn = 2**n
+        thres = _2pn / 1.5
+        bit = int(x > thres) - int(x < -thres)
+        v = _2pn * bit
+        x -= v
+        if v != 0:
+            yield v * s
+
+
 class FixedVariable:
     def __init__(
         self,
@@ -49,9 +67,8 @@ class FixedVariable:
         if low != high and opr == 'const':
             raise ValueError('Constant variable must have low == high')
 
-        if low == high and opr != 'new':
+        if low == high:
             opr = 'const'
-            _factor = _factor
             _from = ()
 
         low, high, step = Decimal(low), Decimal(high), Decimal(step)
@@ -86,7 +103,7 @@ class FixedVariable:
     def get_cost_and_latency(self):
         if self.opr == 'const':
             return 0.0, 0.0
-        if self.opr in ('vadd', 'cadd', 'min', 'max'):
+        if self.opr in ('vadd', 'cadd', 'min', 'max', 'vmul'):
             adder_size = self.hwconf.adder_size
             carry_size = self.hwconf.carry_size
             latency_cutoff = self.hwconf.latency_cutoff
@@ -97,13 +114,25 @@ class FixedVariable:
                 int0, int1 = v0.qint, v1.qint
                 base_latency = max(v0.latency, v1.latency)
                 dlat, _cost = cost_add(int0, int1, 0, False, adder_size, carry_size)
-            else:
+            elif self.opr == 'cadd':
                 assert len(self._from) == 1
                 assert self._data is not None, 'cadd must have data'
                 _f = _const_f(self._data)
                 _cost = float(ceil(log2(abs(self._data) + Decimal(2) ** -_f))) + _f
                 base_latency = self._from[0].latency
                 dlat = 0.0
+            elif self.opr == 'vmul':
+                assert len(self._from) == 2
+                v0, v1 = self._from
+                b0, b1 = sum(v0.kif), sum(v1.kif)
+                int0, int1 = v0.qint, v1.qint
+                dlat0, _cost0 = cost_add(int0, int0, 0, False, adder_size, carry_size)
+                dlat1, _cost1 = cost_add(int1, int1, 0, False, adder_size, carry_size)
+                dlat = max(dlat0 * b1, dlat1 * b0)
+                _cost = min(_cost0 * b1, _cost1 * b0)
+                base_latency = max(v0.latency, v1.latency)
+            else:
+                raise NotImplementedError(f'Operation {self.opr} is unknown')
 
             _latency = dlat + base_latency
             if latency_cutoff > 0 and ceil(_latency / latency_cutoff) > ceil(base_latency / latency_cutoff):
@@ -112,6 +141,7 @@ class FixedVariable:
                     dlat <= latency_cutoff
                 ), f'Latency of an atomic operation {dlat} is larger than the pipelining latency cutoff {latency_cutoff}'
                 _latency = ceil(base_latency / latency_cutoff) * latency_cutoff + dlat
+
         elif self.opr in ('relu', 'wrap'):
             assert len(self._from) == 1
             _latency = self._from[0].latency
@@ -201,7 +231,7 @@ class FixedVariable:
             hwconf=self.hwconf,
         )
 
-    def _const_add(self, other: float | Decimal | None):
+    def _const_add(self, other: float | Decimal | None) -> 'FixedVariable':
         if other is None:
             return self
         if not isinstance(other, (int, float, Decimal)):
@@ -235,22 +265,49 @@ class FixedVariable:
     def __sub__(self, other: 'FixedVariable|int|float|Decimal'):
         return self + (-other)
 
-    def __mul__(
-        self,
-        other: 'float|Decimal',
-    ):
+    def __mul__(self, other: 'FixedVariable|int|float|Decimal') -> 'FixedVariable':
         if other == 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
-        assert log2(abs(other)) % 1 == 0, 'Only support pow2 multiplication'
+        if isinstance(other, FixedVariable):
+            return self._var_mul(other)
 
+        if log2(abs(other)) % 1 == 0:
+            return self._pow2_mul(other)
+
+        variables = [self._pow2_mul(v) for v in to_csd_powers(float(other))]
+        while len(variables) > 1:
+            v = variables.pop() + variables.pop()
+            variables.append(v)
+        return variables[0]
+
+    def _var_mul(self, other: 'FixedVariable') -> 'FixedVariable':
+        a, b, c, d = self.high * other.low, self.low * other.high, self.high * other.high, self.low * other.low
+        low = min(a, b, c, d)
+        high = max(a, b, c, d)
+        step = self.step * other.step
+        _factor = self._factor * other._factor
+        opr = 'vmul'
+        return FixedVariable(
+            low,
+            high,
+            step,
+            _from=(self, other),
+            _factor=_factor,
+            opr=opr,
+        )
+
+    def _pow2_mul(
+        self,
+        other: float | Decimal,
+    ):
         other = Decimal(other)
 
         low = min(self.low * other, self.high * other)
         high = max(self.low * other, self.high * other)
         step = abs(self.step * other)
         _factor = self._factor * other
-        opr = self.opr if low != high else 'const'
+        opr = self.opr
         return FixedVariable(
             low,
             high,

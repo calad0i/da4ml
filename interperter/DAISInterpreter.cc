@@ -193,6 +193,7 @@ namespace dais {
                     ops[i].dtype
                 );
                 break;
+            case 7: buffer[i] = buffer[op.id0] * buffer[op.id1]; break;
             default:
                 throw std::runtime_error(
                     "Unknown opcode: " + std::to_string(op.opcode) + " at index " + std::to_string(i)

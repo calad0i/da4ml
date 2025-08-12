@@ -340,6 +340,9 @@ class Solution(NamedTuple):
                         else:
                             _k, _i, _f = _minimal_kif(qint_k)
                             buf[i] = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
+                case 7:
+                    v0, v1 = buf[op.id0], buf[op.id1]
+                    buf[i] = v0 * v1
                 case _:
                     raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
@@ -370,6 +373,8 @@ class Solution(NamedTuple):
                     case 6 | -6:
                         _sign = '-' if op.opcode == -6 else ''
                         op_str = f'msb(buf[{op.data}]) ? buf[{op.id0}] : {_sign}buf[{op.id1}]'
+                    case 7:
+                        op_str = f'buf[{op.id0}] * buf[{op.id1}]'
                     case _:
                         raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 

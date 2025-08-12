@@ -31,6 +31,17 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
             case -1:  # Input marker
                 i0, i1 = inp_idxs[op.id0]
                 line = f'{_def} assign {v} = inp[{i0}:{i1}];'
+
+            case 0 | 1:  # Common a+/-b<<shift oprs
+                p0, p1 = kifs[op.id0], kifs[op.id1]  # precision -> keep_neg, integers (no sign), fractional
+
+                bw0, bw1 = widths[op.id0], widths[op.id1]  # width
+                s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
+                shift = op.data + f0 - f1
+                v0, v1 = f'v{op.id0}[{bw0 - 1}:0]', f'v{op.id1}[{bw1 - 1}:0]'
+
+                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {op.opcode}) op_{i} ({v0}, {v1}, {v});'
+
             case 2 | -2:  # ReLU
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
@@ -93,16 +104,6 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                     num = 2**bw + num
                 line = f"{_def} assign {v} = '{bin(num)[1:]};"
 
-            case 0 | 1:  # Common a+/-b<<shift oprs
-                p0, p1 = kifs[op.id0], kifs[op.id1]  # precision -> keep_neg, integers (no sign), fractional
-
-                bw0, bw1 = widths[op.id0], widths[op.id1]  # width
-                s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
-                shift = op.data + f0 - f1
-                v0, v1 = f'v{op.id0}[{bw0 - 1}:0]', f'v{op.id1}[{bw1 - 1}:0]'
-
-                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {op.opcode}) op_{i} ({v0}, {v1}, {v});'
-
             case 6 | -6:  # MSB Muxing
                 k, a, b = op.data & 0xFFFFFFFF, op.id0, op.id1
                 p0, p1 = kifs[a], kifs[b]
@@ -115,6 +116,13 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 vk, v0, v1 = f'v{k}[{bwk - 1}]', f'v{a}[{bw0 - 1}:0]', f'v{b}[{bw1 - 1}:0]'
 
                 line = f'{_def} mux #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {inv}) op_{i} ({vk}, {v0}, {v1}, {v});'
+            case 7:  # Multiplication
+                bw0, bw1 = widths[op.id0], widths[op.id1]  # width
+                s0, s1 = int(kifs[op.id0][0]), int(kifs[op.id1][0])
+                v0, v1 = f'v{op.id0}[{bw0 - 1}:0]', f'v{op.id1}[{bw1 - 1}:0]'
+
+                line = f'{_def} multiplier #({bw0}, {bw1}, {s0}, {s1}, {bw}) op_{i} ({v0}, {v1}, {v});'
+
             case _:
                 raise ValueError(f'Unknown opcode {op.opcode} for operation {i} ({op})')
 
