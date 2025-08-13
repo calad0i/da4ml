@@ -21,6 +21,8 @@ class OpObj:
 
 
 def parse_model(model: keras.Model):
+    if isinstance(model, keras.Sequential):
+        model = model._functional
     operators: dict[int, list[OpObj]] = {}
     for depth, nodes in model._nodes_by_depth.items():
         _oprs = []

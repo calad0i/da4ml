@@ -86,6 +86,21 @@ class FixedVariableArray:
             assert bind.arguments.get('out', None) is None, 'Output argument is not supported'
             return einsum(eq, *operands)
 
+        if func in (np.dot, np.matmul):
+            assert len(args) in (2, 3), 'Dot function requires exactly two or three arguments'
+
+            assert len(args) == 2
+            a, b = args
+            if not isinstance(a, FixedVariableArray):
+                a = np.array(a)
+            if not isinstance(b, FixedVariableArray):
+                b = np.array(b)
+            if a.shape[-1] == b.shape[0]:
+                return a @ b
+
+            assert a.size == 1 or b.size == 1, f'Error in dot product: {a.shape} @ {b.shape}'
+            return a * b
+
         args, kwargs = to_raw_arr(args), to_raw_arr(kwargs)
         return FixedVariableArray(
             func(*args, **kwargs),
@@ -155,7 +170,23 @@ class FixedVariableArray:
         return cls.from_lhs(low, high, step, hwconf, latency, solver_options)
 
     def __matmul__(self, other):
-        assert isinstance(other, np.ndarray)
+        if isinstance(other, FixedVariableArray):
+            other = other._vars
+        if not isinstance(other, np.ndarray):
+            other = np.array(other)
+        if any(isinstance(x, FixedVariable) for x in other.ravel()):
+            mat0, mat1 = self._vars, other
+            shape = mat0.shape[:-1] + mat1.shape[1:]
+            mat0, mat1 = mat0.reshape((-1, mat0.shape[-1])), mat1.reshape((mat1.shape[0], -1))
+            _shape = (mat0.shape[0], mat1.shape[1])
+            _vars = np.empty(_shape, dtype=object)
+            for i in range(mat0.shape[0]):
+                for j in range(mat1.shape[1]):
+                    vec0 = mat0[i]
+                    vec1 = mat1[:, j]
+                    _vars[i, j] = reduce(lambda x, y: x + y, vec0 * vec1)
+            return FixedVariableArray(_vars.reshape(shape), self.solver_options)
+
         kwargs = (self.solver_options or {}).copy()
         shape0, shape1 = self.shape, other.shape
         assert shape0[-1] == shape1[0], f'Matrix shapes do not match: {shape0} @ {shape1}'
@@ -180,9 +211,9 @@ class FixedVariableArray:
 
     def __rmatmul__(self, other):
         mat1 = np.moveaxis(other, -1, 0)
-        mat0 = np.moveaxis(self._vars, 0, -1)
+        mat0 = np.moveaxis(self, 0, -1)  # type: ignore
         ndim0, ndim1 = mat0.ndim, mat1.ndim
-        r = FixedVariableArray(mat0, self.solver_options) @ mat1
+        r = mat0 @ mat1
 
         _axes = tuple(range(0, ndim0 + ndim1 - 2))
         axes = _axes[ndim0 - 1 :] + _axes[: ndim0 - 1]
@@ -232,6 +263,11 @@ class FixedVariableArray:
         max_lat = max(v.latency for v in self._vars.ravel())
         return f'FixedVariableArray(shape={shape}, hwconf={hwconf_str}, latency={max_lat})'
 
+    def __pow__(self, power: int | float):
+        _power = int(power)
+        assert _power == power, 'Power must be an integer'
+        return FixedVariableArray(self._vars**_power, self.solver_options)
+
     def relu(self, i: NDArray[np.integer] | None = None, f: NDArray[np.integer] | None = None, round_mode: str = 'TRN'):
         shape = self._vars.shape
         i = np.broadcast_to(i, shape) if i is not None else np.full(shape, None)
@@ -277,6 +313,10 @@ class FixedVariableArray:
     @property
     def size(self):
         return self._vars.size
+
+    @property
+    def ndim(self):
+        return self._vars.ndim
 
     @property
     def kif(self):

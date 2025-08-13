@@ -7,14 +7,21 @@ import hgq
 import keras
 import numpy as np
 from hgq.layers import (
+    QAdd,
     QBatchNormalization,
     QBatchNormDense,
     QConv1D,
     QConv2D,
     QConv3D,
     QDense,
+    QDot,
+    QEinsum,
     QEinsumDense,
     QEinsumDenseBatchnorm,
+    QMaximum,
+    QMeanPow2,
+    QMinimum,
+    QSubtract,
     QSum,
 )
 from hgq.layers.core.base import MultipleQuantizers, Quantizer
@@ -23,10 +30,19 @@ from keras.layers import ReLU
 from keras.src.layers.pooling.base_global_pooling import BaseGlobalPooling
 from keras.src.layers.pooling.base_pooling import BasePooling
 from keras.src.ops.numpy import (
+    Abs,
+    Absolute,
     Add,
     Concatenate,
     Divide,
+    Dot,
+    Einsum,
     GetItem,
+    Matmul,
+    Max,
+    Maximum,
+    Min,
+    Minimum,
     Moveaxis,
     Multiply,
     Ravel,
@@ -49,13 +65,13 @@ def mirror_quantizer(q: Quantizer, v: FixedVariableArray) -> FixedVariableArray:
     return quantize(v, k, i, f, overflow_mode=overflow_mode, round_mode=round_mode)
 
 
-_registry: dict[type, 'type[MirrorOperationBase]'] = {}
+_registry: dict[type, 'type[ReplayOperationBase]'] = {}
 
 
-class MirrorOperationMeta(type):
+class ReplayOperationMeta(type):
     def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, typing.Any]):
         cls = super().__new__(mcs, name, bases, namespace)
-        if name == 'MirrorOperationBase':
+        if name == 'ReplayOperationBase':
             return cls
 
         handles: type | tuple[type, ...] = namespace['handles']
@@ -67,7 +83,7 @@ class MirrorOperationMeta(type):
         return cls
 
 
-class MirrorOperationBase(metaclass=MirrorOperationMeta):
+class ReplayOperationBase(metaclass=ReplayOperationMeta):
     handles: tuple[type, ...] = ()
 
     def __init__(self, layer: 'keras.Operation'):
@@ -124,7 +140,7 @@ class MirrorOperationBase(metaclass=MirrorOperationMeta):
         return outputs
 
 
-class MirrorQuantizer(MirrorOperationBase):
+class ReplayQuantizer(ReplayOperationBase):
     handles = (Quantizer,)
 
     def __init__(self, op: 'Quantizer'):
@@ -135,8 +151,8 @@ class MirrorQuantizer(MirrorOperationBase):
         return mirror_quantizer(self.op, inputs)
 
 
-class MirrorQDense(MirrorOperationBase):
-    handles = (QDense, QEinsumDense, QEinsumDenseBatchnorm, QBatchNormDense, QBatchNormalization, keras.layers.EinsumDense)
+class ReplayQDense(ReplayOperationBase):
+    handles = (QDense, QEinsumDense, QEinsumDenseBatchnorm, QBatchNormDense, keras.layers.EinsumDense)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
         op = self.op
@@ -152,14 +168,6 @@ class MirrorQDense(MirrorOperationBase):
             qkernel = op.kernel
             qbias = op.bias
             eq = op.equation
-        elif isinstance(op, QBatchNormalization):
-            qkernel, qbias = op.qscaler_and_qoffset
-            dim = inputs._vars.ndim
-            axis = op.axis
-            assert axis != 0, 'Cannot normalizing on batch axis'
-            axis = axis - 1 if axis >= 0 else dim + axis
-            idx = ''.join(chr(ord('a') + i) for i in range(dim))
-            eq = f'...{idx},{idx[axis]}->...{idx}'
         else:
             raise TypeError(f'Unsupported layer type: {type(op)}')
 
@@ -168,7 +176,28 @@ class MirrorQDense(MirrorOperationBase):
         return (einsum(eq, inputs[None], qkernel) + qbias)[0]
 
 
-class MirrorQConv(MirrorOperationBase):
+class ReplayQDot(ReplayOperationBase):
+    handles = (QDot, keras.layers.Dot)
+
+    def call(self, inputs: tuple[FixedVariableArray, FixedVariableArray]) -> FixedVariableArray:
+        layer: QDot | keras.layers.Dot = self.op
+        assert not layer.normalize, 'normalize is not supported in mirror operation'
+
+        axes = layer.axes
+        return np.dot(inputs[0][None], inputs[1][None], axes=axes)[0]  # type: ignore
+
+
+class ReplayQBatchNormalization(ReplayOperationBase):
+    handles = (QBatchNormalization,)
+
+    def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
+        layer: QBatchNormalization = self.op
+        scale, bias = map(np.array, layer.qscaler_and_qoffset)
+        shape = layer._shape
+        return inputs * scale.reshape(shape) + bias.reshape(shape)
+
+
+class ReplayQConv(ReplayOperationBase):
     handles = (QConv1D, QConv2D, QConv3D)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
@@ -190,14 +219,14 @@ class MirrorQConv(MirrorOperationBase):
         return outputs
 
 
-class MirrorReLU(MirrorOperationBase):
+class ReplayReLU(ReplayOperationBase):
     handles = (ReLU,)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
         return relu(inputs)
 
 
-class MirrorReshape(MirrorOperationBase):
+class ReplayReshape(ReplayOperationBase):
     handles = (keras.layers.Reshape, keras.layers.Flatten, Reshape, Ravel)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
@@ -211,8 +240,8 @@ class MirrorReshape(MirrorOperationBase):
             raise TypeError(f'Unsupported layer type: {type(self.op)}')
 
 
-class MirrorMerge(MirrorOperationBase):
-    handles = (keras.layers.Add, keras.layers.Concatenate, hgq.layers.QAdd)
+class ReplayMerge(ReplayOperationBase):
+    handles = (keras.layers.Add, keras.layers.Concatenate, QAdd)
 
     def call(self, inputs: tuple[FixedVariableArray, FixedVariableArray]) -> FixedVariableArray:
         op: keras.Operation = self.op
@@ -226,7 +255,7 @@ class MirrorMerge(MirrorOperationBase):
             raise TypeError(f'Unsupported layer type: {type(op)}')
 
 
-class MirrorPool(MirrorOperationBase):
+class ReplayPool(ReplayOperationBase):
     handles = (
         hgq.layers.QAvgPool1D,
         hgq.layers.QAvgPool2D,
@@ -295,7 +324,7 @@ class MirrorPool(MirrorOperationBase):
         return out  # type: ignore
 
 
-class MirrorRepeatVector(MirrorOperationBase):
+class ReplayRepeatVector(ReplayOperationBase):
     handles = (keras.layers.RepeatVector,)
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
@@ -306,7 +335,7 @@ class MirrorRepeatVector(MirrorOperationBase):
         return np.repeat(inputs[None], layer.n, axis=0)[0]  # type: ignore
 
 
-class MirrorGetItem(MirrorOperationBase):
+class ReplayGetItem(ReplayOperationBase):
     handles = (GetItem,)
 
     def call(self, x: FixedVariableArray, key):
@@ -315,15 +344,21 @@ class MirrorGetItem(MirrorOperationBase):
         return x[None][key][0]
 
 
-class MirrorSum(MirrorOperationBase):
-    handles = (Sum,)
+class ReplayReduction(ReplayOperationBase):
+    handles = (Sum, Max, Min)
 
     def call(self, x: FixedVariableArray, axis=None, keepdims=False):
-        return np.sum(x[None], axis=axis, keepdims=keepdims)[0]  # type: ignore
+        if isinstance(self.op, Sum):
+            op = np.sum
+        elif isinstance(self.op, Max):
+            op = np.amax
+        elif isinstance(self.op, Min):
+            op = np.amin
+        return op(x[None], axis=axis, keepdims=keepdims)[0]  # type: ignore
 
 
-class MirrorQSum(MirrorOperationBase):
-    handles = (QSum,)
+class ReplayQReduction(ReplayOperationBase):
+    handles = (QSum, QMeanPow2)
 
     def call(self, x: FixedVariableArray):
         layer: QSum = self.op
@@ -331,11 +366,14 @@ class MirrorQSum(MirrorOperationBase):
         return np.sum(x[None], axis=axes, keepdims=keepdims)[0] * scale  # type: ignore
 
 
-class MirrorArithmetic(MirrorOperationBase):
-    handles = (Add, Subtract, Multiply, TrueDivide, Divide)
+class ReplayArithmetic(ReplayOperationBase):
+    handles = (Add, Subtract, Multiply, TrueDivide, Divide, QSubtract, QMaximum, QMinimum, Maximum, Minimum)
 
     def call(self, x1: FixedVariableArray, x2: FixedVariableArray):
-        match self.op.__class__.__name__:
+        name = self.op.__class__.__name__
+        if name.startswith('Q'):
+            name = name[1:]
+        match name:
             case 'Add':
                 return x1 + x2
             case 'Subtract':
@@ -344,11 +382,15 @@ class MirrorArithmetic(MirrorOperationBase):
                 return x1 * x2
             case 'TrueDivide' | 'Divide':
                 return x1 / x2
+            case 'Maximum':
+                return np.maximum(x1, x2)  # type: ignore
+            case 'Minimum':
+                return np.minimum(x1, x2)  # type: ignore
             case _:
                 raise TypeError(f'Unsupported arithmetic operation: {type(self.op)}')
 
 
-class MirrorConcatenate(MirrorOperationBase):
+class ReplayConcatenate(ReplayOperationBase):
     handles = (Concatenate,)
 
     def call(self, xs: Sequence[FixedVariableArray]):
@@ -358,7 +400,7 @@ class MirrorConcatenate(MirrorOperationBase):
         return np.concatenate([x[None] for x in xs], axis=axis)[0]  # type: ignore
 
 
-class MirrorRepeat(MirrorOperationBase):
+class ReplayRepeat(ReplayOperationBase):
     handles = (Repeat,)
 
     def call(self, x: FixedVariableArray):
@@ -367,7 +409,7 @@ class MirrorRepeat(MirrorOperationBase):
         return np.repeat(x[None], repeats, axis=axis)[0]  # type: ignore
 
 
-class MirrorTranspose(MirrorOperationBase):
+class ReplayTranspose(ReplayOperationBase):
     handles = (Transpose,)
 
     def call(self, x: FixedVariableArray):
@@ -375,7 +417,7 @@ class MirrorTranspose(MirrorOperationBase):
         return np.transpose(x, axes)  # type: ignore
 
 
-class MirrorMoveaxis(MirrorOperationBase):
+class ReplayMoveaxis(ReplayOperationBase):
     handles = (Moveaxis,)
 
     def call(self, x: FixedVariableArray):
@@ -390,9 +432,41 @@ for k, v in keras.layers.__dict__.items():
         noop_layers.append(v)
 
 
-class MirrorNoOp(MirrorOperationBase):
+class ReplayNoOp(ReplayOperationBase):
     handles = tuple(noop_layers)
 
     def call(self, x: FixedVariableArray, training=False) -> FixedVariableArray:
         assert not training, 'Training mode is not supported in mirror operation'
         return x
+
+
+class ReplayQEinsum(ReplayOperationBase):
+    handles = (QEinsum,)
+
+    def call(self, inputs: tuple[FixedVariableArray, ...]) -> FixedVariableArray:
+        layer: QEinsum = self.op
+        eq = layer.equation
+        return einsum(eq, *inputs)
+
+
+class ReplayEinsum(ReplayOperationBase):
+    handles = (Einsum,)
+
+    def call(self, *operands: FixedVariableArray) -> FixedVariableArray:
+        layer: Einsum = self.op
+        eq = layer.subscripts
+        return einsum(eq, *operands)
+
+
+class ReplayMatmul(ReplayOperationBase):
+    handles = (Matmul, Dot)
+
+    def call(self, x1: FixedVariableArray, x2: FixedVariableArray) -> FixedVariableArray:
+        return x1 @ x2
+
+
+class ReplayAbs(ReplayOperationBase):
+    handles = (Absolute, Abs)
+
+    def call(self, x: FixedVariableArray) -> FixedVariableArray:
+        return np.abs(x)  # type: ignore

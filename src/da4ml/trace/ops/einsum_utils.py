@@ -272,6 +272,10 @@ def _einsum(fn: str, input0, input1) -> np.ndarray:
 
 
 @overload
+def einsum(fn: str, input0: 'FixedVariableArray', input1: 'FixedVariableArray') -> 'FixedVariableArray': ...
+
+
+@overload
 def einsum(fn: str, input0: 'FixedVariableArray', input1: NDArray[np.integer | np.floating]) -> 'FixedVariableArray': ...
 
 
@@ -290,10 +294,9 @@ def einsum(fn: str, input0, input1):
 
     fg0 = isinstance(input0, FixedVariableArray)
     fg1 = isinstance(input1, FixedVariableArray)
-    if fg0 and fg1:
-        raise ValueError('Einsum does not support two FixedVariableArray inputs')
 
     r = _einsum(fn, input0, input1)
+
     if fg0:
         return FixedVariableArray(r, input0.solver_options)
     elif fg1:

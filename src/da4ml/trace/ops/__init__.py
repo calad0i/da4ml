@@ -35,9 +35,9 @@ def relu(x: T, i: NDArray[np.integer] | None = None, f: NDArray[np.integer] | No
 
 def quantize(
     x: T,
-    k: NDArray[np.integer],
-    i: NDArray[np.integer],
-    f: NDArray[np.integer],
+    k: NDArray[np.integer] | np.integer | int,
+    i: NDArray[np.integer] | np.integer | int,
+    f: NDArray[np.integer] | np.integer | int,
     overflow_mode: str = 'WRAP',
     round_mode: str = 'TRN',
 ) -> T:

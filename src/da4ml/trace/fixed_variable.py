@@ -282,9 +282,19 @@ class FixedVariable:
         return variables[0]
 
     def _var_mul(self, other: 'FixedVariable') -> 'FixedVariable':
-        a, b, c, d = self.high * other.low, self.low * other.high, self.high * other.high, self.low * other.low
-        low = min(a, b, c, d)
-        high = max(a, b, c, d)
+        if other is not self:
+            a, b, c, d = self.high * other.low, self.low * other.high, self.high * other.high, self.low * other.low
+            low = min(a, b, c, d)
+            high = max(a, b, c, d)
+        else:
+            a, b = self.low * other.low, self.high * other.high
+            if self.low < 0 and self.high > 0:
+                low = min(a, b, 0)
+                high = max(a, b, 0)
+            else:
+                low = min(a, b)
+                high = max(a, b)
+
         step = self.step * other.step
         _factor = self._factor * other._factor
         opr = 'vmul'
@@ -330,6 +340,21 @@ class FixedVariable:
 
     def __rmul__(self, other: 'float|Decimal|int|FixedVariable'):
         return self * other
+
+    def __pow__(self, other):
+        _power = int(other)
+        assert _power == other, 'Power must be an integer'
+        assert _power >= 0, 'Power must be non-negative'
+        if _power == 0:
+            return FixedVariable(1, 1, 1, hwconf=self.hwconf, opr='const')
+        if _power == 1:
+            return self
+
+        pow0 = _power // 2
+        ret = (self**pow0) * (self ** (_power - pow0))
+        if other % 2 == 0:
+            ret.low = max(ret.low, 0)
+        return ret
 
     def relu(self, i: int | None = None, f: int | None = None, round_mode: str = 'TRN'):
         round_mode = round_mode.upper()
