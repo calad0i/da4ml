@@ -455,7 +455,8 @@ class ReplayEinsum(ReplayOperationBase):
     def call(self, *operands: FixedVariableArray) -> FixedVariableArray:
         layer: Einsum = self.op
         eq = layer.subscripts
-        return einsum(eq, *operands)
+        operands = [operand[None] for operand in operands]  # type: ignore
+        return einsum(eq, *operands)[0]
 
 
 class ReplayMatmul(ReplayOperationBase):

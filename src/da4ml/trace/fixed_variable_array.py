@@ -326,7 +326,13 @@ class FixedVariableArray:
 
 
 class FixedVariableArrayInput(FixedVariableArray):
-    def __init__(self, shape: tuple[int, ...] | int, hwconf: HWConfig, solver_options: dict[str, Any] | None = None, latency=0.0):
+    def __init__(
+        self,
+        shape: tuple[int, ...] | int,
+        hwconf: HWConfig = HWConfig(1, -1, -1),
+        solver_options: dict[str, Any] | None = None,
+        latency=0.0,
+    ):
         _vars = np.empty(shape, dtype=object)
         _vars_f = _vars.ravel()
         for i in range(_vars.size):
