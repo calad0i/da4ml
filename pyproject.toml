@@ -30,6 +30,7 @@ classifiers = [
 ]
 dynamic = [ "version" ]
 dependencies = [ "llvmlite>=0.44", "numba>=0.61" ]
+optional-dependencies.docs = [ "hgq2", "myst-parser", "pyparsing", "sphinx", "sphinx-rtd-theme" ]
 urls.repository = "https://github.com/calad0i/da4ml"
 
 [tool.setuptools]
