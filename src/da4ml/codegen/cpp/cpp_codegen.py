@@ -46,7 +46,7 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
         match op.opcode:
             case -1:
                 # Input marker
-                val = f'inp[{ops[op.id0].id0}]'
+                val = f'inp[{op.id0}]'
             case 0 | 1:
                 # Common a+/-b<<shift op
                 ref1 = f'bit_shift<{op.data}>(v{op.id1})' if op.data != 0 else f'v{op.id1}'

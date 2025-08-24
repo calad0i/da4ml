@@ -164,6 +164,10 @@ class FixedVariableArray:
         latency: NDArray[np.floating] | float = 0.0,
         solver_options: dict[str, Any] | None = None,
     ):
+        mask = k + i + f <= 0
+        k = np.where(mask, 0, k)
+        i = np.where(mask, 0, i)
+        f = np.where(mask, 0, f)
         step = 2.0**-f
         _high = 2.0**i
         high, low = _high - step, -_high * k
