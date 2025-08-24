@@ -6,8 +6,8 @@ import keras
 import numpy as np
 from keras import KerasTensor, Operation
 
-from ...trace import FixedVariableArray, HWConfig, comb_trace
-from ...trace.fixed_variable_array import FixedVariableArrayInput
+from ...trace import FixedVariableArray, FixedVariableArrayInput, HWConfig, comb_trace
+from ...trace.fixed_variable import FixedVariable
 from .replica import _registry
 
 
@@ -55,6 +55,8 @@ def replace_tensors(tensor_map: dict[KerasTensor, FixedVariableArray], obj: Any)
 def _flatten_arr(args: Any) -> FixedVariableArray:
     if isinstance(args, FixedVariableArray):
         return np.ravel(args)  # type: ignore
+    if isinstance(args, FixedVariable):
+        return FixedVariableArray(np.array([args]))
     if not isinstance(args, Sequence):
         return None  # type: ignore
     args = [_flatten_arr(a) for a in args]

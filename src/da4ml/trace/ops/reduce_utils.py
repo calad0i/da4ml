@@ -99,7 +99,7 @@ def reduce(operator: Callable[[T, T], T], x: TA, axis: int | Sequence[int] | Non
     r = _arr.reshape(target_shape)  # type: ignore
 
     if isinstance(x, FixedVariableArray):
-        ret = FixedVariableArray(r, solver_config)
-        if ret.size == 1 and not keepdims:
-            return ret.ravel()[0]  # type: ignore
+        r = FixedVariableArray(r, solver_config)
+        if r.size == 1 and not keepdims:
+            return r.ravel()[0]  # type: ignore
     return r if r.size > 1 or keepdims else r.ravel()[0]  # type: ignore

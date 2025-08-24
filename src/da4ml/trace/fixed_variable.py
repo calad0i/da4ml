@@ -265,6 +265,10 @@ class FixedVariable:
     def __sub__(self, other: 'FixedVariable|int|float|Decimal'):
         return self + (-other)
 
+    def __truediv__(self, other: 'int|float|Decimal'):
+        assert not isinstance(other, FixedVariable), 'Division by variable is not supported'
+        return self * (1 / other)
+
     def __mul__(self, other: 'FixedVariable|int|float|Decimal') -> 'FixedVariable':
         if other == 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
