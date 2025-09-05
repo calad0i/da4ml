@@ -5,6 +5,9 @@ Two things:
 1. Converting constant-matrix-vector multiplications (CMVMs) into optimized adder graphs with distributed arithmetic for FPGA implementation.
 2. Converting (a part of) neural networks to fully parallel HDL or HLS with the CMVM optimization above.
 
+## Should I use the standalone flow or the hls4ml-integrated flow?
+If the network is supported by da4ml standalone, it is **recommended to use the standalone flow**. In most cases, the standalone flow gives better latency and timing, and is orders of magnitude faster in synthesis time. However, in some occasions, the hls4ml-integrated flow could provide better timing when the routing is highly challenging for the standalone flow. If the network is not supported by da4ml standalone (e.g., contains unsupported layers or operations), then the hls4ml-integrated flow is the only option.
+
 ## So does da4ml only work with neural networks with II=1?
 No. When integrated with hls4ml, da4ml only requires that **each CMVM operation is unrolled (II=1)**. This is different from unrolling the whole model, e.g., convolution layers can still have II>1 by reusing the same CMVM kernel for different input windows.
 
