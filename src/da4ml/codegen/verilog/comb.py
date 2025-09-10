@@ -5,6 +5,20 @@ import numpy as np
 from ...cmvm.types import QInterval, Solution, _minimal_kif
 
 
+def make_neg(neg_defined, ops, kifs, lines, op, bw0, v0_name):
+    _min, _max, step = ops[op.id0].qint
+    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
+    if op.id0 not in neg_defined:
+        neg_defined.add(op.id0)
+        was_signed = int(kifs[op.id0][0])
+        lines.append(
+            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
+        )
+        bw0 = bw_neg
+    v0_name = f'v{op.id0}_neg'
+    return bw0, v0_name
+
+
 def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
     ops = sol.ops
     kifs = list(map(_minimal_kif, (op.qint for op in ops)))
@@ -50,20 +64,12 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 bw0 = widths[op.id0]
 
                 if op.opcode == -2:
-                    _min, _max, step = ops[op.id0].qint
-                    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
-                    if op.id0 not in neg_defined:
-                        neg_defined.add(op.id0)
-                        was_signed = int(kifs[op.id0][0])
-                        lines.append(
-                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
-                        )
-                        bw0 = bw_neg
-                    v0_name = f'v{op.id0}_neg'
+                    bw0, v0_name = make_neg(neg_defined, ops, kifs, lines, op, bw0, v0_name)
                 if ops[op.id0].qint.min < 0:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0 - 1}]}}}};'
                 else:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
+
             case 3 | -3:  # Explicit quantization
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
@@ -71,23 +77,9 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 bw0 = widths[op.id0]
 
                 if op.opcode == -3:
-                    _min, _max, step = ops[op.id0].qint
-                    lines.append('/* verilator lint_off WIDTHTRUNC */')
-                    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
-                    if op.id0 not in neg_defined:
-                        neg_defined.add(op.id0)
-                        # lines.append('/* verilator lint_off WIDTHTRUNC */')
-                        # lines.append(
-                        #     f'wire [{bw_neg - 1}:0] v{op.id0}_neg; assign v{op.id0}_neg[{bw_neg - 1}:0] = -{v0_name}[{bw0 - 1}:0];'
-                        # )
-                        # lines.append('/* verilator lint_on WIDTHTRUNC */')
-                        was_signed = int(kifs[op.id0][0])
-                        lines.append(
-                            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
-                        )
-                    v0_name = f'v{op.id0}_neg'
-
+                    bw0, v0_name = make_neg(neg_defined, ops, kifs, lines, op, bw0, v0_name)
                 line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
+
             case 4:  # constant addition
                 num = op.data
                 sign, mag = int(num < 0), abs(num)

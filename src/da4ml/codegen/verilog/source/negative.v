@@ -11,6 +11,7 @@ module negative #(
     // verilator lint_off UNUSEDSIGNAL
     output [BW_OUT-1:0] out
 );
+  /* verilator lint_off WIDTHTRUNC */
   generate
     if (BW_IN < BW_OUT) begin : in_is_smaller
       wire [BW_OUT-1:0] in_ext;
@@ -24,5 +25,5 @@ module negative #(
       assign out = -in[BW_OUT-1:0];
     end
   endgenerate
-
+  /* verilator lint_on WIDTHTRUNC */
 endmodule
