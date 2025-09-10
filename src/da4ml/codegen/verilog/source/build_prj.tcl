@@ -13,6 +13,7 @@ read_verilog "${project_name}.v"
 read_verilog "shift_adder.v"
 read_verilog "negative.v"
 read_verilog "mux.v"
+read_verilog "multiplier.v"
 foreach file [glob -nocomplain "${project_name}_stage*.v"] {
     read_verilog $file
 }
