@@ -5,16 +5,14 @@ import numpy as np
 from ...cmvm.types import QInterval, Solution, _minimal_kif
 
 
-def make_neg(neg_defined, ops, kifs, lines, op, bw0, v0_name):
-    _min, _max, step = ops[op.id0].qint
+def make_neg(lines, op, bw0, v0_name):
+    _min, _max, step = op.qint
     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
-    if op.id0 not in neg_defined:
-        neg_defined.add(op.id0)
-        was_signed = int(kifs[op.id0][0])
-        lines.append(
-            f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
-        )
-        bw0 = bw_neg
+    was_signed = int(_min < 0)
+    lines.append(
+        f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
+    )
+    bw0 = bw_neg
     v0_name = f'v{op.id0}_neg'
     return bw0, v0_name
 
@@ -63,8 +61,9 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
 
-                if op.opcode == -2:
-                    bw0, v0_name = make_neg(neg_defined, ops, kifs, lines, op, bw0, v0_name)
+                if op.opcode == -2 and op.id0 not in neg_defined:
+                    neg_defined.add(op.id0)
+                    bw0, v0_name = make_neg(lines, op, bw0, v0_name)
                 if ops[op.id0].qint.min < 0:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0 - 1}]}}}};'
                 else:
@@ -76,8 +75,9 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
 
-                if op.opcode == -3:
-                    bw0, v0_name = make_neg(neg_defined, ops, kifs, lines, op, bw0, v0_name)
+                if op.opcode == -3 and op.id0 not in neg_defined:
+                    neg_defined.add(op.id0)
+                    bw0, v0_name = make_neg(lines, op, bw0, v0_name)
                 line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
 
             case 4:  # constant addition
