@@ -69,12 +69,13 @@ class HDLModel:
 
     def write(self):
         flavor = self._flavor
+        suffix = 'v' if flavor == 'verilog' else 'vhd'
         self._path.mkdir(parents=True, exist_ok=True)
         if self._pipe is not None:  # Pipeline
             # Main logic
             codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
             for k, v in codes.items():
-                with open(self._path / f'{k}.v', 'w') as f:
+                with open(self._path / f'{k}.{suffix}', 'w') as f:
                     f.write(v)
 
             # Build script
@@ -108,20 +109,20 @@ class HDLModel:
 
             # Main logic
             code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps')
-            with open(self._path / f'{self._prj_name}.v', 'w') as f:
+            with open(self._path / f'{self._prj_name}.{suffix}', 'w') as f:
                 f.write(code)
 
             # Verilog IO wrapper (non-uniform bw to uniform one, no clk)
             io_wrapper = generate_io_wrapper(self._solution, self._prj_name, False)
             binder = binder_gen(self._solution, f'{self._prj_name}_wrapper')
 
-        with open(self._path / f'{self._prj_name}_wrapper.v', 'w') as f:
+        with open(self._path / f'{self._prj_name}_wrapper.{suffix}', 'w') as f:
             f.write(io_wrapper)
         with open(self._path / f'{self._prj_name}_wrapper_binder.cc', 'w') as f:
             f.write(binder)
 
         # Common resource copy
-        for fname in self.__src_root.glob(f'{flavor}/source/*.v'):
+        for fname in self.__src_root.glob(f'{flavor}/source/*.{suffix}'):
             shutil.copy(fname, self._path)
         shutil.copy(self.__src_root / f'{flavor}/source/build_binder.mk', self._path)
         shutil.copy(self.__src_root / f'{flavor}/source/ioutil.hh', self._path)
@@ -298,7 +299,7 @@ Estimated cost: {cost} LUTs"""
         return spec
 
 
-class VerilogModel(HDLModel):
+class VHDLModel(HDLModel):
     def __init__(
         self,
         solution: Solution | CascadedSolution,
@@ -313,7 +314,7 @@ class VerilogModel(HDLModel):
         register_layers: int = 1,
     ):
         self._hdl_model = super().__init__(
-            'verilog',
+            'vhdl',
             solution,
             prj_name,
             path,
