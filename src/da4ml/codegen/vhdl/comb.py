@@ -53,7 +53,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
             case -1:  # Input marker
                 i0, i1 = inp_idxs[op.id0]
                 signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
-                line = f'v{i} <= inp{_loc(i0,i1)};'
+                line = f'v{i} <= model_inp{_loc(i0,i1)};'
 
             case 0 | 1:  # Common a+/-b<<shift oprs
                 p0, p1 = kifs[op.id0], kifs[op.id1]
@@ -157,9 +157,9 @@ def output_gen(sol: Solution, neg_defined: set[int]):
                 assigns.append(
                     f'op_neg_{idx}:entity work.negative generic map(BW_IN=>{bw0},BW_OUT=>{bw},IN_SIGNED=>{was_signed}) port map(neg_in=>v{idx},neg_out=>v{idx}_neg);'
                 )
-            assigns.append(f'outp{_loc(i0,i1)} <= v{idx}_neg{_loc(bw-1,0)};')
+            assigns.append(f'model_out{_loc(i0,i1)} <= v{idx}_neg{_loc(bw-1,0)};')
         else:
-            assigns.append(f'outp{_loc(i0,i1)} <= v{idx}{_loc(bw-1,0)};')
+            assigns.append(f'model_out{_loc(i0,i1)} <= v{idx}{_loc(bw-1,0)};')
     return signals, assigns
 
 
@@ -177,8 +177,8 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity {fn_name} is port(
-    inp:in std_logic_vector{_loc(inp_bits-1,0)};
-    outp:out std_logic_vector{_loc(out_bits-1,0)}
+    model_inp:in std_logic_vector{_loc(inp_bits-1,0)};
+    model_out:out std_logic_vector{_loc(out_bits-1,0)}
 );
 end entity {fn_name};
 

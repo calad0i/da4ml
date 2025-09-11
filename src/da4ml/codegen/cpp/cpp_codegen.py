@@ -46,18 +46,18 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
         match op.opcode:
             case -1:
                 # Input marker
-                val = f'inp[{op.id0}]'
+                val = f'model_inp[{op.id0}]'
             case 0 | 1:
                 # Common a+/-b<<shift op
                 ref1 = f'bit_shift<{op.data}>(v{op.id1})' if op.data != 0 else f'v{op.id1}'
                 val = f'{ref0} {"-" if op.opcode == 1 else "+"} {ref1}'
             case 2 | -2:
-                if op.opcode == 2:  # relu(inp)
+                if op.opcode == 2:  # relu(model_inp)
                     if ops[op.id0].qint.min < 0:
                         val = f'{ref0} > 0 ? {_type}({ref0}) : {_type}(0)'
                     else:
                         val = ref0
-                else:  # relu(-inp)
+                else:  # relu(-model_inp)
                     if ops[op.id0].qint.max > 0:
                         val = f'{ref0} > 0 ? {_type}(0) : {_type}(-{ref0})'
                     else:
@@ -105,15 +105,15 @@ def output_gen(sol: Solution, typestr_fn: Callable[[bool | int, int, int], str])
     lines = []
     for i, idx in enumerate(sol.out_idxs):
         if idx < 0:
-            lines.append(f'out[{i}] = 0;')
+            lines.append(f'model_out[{i}] = 0;')
             continue
         _type = typestr_fn(*_minimal_kif(sol.out_qint[i]))
         shift = sol.out_shifts[i]
         neg_str = '-' if sol.out_negs[i] else ''
         if shift == 0:
-            lines.append(f'out[{i}] = {_type}({neg_str}v{idx});')
+            lines.append(f'model_out[{i}] = {_type}({neg_str}v{idx});')
         else:
-            lines.append(f'out[{i}] = {_type}({neg_str}bit_shift<{shift}>(v{idx}));')
+            lines.append(f'model_out[{i}] = {_type}({neg_str}bit_shift<{shift}>(v{idx}));')
     return lines
 
 
@@ -140,7 +140,7 @@ def cpp_logic_and_bridge_gen(
 
     n_in, n_out = sol.shape
     template_def = 'template <typename inp_t, typename out_t>'
-    fn_signature = f'void {fn_name}(inp_t inp[{n_in}], out_t out[{n_out}])'
+    fn_signature = f'void {fn_name}(inp_t model_inp[{n_in}], out_t model_out[{n_out}])'
     pragmas = pragmas or []
 
     ssa_lines = ssa_gen(sol, print_latency=print_latency, typestr_fn=typestr_fn)
@@ -173,12 +173,12 @@ bool openmp_enabled() {{
     return _openmp;
 }}
 
-void inference_f64(double *inp, double *out, size_t size) {{
-    batch_inference<{fn_name}_config, double>(inp, out, size);
+void inference_f64(double *model_inp, double *model_out, size_t size) {{
+    batch_inference<{fn_name}_config, double>(model_inp, model_out, size);
 }}
 
-void inference_f32(float *inp, float *out, size_t size) {{
-    batch_inference<{fn_name}_config, float>(inp, out, size);
+void inference_f32(float *model_inp, float *model_out, size_t size) {{
+    batch_inference<{fn_name}_config, float>(model_inp, model_out, size);
 }}
 }}"""
     return code, bridge

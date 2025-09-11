@@ -67,19 +67,19 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
     w_reg_in, w_het_in = shape_in
     w_reg_out, w_het_out = shape_out
 
-    inp_assignment = [f'packed_inp{_loc(ih,jh)} <= inp{_loc(ir,jr)};' for (ih, jh), (ir, jr) in zip(het_in, reg_in)]
+    inp_assignment = [f'packed_inp{_loc(ih,jh)} <= model_inp{_loc(ir,jr)};' for (ih, jh), (ir, jr) in zip(het_in, reg_in)]
     _out_assignment: list[tuple[int, str]] = []
 
     for i, ((ih, jh), (ir, jr)) in enumerate(zip(het_out, reg_out)):
         if ih == jh - 1:
             continue
-        _out_assignment.append((ih, f'outp{_loc(ir,jr)} <= packed_out{_loc(ih,jh)};'))
+        _out_assignment.append((ih, f'model_out{_loc(ir,jr)} <= packed_out{_loc(ih,jh)};'))
 
     for i, (i, j, copy_from) in enumerate(pad_out):
         n_bit = i - j + 1
         value = "'0'" if copy_from == -1 else f'packed_out({copy_from})'
         pad = f'(others => {value})' if n_bit > 1 else value
-        _out_assignment.append((i, f'outp{_loc(i,j)} <= {pad};'))
+        _out_assignment.append((i, f'model_out{_loc(i,j)} <= {pad};'))
     _out_assignment.sort(key=lambda x: x[0])
     out_assignment = [v for _, v in _out_assignment]
 
@@ -94,8 +94,8 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
     return f"""library ieee;
 use ieee.std_logic_1164.all;
 entity {module_name}_wrapper is port({clk_and_rst_inp}
-    inp:in std_logic_vector{_loc(w_reg_in-1,0)};
-    outp:out std_logic_vector{_loc(w_reg_out-1,0)}
+    model_inp:in std_logic_vector{_loc(w_reg_in-1,0)};
+    model_out:out std_logic_vector{_loc(w_reg_out-1,0)}
 );
 end entity {module_name}_wrapper;
 
@@ -107,8 +107,8 @@ begin
     {inp_assignment_str}
 
     op:entity work.{module_name} port map({clk_and_rst_bind}
-        inp=>packed_inp,
-        outp=>packed_out
+        model_inp=>packed_inp,
+        model_out=>packed_out
     );
 
     {out_assignment_str}

@@ -226,7 +226,7 @@ class HDLModel:
         self.write()
         self._compile(verbose=verbose, openmp=openmp, nproc=nproc, o3=o3, clean=clean)
 
-    def predict(self, data: NDArray[np.floating]):
+    def predict(self, data: NDArray[np.floating]) -> NDArray[np.float32]:
         """Run the model on the input data.
 
         Parameters
@@ -265,7 +265,7 @@ class HDLModel:
         # Unscale the output int32 to recover fp values
         k, i, f = np.max(k_out), np.max(i_out), np.max(f_out)
         a, b, c = 2.0 ** (k + i + f), k * 2.0 ** (i + f), 2.0**-f
-        return ((out_data.reshape(n_sample, out_size) + b) % a - b) * c
+        return ((out_data.reshape(n_sample, out_size) + b) % a - b) * c.astype(np.float32)
 
     def __repr__(self):
         inp_size, out_size = self._solution.shape

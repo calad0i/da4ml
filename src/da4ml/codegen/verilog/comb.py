@@ -42,7 +42,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
         match op.opcode:
             case -1:  # Input marker
                 i0, i1 = inp_idxs[op.id0]
-                line = f'{_def} assign {v} = inp[{i0}:{i1}];'
+                line = f'{_def} assign {v} = model_inp[{i0}:{i1}];'
 
             case 0 | 1:  # Common a+/-b<<shift oprs
                 p0, p1 = kifs[op.id0], kifs[op.id1]  # precision -> keep_neg, integers (no sign), fractional
@@ -144,10 +144,10 @@ def output_gen(sol: Solution, neg_defined: set[int]):
                 lines.append(
                     f'wire [{bw - 1}:0] v{idx}_neg; negative #({bw0}, {bw}, {was_signed}) op_neg_{idx} (v{idx}, v{idx}_neg);'
                 )
-            lines.append(f'assign out[{i0}:{i1}] = v{idx}_neg[{bw - 1}:0];')
+            lines.append(f'assign model_out[{i0}:{i1}] = v{idx}_neg[{bw - 1}:0];')
 
         else:
-            lines.append(f'assign out[{i0}:{i1}] = v{idx}[{bw - 1}:0];')
+            lines.append(f'assign model_out[{i0}:{i1}] = v{idx}[{bw - 1}:0];')
     return lines
 
 
@@ -157,8 +157,8 @@ def comb_logic_gen(sol: Solution, fn_name: str, print_latency: bool = False, tim
 
     fn_signature = [
         f'module {fn_name} (',
-        f'    input [{inp_bits - 1}:0] inp,',
-        f'    output [{out_bits - 1}:0] out',
+        f'    input [{inp_bits - 1}:0] model_inp,',
+        f'    output [{out_bits - 1}:0] model_out',
         ');',
     ]
 

@@ -66,18 +66,18 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
     w_reg_in, w_het_in = shape_in
     w_reg_out, w_het_out = shape_out
 
-    inp_assignment = [f'assign packed_inp[{ih}:{jh}] = inp[{ir}:{jr}];' for (ih, jh), (ir, jr) in zip(het_in, reg_in)]
+    inp_assignment = [f'assign packed_inp[{ih}:{jh}] = model_inp[{ir}:{jr}];' for (ih, jh), (ir, jr) in zip(het_in, reg_in)]
     _out_assignment: list[tuple[int, str]] = []
 
     for i, ((ih, jh), (ir, jr)) in enumerate(zip(het_out, reg_out)):
         if ih == jh - 1:
             continue
-        _out_assignment.append((ih, f'assign out[{ir}:{jr}] = packed_out[{ih}:{jh}];'))
+        _out_assignment.append((ih, f'assign model_out[{ir}:{jr}] = packed_out[{ih}:{jh}];'))
 
     for i, (i, j, copy_from) in enumerate(pad_out):
         n_bit = i - j + 1
         pad = f"{n_bit}'b0" if copy_from == -1 else f'{{{n_bit}{{packed_out[{copy_from}]}}}}'
-        _out_assignment.append((i, f'assign out[{i}:{j}] = {pad};'))
+        _out_assignment.append((i, f'assign model_out[{i}:{j}] = {pad};'))
     _out_assignment.sort(key=lambda x: x[0])
     out_assignment = [v for _, v in _out_assignment]
 
@@ -93,9 +93,9 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
 
 module {module_name}_wrapper ({clk_and_rst_inp}
     // verilator lint_off UNUSEDSIGNAL
-    input [{w_reg_in - 1}:0] inp,
+    input [{w_reg_in - 1}:0] model_inp,
     // verilator lint_on UNUSEDSIGNAL
-    output [{w_reg_out - 1}:0] out
+    output [{w_reg_out - 1}:0] model_out
 );
     wire [{w_het_in - 1}:0] packed_inp;
     wire [{w_het_out - 1}:0] packed_out;
@@ -103,8 +103,8 @@ module {module_name}_wrapper ({clk_and_rst_inp}
     {inp_assignment_str}
 
     {module_name} op ({clk_and_rst_bind}
-        .inp(packed_inp),
-        .out(packed_out)
+        .model_inp(packed_inp),
+        .model_out(packed_out)
     );
 
     {out_assignment_str}

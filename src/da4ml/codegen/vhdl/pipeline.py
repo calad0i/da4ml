@@ -18,13 +18,15 @@ def pipeline_logic_gen(
         registers += [f'signal stage{j}_inp_copy{i}:std_logic_vector({width-1} downto 0);' for j, width in enumerate(inp_bits)]
     wires = [f'signal stage{i}_out:std_logic_vector({width-1} downto 0);' for i, width in enumerate(out_bits)]
 
-    comb_logic = [f'stage{i}:entity work.{name}_stage{i} port map(inp=>stage{i}_inp,outp=>stage{i}_out);' for i in range(N)]
+    comb_logic = [
+        f'stage{i}:entity work.{name}_stage{i} port map(model_inp=>stage{i}_inp,model_out=>stage{i}_out);' for i in range(N)
+    ]
 
     if register_layers == 1:
-        serial_logic = ['stage0_inp <= inp;']
+        serial_logic = ['stage0_inp <= model_inp;']
         serial_logic += [f'stage{i}_inp <= stage{i-1}_out;' for i in range(1, N)]
     else:
-        serial_logic = ['stage0_inp_copy0 <= inp;']
+        serial_logic = ['stage0_inp_copy0 <= model_inp;']
         for j in range(1, register_layers - 1):
             serial_logic.append(f'stage0_inp_copy{j} <= stage0_inp_copy{j-1};')
         serial_logic.append(f'stage0_inp <= stage0_inp_copy{register_layers - 2};')
@@ -34,7 +36,7 @@ def pipeline_logic_gen(
                 serial_logic.append(f'stage{i}_inp_copy{j} <= stage{i}_inp_copy{j-1};')
             serial_logic.append(f'stage{i}_inp <= stage{i}_inp_copy{register_layers - 2};')
 
-    serial_logic += [f'outp <= stage{N-1}_out;']
+    serial_logic += [f'model_out <= stage{N-1}_out;']
 
     blk = '\n    '
 
@@ -42,8 +44,8 @@ def pipeline_logic_gen(
 use ieee.std_logic_1164.all;
 entity {name} is port(
     clk:in std_logic;
-    inp:in std_logic_vector({inp_bits[0]-1} downto 0);
-    outp:out std_logic_vector({out_bits[-1]-1} downto 0));
+    model_inp:in std_logic_vector({inp_bits[0]-1} downto 0);
+    model_out:out std_logic_vector({out_bits[-1]-1} downto 0));
 end entity {name};
 
 architecture rtl of {name} is

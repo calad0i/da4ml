@@ -18,13 +18,13 @@ def pipeline_logic_gen(
         registers += [f'reg [{width-1}:0] stage{j}_inp_copy{i};' for j, width in enumerate(inp_bits)]
     wires = [f'wire [{width-1}:0] stage{i}_out;' for i, width in enumerate(out_bits)]
 
-    comb_logic = [f'{name}_stage{i} stage{i} (.inp(stage{i}_inp), .out(stage{i}_out));' for i in range(N)]
+    comb_logic = [f'{name}_stage{i} stage{i} (.model_inp(stage{i}_inp), .model_out(stage{i}_out));' for i in range(N)]
 
     if register_layers == 1:
-        serial_logic = ['stage0_inp <= inp;']
+        serial_logic = ['stage0_inp <= model_inp;']
         serial_logic += [f'stage{i}_inp <= stage{i-1}_out;' for i in range(1, N)]
     else:
-        serial_logic = ['stage0_inp_copy0 <= inp;']
+        serial_logic = ['stage0_inp_copy0 <= model_inp;']
         for j in range(1, register_layers - 1):
             serial_logic.append(f'stage0_inp_copy{j} <= stage0_inp_copy{j-1};')
         serial_logic.append(f'stage0_inp <= stage0_inp_copy{register_layers - 2};')
@@ -34,15 +34,15 @@ def pipeline_logic_gen(
                 serial_logic.append(f'stage{i}_inp_copy{j} <= stage{i}_inp_copy{j-1};')
             serial_logic.append(f'stage{i}_inp <= stage{i}_inp_copy{register_layers - 2};')
 
-    serial_logic += [f'out <= stage{N-1}_out;']
+    serial_logic += [f'model_out <= stage{N-1}_out;']
 
     sep0 = '\n    '
     sep1 = '\n        '
 
     module = f"""module {name} (
     input clk,
-    input [{inp_bits[0]-1}:0] inp,
-    output reg [{out_bits[-1]-1}:0] out
+    input [{inp_bits[0]-1}:0] model_inp,
+    output reg [{out_bits[-1]-1}:0] model_out
 );
 
     {sep0.join(registers)}
