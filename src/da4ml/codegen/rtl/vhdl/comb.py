@@ -9,10 +9,11 @@ def make_neg(
     signals: list[str],
     assigns: list[str],
     op: Op,
+    ops: list[Op],
     bw0: int,
     v0_name: str,
 ):
-    _min, _max, step = op.qint
+    _min, _max, step = ops[op.id0].qint
     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
     was_signed = int(_min < 0)
     signals.append(f'signal v{op.id0}_neg : std_logic_vector({bw_neg-1} downto {0});')
@@ -66,7 +67,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 bw0 = widths[op.id0]
                 if op.opcode == -2 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
-                    bw0, v0_name = make_neg(signals, assigns, op, bw0, v0_name)
+                    bw0, v0_name = make_neg(signals, assigns, op, ops, bw0, v0_name)
                 signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
                 if ops[op.id0].qint.min < 0:
                     if bw > 1:
@@ -83,7 +84,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 bw0 = widths[op.id0]
                 if op.opcode == -3 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
-                    bw0, v0_name = make_neg(signals, assigns, op, bw0, v0_name)
+                    bw0, v0_name = make_neg(signals, assigns, op, ops, bw0, v0_name)
                 signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
                 line = f'v{i} <= {v0_name}({i0} downto {i1});'
 

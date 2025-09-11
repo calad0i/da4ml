@@ -2,11 +2,17 @@ from math import ceil, log2
 
 import numpy as np
 
-from ....cmvm.types import QInterval, Solution, _minimal_kif
+from ....cmvm.types import Op, QInterval, Solution, _minimal_kif
 
 
-def make_neg(lines, op, bw0, v0_name):
-    _min, _max, step = op.qint
+def make_neg(
+    lines: list[str],
+    op: Op,
+    ops: list[Op],
+    bw0: int,
+    v0_name: str,
+):
+    _min, _max, step = ops[op.id0].qint
     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
     was_signed = int(_min < 0)
     lines.append(
@@ -63,7 +69,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
 
                 if op.opcode == -2 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
-                    bw0, v0_name = make_neg(lines, op, bw0, v0_name)
+                    bw0, v0_name = make_neg(lines, op, ops, bw0, v0_name)
                 if ops[op.id0].qint.min < 0:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0 - 1}]}}}};'
                 else:
@@ -77,7 +83,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
 
                 if op.opcode == -3 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
-                    bw0, v0_name = make_neg(lines, op, bw0, v0_name)
+                    bw0, v0_name = make_neg(lines, op, ops, bw0, v0_name)
                 line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
 
             case 4:  # constant addition
