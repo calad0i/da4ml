@@ -13,10 +13,10 @@ def pipeline_logic_gen(
     inp_bits = [sum(map(sum, map(_minimal_kif, sol.inp_qint))) for sol in csol.solutions]
     out_bits = inp_bits[1:] + [sum(map(sum, map(_minimal_kif, csol.out_qint)))]
 
-    registers = [f'reg [{width}-1:0] stage{i}_inp;' for i, width in enumerate(inp_bits)]
+    registers = [f'reg [{width-1}:0] stage{i}_inp;' for i, width in enumerate(inp_bits)]
     for i in range(0, register_layers - 1):
-        registers += [f'reg [{width}-1:0] stage{j}_inp_copy{i};' for j, width in enumerate(inp_bits)]
-    wires = [f'wire [{width}-1:0] stage{i}_out;' for i, width in enumerate(out_bits)]
+        registers += [f'reg [{width-1}:0] stage{j}_inp_copy{i};' for j, width in enumerate(inp_bits)]
+    wires = [f'wire [{width-1}:0] stage{i}_out;' for i, width in enumerate(out_bits)]
 
     comb_logic = [f'{name}_stage{i} stage{i} (.inp(stage{i}_inp), .out(stage{i}_out));' for i in range(N)]
 

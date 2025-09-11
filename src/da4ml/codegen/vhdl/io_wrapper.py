@@ -77,16 +77,8 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
 
     for i, (i, j, copy_from) in enumerate(pad_out):
         n_bit = i - j + 1
-        if copy_from == -1:
-            if n_bit > 1:
-                pad = f"({n_bit -1} downto 0 => '0')"
-            else:
-                pad = "'0'"
-        else:
-            if n_bit > 1:
-                pad = f'({n_bit - 1} downto 0 => packed_out({copy_from}))'
-            else:
-                pad = f'packed_out({copy_from})'
+        value = "'0'" if copy_from == -1 else f'packed_out({copy_from})'
+        pad = f'(others => {value})' if n_bit > 1 else value
         _out_assignment.append((i, f'outp{_loc(i,j)} <= {pad};'))
     _out_assignment.sort(key=lambda x: x[0])
     out_assignment = [v for _, v in _out_assignment]
