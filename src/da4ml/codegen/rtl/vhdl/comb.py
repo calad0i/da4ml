@@ -15,17 +15,13 @@ def make_neg(
     _min, _max, step = op.qint
     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
     was_signed = int(_min < 0)
-    signals.append(f'signal v{op.id0}_neg : std_logic_vector{_loc(bw_neg-1,0)};')
+    signals.append(f'signal v{op.id0}_neg : std_logic_vector({bw_neg-1} downto {0});')
     assigns.append(
         f'op_neg_{op.id0} : entity work.negative generic map (BW_IN => {bw0}, BW_OUT => {bw_neg}, IN_SIGNED => {was_signed}) port map (neg_in => {v0_name}, neg_out => v{op.id0}_neg);'
     )
     bw0 = bw_neg
     v0_name = f'v{op.id0}_neg'
     return bw0, v0_name
-
-
-def _loc(i: int, j: int):
-    return f'({i} downto {j})' if i != j else f'({i})'
 
 
 def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
@@ -52,15 +48,15 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
         match op.opcode:
             case -1:  # Input marker
                 i0, i1 = inp_idxs[op.id0]
-                signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
-                line = f'v{i} <= model_inp{_loc(i0,i1)};'
+                signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
+                line = f'v{i} <= model_inp({i0} downto {i1});'
 
             case 0 | 1:  # Common a+/-b<<shift oprs
                 p0, p1 = kifs[op.id0], kifs[op.id1]
                 bw0, bw1 = widths[op.id0], widths[op.id1]
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
                 shift = op.data + f0 - f1
-                signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
+                signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
                 line = f'op_{i}:entity work.shift_adder generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw},SHIFT1=>{shift},IS_SUB=>{op.opcode}) port map(in0=>v{op.id0},in1=>v{op.id1},result=>v{i});'
 
             case 2 | -2:  # ReLU
@@ -71,14 +67,14 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 if op.opcode == -2 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
                     bw0, v0_name = make_neg(signals, assigns, op, bw0, v0_name)
-                signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
+                signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
                 if ops[op.id0].qint.min < 0:
                     if bw > 1:
                         line = f'v{i} <= {v0_name}({i0} downto {i1}) and ({bw - 1} downto 0 => not {v0_name}({bw0-1}));'
                     else:
-                        line = f'v{i} <= {v0_name}(0) and (not {v0_name}({bw0-1}));'
+                        line = f'v{i}(0) <= {v0_name}(0) and (not {v0_name}({bw0-1}));'
                 else:
-                    line = f'v{i} <= {v0_name}{_loc(i0,i1)};'
+                    line = f'v{i} <= {v0_name}({i0} downto {i1});'
 
             case 3 | -3:  # Explicit quantization
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
@@ -88,8 +84,8 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 if op.opcode == -3 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
                     bw0, v0_name = make_neg(signals, assigns, op, bw0, v0_name)
-                signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
-                line = f'v{i} <= {v0_name}{_loc(i0,i1)};'
+                signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
+                line = f'v{i} <= {v0_name}({i0} downto {i1});'
 
             case 4:  # constant addition
                 num = op.data
@@ -98,14 +94,14 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 bw0 = widths[op.id0]
                 s0 = int(kifs[op.id0][0])
                 shift = kifs[op.id0][2] - kifs[i][2]
-                signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
+                signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
                 bin_val = format(mag, f'0{bw1}b')
                 line = f'op_{i}:entity work.shift_adder generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>0,BW_OUT=>{bw},SHIFT1=>{shift},IS_SUB=>{sign}) port map(in0=>v{op.id0},in1=>"{bin_val}",result=>v{i});'
             case 5:  # constant
                 num = op.data
                 if num < 0:
                     num = 2**bw + num
-                signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
+                signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
                 bin_val = format(num, f'0{bw}b')
                 line = f'v{i} <= "{bin_val}";'
 
@@ -118,12 +114,12 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 _shift = (op.data >> 32) & 0xFFFFFFFF
                 _shift = _shift if _shift < 0x80000000 else _shift - 0x100000000
                 shift = f0 - f1 + _shift
-                signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
+                signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
                 line = f'op_{i}:entity work.mux generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw},SHIFT1=>{shift},INVERT1=>{inv}) port map(key=>v{k}({bwk-1}),in0=>v{a},in1=>v{b},result=>v{i});'
             case 7:  # Multiplication
                 bw0, bw1 = widths[op.id0], widths[op.id1]
                 s0, s1 = int(kifs[op.id0][0]), int(kifs[op.id1][0])
-                signals.append(f'signal v{i}:std_logic_vector{_loc(bw-1,0)};')
+                signals.append(f'signal v{i}:std_logic_vector({bw-1} downto {0});')
                 line = f'op_{i}:entity work.multiplier generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw}) port map(in0=>v{op.id0},in1=>v{op.id1},result=>v{i});'
 
             case _:
@@ -153,13 +149,13 @@ def output_gen(sol: Solution, neg_defined: set[int]):
                 neg_defined.add(idx)
                 bw0 = sum(_minimal_kif(sol.ops[idx].qint))
                 was_signed = int(_minimal_kif(sol.ops[idx].qint)[0])
-                signals.append(f'signal v{idx}_neg:std_logic_vector{_loc(bw-1,0)};')
+                signals.append(f'signal v{idx}_neg:std_logic_vector({bw-1} downto {0});')
                 assigns.append(
                     f'op_neg_{idx}:entity work.negative generic map(BW_IN=>{bw0},BW_OUT=>{bw},IN_SIGNED=>{was_signed}) port map(neg_in=>v{idx},neg_out=>v{idx}_neg);'
                 )
-            assigns.append(f'model_out{_loc(i0,i1)} <= v{idx}_neg{_loc(bw-1,0)};')
+            assigns.append(f'model_out({i0} downto {i1}) <= v{idx}_neg({bw-1} downto {0});')
         else:
-            assigns.append(f'model_out{_loc(i0,i1)} <= v{idx}{_loc(bw-1,0)};')
+            assigns.append(f'model_out({i0} downto {i1}) <= v{idx}({bw-1} downto {0});')
     return signals, assigns
 
 
@@ -177,8 +173,8 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity {fn_name} is port(
-    model_inp:in std_logic_vector{_loc(inp_bits-1,0)};
-    model_out:out std_logic_vector{_loc(out_bits-1,0)}
+    model_inp:in std_logic_vector({inp_bits-1} downto {0});
+    model_out:out std_logic_vector({out_bits-1} downto {0})
 );
 end entity {fn_name};
 

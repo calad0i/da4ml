@@ -1,7 +1,10 @@
 from itertools import accumulate
 
 from ....cmvm.types import CascadedSolution, QInterval, Solution, _minimal_kif
-from .comb import _loc
+
+
+def _loc(i: int, j: int):
+    return f'({i} downto {j})' if i != j else f'({i})'
 
 
 def hetero_io_map(qints: list[QInterval], merge: bool = False):
@@ -94,14 +97,14 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
     return f"""library ieee;
 use ieee.std_logic_1164.all;
 entity {module_name}_wrapper is port({clk_and_rst_inp}
-    model_inp:in std_logic_vector{_loc(w_reg_in-1,0)};
-    model_out:out std_logic_vector{_loc(w_reg_out-1,0)}
+    model_inp:in std_logic_vector({w_reg_in-1} downto {0});
+    model_out:out std_logic_vector({w_reg_out-1} downto {0})
 );
 end entity {module_name}_wrapper;
 
 architecture rtl of {module_name}_wrapper is
-    signal packed_inp:std_logic_vector{_loc(w_het_in-1,0)};
-    signal packed_out:std_logic_vector{_loc(w_het_out-1,0)};
+    signal packed_inp:std_logic_vector({w_het_in-1} downto {0});
+    signal packed_out:std_logic_vector({w_het_out-1} downto {0});
 
 begin
     {inp_assignment_str}
