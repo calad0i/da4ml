@@ -16,12 +16,19 @@ def kif_to_hlslib_type(k: bool | int = 1, i: int = 0, f: int = 0):
     return f'ac_fixed<{int(k)},{k + i + f},{k + i}>'
 
 
+def kif_to_oneapi_type(k: bool | int = 1, i: int = 0, f: int = 0):
+    # OneAPI requires at least 2 bits for all ac_fixed as of 2025.1
+    return f'ac_fixed<{int(k)},{max(k + i + f, 2)},{k + i}>'
+
+
 def get_typestr_fn(flavor: str):
     match flavor.lower():
         case 'vitis':
             typestr_fn = kif_to_vitis_type
         case 'hlslib':
             typestr_fn = kif_to_hlslib_type
+        case 'oneapi':
+            typestr_fn = kif_to_oneapi_type
         case _:
             raise ValueError(f'Unsupported flavor: {flavor}')
     return typestr_fn
@@ -126,7 +133,7 @@ def get_io_types(sol: Solution, flavor: str):
     return inp_type, out_type
 
 
-def cpp_logic_and_bridge_gen(
+def hls_logic_and_bridge_gen(
     sol: Solution,
     fn_name: str,
     flavor: str,

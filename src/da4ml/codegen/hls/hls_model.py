@@ -13,7 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from da4ml.cmvm.types import Solution
-from da4ml.codegen.cpp.cpp_codegen import cpp_logic_and_bridge_gen, get_io_types
+from da4ml.codegen.hls.hls_codegen import get_io_types, hls_logic_and_bridge_gen
 
 from ... import codegen
 from ...cmvm.types import _minimal_kif
@@ -39,7 +39,7 @@ class HLSModel:
         self._prj_name = prj_name
         self._path = Path(path)
         self._flavor = flavor.lower()
-        assert self._flavor in ('vitis', 'hlslib'), f'Unsupported HLS flavor: {self._flavor}'
+        assert self._flavor in ('vitis', 'hlslib', 'oneapi'), f'Unsupported HLS flavor: {self._flavor}'
         self._print_latency = print_latency
         self._part_name = part_name
         self._clock_period = clock_period
@@ -64,7 +64,7 @@ class HLSModel:
     def write(self):
         if not self._path.exists():
             self._path.mkdir(parents=True, exist_ok=True)
-        template_def, bridge = cpp_logic_and_bridge_gen(
+        template_def, bridge = hls_logic_and_bridge_gen(
             self._solution,
             self._prj_name,
             self._flavor,
@@ -104,11 +104,11 @@ class HLSModel:
         with open(self._path / f'{self._prj_name}_bridge.cc', 'w') as f:
             f.write(bridge)
 
-        shutil.copy(self.__src_root / 'cpp/source/binder_util.hh', self._path)
-        shutil.copy(self.__src_root / f'cpp/source/{self._flavor}_bitshift.hh', self._path / 'bitshift.hh')
-        shutil.copy(self.__src_root / 'cpp/source/build_binder.mk', self._path)
+        shutil.copy(self.__src_root / 'hls/source/binder_util.hh', self._path)
+        shutil.copy(self.__src_root / f'hls/source/{self._flavor}_bitshift.hh', self._path / 'bitshift.hh')
+        shutil.copy(self.__src_root / 'hls/source/build_binder.mk', self._path)
         if self._flavor == 'vitis':
-            shutil.copytree(self.__src_root / 'cpp/source/ap_types', self._path / 'ap_types', dirs_exist_ok=True)
+            shutil.copytree(self.__src_root / 'hls/source/ap_types', self._path / 'ap_types', dirs_exist_ok=True)
         else:
             pass
 
