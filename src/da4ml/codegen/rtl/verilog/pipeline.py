@@ -1,4 +1,4 @@
-from ...cmvm.types import CascadedSolution, _minimal_kif
+from ....cmvm.types import CascadedSolution, _minimal_kif
 from .comb import comb_logic_gen
 
 
@@ -6,21 +6,19 @@ def pipeline_logic_gen(
     csol: CascadedSolution,
     name: str,
     print_latency=False,
-    timescale: str | None = None,
+    timescale: str | None = '`timescale 1 ns / 1 ps',
     register_layers: int = 1,
 ):
     N = len(csol.solutions)
     inp_bits = [sum(map(sum, map(_minimal_kif, sol.inp_qint))) for sol in csol.solutions]
     out_bits = inp_bits[1:] + [sum(map(sum, map(_minimal_kif, csol.out_qint)))]
 
-    registers = [f'signal stage{i}_inp:std_logic_vector({width-1} downto 0);' for i, width in enumerate(inp_bits)]
+    registers = [f'reg [{width-1}:0] stage{i}_inp;' for i, width in enumerate(inp_bits)]
     for i in range(0, register_layers - 1):
-        registers += [f'signal stage{j}_inp_copy{i}:std_logic_vector({width-1} downto 0);' for j, width in enumerate(inp_bits)]
-    wires = [f'signal stage{i}_out:std_logic_vector({width-1} downto 0);' for i, width in enumerate(out_bits)]
+        registers += [f'reg [{width-1}:0] stage{j}_inp_copy{i};' for j, width in enumerate(inp_bits)]
+    wires = [f'wire [{width-1}:0] stage{i}_out;' for i, width in enumerate(out_bits)]
 
-    comb_logic = [
-        f'stage{i}:entity work.{name}_stage{i} port map(model_inp=>stage{i}_inp,model_out=>stage{i}_out);' for i in range(N)
-    ]
+    comb_logic = [f'{name}_stage{i} stage{i} (.model_inp(stage{i}_inp), .model_out(stage{i}_out));' for i in range(N)]
 
     if register_layers == 1:
         serial_logic = ['stage0_inp <= model_inp;']
@@ -38,30 +36,28 @@ def pipeline_logic_gen(
 
     serial_logic += [f'model_out <= stage{N-1}_out;']
 
-    blk = '\n    '
+    sep0 = '\n    '
+    sep1 = '\n        '
 
-    module = f"""library ieee;
-use ieee.std_logic_1164.all;
-entity {name} is port(
-    clk:in std_logic;
-    model_inp:in std_logic_vector({inp_bits[0]-1} downto 0);
-    model_out:out std_logic_vector({out_bits[-1]-1} downto 0));
-end entity {name};
+    module = f"""module {name} (
+    input clk,
+    input [{inp_bits[0]-1}:0] model_inp,
+    output reg [{out_bits[-1]-1}:0] model_out
+);
 
-architecture rtl of {name} is
-    {blk.join(registers)}
-    {blk.join(wires)}
+    {sep0.join(registers)}
+    {sep0.join(wires)}
 
-begin
-    {blk.join(comb_logic)}
+    {sep0.join(comb_logic)}
 
-    process(clk) begin
-        if rising_edge(clk) then
-            {f'{blk}        '.join(serial_logic)}
-        end if;
-    end process;
-end architecture rtl;
+    always @(posedge clk) begin
+        {sep1.join(serial_logic)}
+    end
+endmodule
 """
+
+    if timescale:
+        module = f'{timescale}\n\n{module}'
 
     ret: dict[str, str] = {}
     for i, s in enumerate(csol.solutions):

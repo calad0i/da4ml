@@ -10,12 +10,9 @@ from uuid import uuid4
 import numpy as np
 from numpy.typing import NDArray
 
-from ... import codegen
 from ...cmvm.types import CascadedSolution, Solution, _minimal_kif
 from ...trace.pipeline import to_pipeline
-from .comb import comb_logic_gen
-from .io_wrapper import binder_gen, generate_io_wrapper
-from .pipeline import pipeline_logic_gen
+from .. import rtl
 
 
 def get_io_kifs(sol: Solution | CascadedSolution):
@@ -24,13 +21,13 @@ def get_io_kifs(sol: Solution | CascadedSolution):
     return np.array(inp_kifs, np.int8), np.array(out_kifs, np.int8)
 
 
-class HDLModel:
+class RTLModel:
     def __init__(
         self,
-        flavor: str,
         solution: Solution | CascadedSolution,
         prj_name: str,
         path: str | Path,
+        flavor: str = 'verilog',
         latency_cutoff: float = -1,
         print_latency: bool = True,
         part_name: str = 'xcvu13p-flga2577-2-e',
@@ -45,7 +42,7 @@ class HDLModel:
         self._prj_name = prj_name
         self._latency_cutoff = latency_cutoff
         self._print_latency = print_latency
-        self.__src_root = Path(codegen.__file__).parent
+        self.__src_root = Path(rtl.__file__).parent
         self._part_name = part_name
         self._clock_period = clock_period
         self._clock_uncertainty = clock_uncertainty
@@ -69,16 +66,22 @@ class HDLModel:
 
     def write(self):
         flavor = self._flavor
+        suffix = 'v' if flavor == 'verilog' else 'vhd'
+        if flavor == 'vhdl':
+            from .vhdl import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
+        else:  # verilog
+            from .verilog import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
+
         self._path.mkdir(parents=True, exist_ok=True)
         if self._pipe is not None:  # Pipeline
             # Main logic
             codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
             for k, v in codes.items():
-                with open(self._path / f'{k}.v', 'w') as f:
+                with open(self._path / f'{k}.{suffix}', 'w') as f:
                     f.write(v)
 
             # Build script
-            with open(self.__src_root / f'{flavor}/source/build_prj.tcl') as f:
+            with open(self.__src_root / 'common_source/build_prj.tcl') as f:
                 tcl = f.read()
             tcl = tcl.replace('${DEVICE}', self._part_name)
             tcl = tcl.replace('${PROJECT_NAME}', self._prj_name)
@@ -86,7 +89,7 @@ class HDLModel:
                 f.write(tcl)
 
             # XDC
-            with open(self.__src_root / f'{flavor}/source/template.xdc') as f:
+            with open(self.__src_root / 'common_source/template.xdc') as f:
                 xdc = f.read()
             xdc = xdc.replace('${CLOCK_PERIOD}', str(self._clock_period))
             xdc = xdc.replace('${UNCERTAINITY_SETUP}', str(self._clock_uncertainty))
@@ -108,24 +111,25 @@ class HDLModel:
 
             # Main logic
             code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps')
-            with open(self._path / f'{self._prj_name}.v', 'w') as f:
+            with open(self._path / f'{self._prj_name}.{suffix}', 'w') as f:
                 f.write(code)
 
             # Verilog IO wrapper (non-uniform bw to uniform one, no clk)
             io_wrapper = generate_io_wrapper(self._solution, self._prj_name, False)
             binder = binder_gen(self._solution, f'{self._prj_name}_wrapper')
 
-        with open(self._path / f'{self._prj_name}_wrapper.v', 'w') as f:
+        with open(self._path / f'{self._prj_name}_wrapper.{suffix}', 'w') as f:
             f.write(io_wrapper)
         with open(self._path / f'{self._prj_name}_wrapper_binder.cc', 'w') as f:
             f.write(binder)
 
         # Common resource copy
-        for fname in self.__src_root.glob(f'{flavor}/source/*.v'):
+        for fname in self.__src_root.glob(f'{flavor}/source/*.{suffix}'):
             shutil.copy(fname, self._path)
-        shutil.copy(self.__src_root / f'{flavor}/source/build_binder.mk', self._path)
-        shutil.copy(self.__src_root / f'{flavor}/source/ioutil.hh', self._path)
-        shutil.copy(self.__src_root / f'{flavor}/source/binder_util.hh', self._path)
+
+        shutil.copy(self.__src_root / 'common_source/build_binder.mk', self._path)
+        shutil.copy(self.__src_root / 'common_source/ioutil.hh', self._path)
+        shutil.copy(self.__src_root / 'common_source/binder_util.hh', self._path)
         self._solution.save(self._path / 'model.json')
         with open(self._path / 'misc.json', 'w') as f:
             f.write(f'{{"cost": {self._solution.cost}}}')
@@ -159,6 +163,7 @@ class HDLModel:
         env['VM_PREFIX'] = f'{self._prj_name}_wrapper'
         env['STAMP'] = self._uuid
         env['EXTRA_CXXFLAGS'] = '-fopenmp' if openmp else ''
+        env['VERILATOR_FLAGS'] = '-Wall' if self._flavor == 'verilog' else ''
         if nproc is not None:
             env['N_JOBS'] = str(nproc)
         if o3:
@@ -240,6 +245,7 @@ class HDLModel:
         NDArray[np.float64]
             Output of the model in shape (n_samples, output_size).
         """
+
         assert self._lib is not None, 'Library not loaded, call .compile() first.'
         inp_size, out_size = self._solution.shape
 
@@ -298,7 +304,7 @@ Estimated cost: {cost} LUTs"""
         return spec
 
 
-class VerilogModel(HDLModel):
+class VerilogModel(RTLModel):
     def __init__(
         self,
         solution: Solution | CascadedSolution,
@@ -313,10 +319,39 @@ class VerilogModel(HDLModel):
         register_layers: int = 1,
     ):
         self._hdl_model = super().__init__(
-            'verilog',
             solution,
             prj_name,
             path,
+            'verilog',
+            latency_cutoff,
+            print_latency,
+            part_name,
+            clock_period,
+            clock_uncertainty,
+            io_delay_minmax,
+            register_layers,
+        )
+
+
+class VHDLModel(RTLModel):
+    def __init__(
+        self,
+        solution: Solution | CascadedSolution,
+        prj_name: str,
+        path: str | Path,
+        latency_cutoff: float = -1,
+        print_latency: bool = True,
+        part_name: str = 'xcvu13p-flga2577-2-e',
+        clock_period: float = 5,
+        clock_uncertainty: float = 0.1,
+        io_delay_minmax: tuple[float, float] = (0.2, 0.4),
+        register_layers: int = 1,
+    ):
+        self._hdl_model = super().__init__(
+            solution,
+            prj_name,
+            path,
+            'vhdl',
             latency_cutoff,
             print_latency,
             part_name,

@@ -2,7 +2,7 @@ from math import ceil, log2
 
 import numpy as np
 
-from ...cmvm.types import Op, QInterval, Solution, _minimal_kif
+from ....cmvm.types import Op, QInterval, Solution, _minimal_kif
 
 
 def make_neg(

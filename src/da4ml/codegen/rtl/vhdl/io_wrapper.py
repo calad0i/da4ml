@@ -1,6 +1,6 @@
 from itertools import accumulate
 
-from ...cmvm.types import CascadedSolution, QInterval, Solution, _minimal_kif
+from ....cmvm.types import CascadedSolution, QInterval, Solution, _minimal_kif
 from .comb import _loc
 
 

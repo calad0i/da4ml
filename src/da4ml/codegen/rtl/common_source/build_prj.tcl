@@ -1,21 +1,41 @@
 set project_name "${PROJECT_NAME}"
 set device "${DEVICE}"
+set source_type "${SOURCE_TYPE}"
 
 set top_module "${project_name}"
 set output_dir "./output_${project_name}"
 
 create_project $project_name "${output_dir}/$project_name" -force -part $device
 
-set_property TARGET_LANGUAGE Verilog [current_project]
 set_property DEFAULT_LIB work [current_project]
 
-read_verilog "${project_name}.v"
-read_verilog "shift_adder.v"
-read_verilog "negative.v"
-read_verilog "mux.v"
-read_verilog "multiplier.v"
-foreach file [glob -nocomplain "${project_name}_stage*.v"] {
-    read_verilog $file
+if { $source_type != "vhdl" && $source_type != "verilog" } {
+    puts "Error: SOURCE_TYPE must be either 'vhdl' or 'verilog'."
+    exit 1
+}
+
+if { $source_type == "vhdl" } {
+    set_property TARGET_LANGUAGE VHDL [current_project]
+
+    read_vhdl -vhdl2008 "${project_name}.vhd"
+    read_vhdl -vhdl2008 "shift_adder.vhd"
+    read_vhdl -vhdl2008 "negative.vhd"
+    read_vhdl -vhdl2008 "mux.vhd"
+    read_vhdl -vhdl2008 "multiplier.vhd"
+    foreach file [glob -nocomplain "${project_name}_stage*.vhd"] {
+        read_vhdl -vhdl2008 $file
+    }
+} else {
+    set_property TARGET_LANGUAGE Verilog [current_project]
+
+    read_verilog "${project_name}.v"
+    read_verilog "shift_adder.v"
+    read_verilog "negative.v"
+    read_verilog "mux.v"
+    read_verilog "multiplier.v"
+    foreach file [glob -nocomplain "${project_name}_stage*.v"] {
+        read_verilog $file
+    }
 }
 
 read_xdc "${project_name}.xdc" -mode out_of_context
