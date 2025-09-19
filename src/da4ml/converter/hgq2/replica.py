@@ -133,7 +133,7 @@ class ReplayOperationBase(metaclass=ReplayOperationMeta):
                 assert isinstance(layer.oq, Quantizer)
                 outputs = mirror_quantizer(layer.oq, outputs)
 
-        if isinstance(outputs, FixedVariableArray):
+        if isinstance(outputs, (FixedVariableArray, np.ndarray)):
             outputs = (outputs,)
 
         return outputs
