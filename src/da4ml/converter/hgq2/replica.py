@@ -94,7 +94,6 @@ class ReplayOperationBase(metaclass=ReplayOperationMeta):
 
     def __call__(self, *args, **kwargs) -> tuple[FixedVariableArray, ...]:
         assert all(not isinstance(a, FixedVariableArray) for a in kwargs.values())
-        assert all(isinstance(a, FixedVariableArray) or isinstance(a, Sequence) for a in args)
         inputs = args[0] if len(args) == 1 else args
 
         if not isinstance(self.op, hgq.layers.QLayerBase):
