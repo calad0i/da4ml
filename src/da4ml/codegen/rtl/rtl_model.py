@@ -95,8 +95,8 @@ class RTLModel:
             xdc = xdc.replace('${CLOCK_PERIOD}', str(self._clock_period))
             xdc = xdc.replace('${UNCERTAINITY_SETUP}', str(self._clock_uncertainty))
             xdc = xdc.replace('${UNCERTAINITY_HOLD}', str(self._clock_uncertainty))
-            xdc = xdc.replace('${DELAY_MAX}', str(self._io_delay_minmax[0]))
-            xdc = xdc.replace('${DELAY_MIN}', str(self._io_delay_minmax[1]))
+            xdc = xdc.replace('${DELAY_MAX}', str(self._io_delay_minmax[1]))
+            xdc = xdc.replace('${DELAY_MIN}', str(self._io_delay_minmax[0]))
             with open(self._path / f'{self._prj_name}.xdc', 'w') as f:
                 f.write(xdc)
 
