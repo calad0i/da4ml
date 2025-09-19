@@ -85,6 +85,7 @@ class RTLModel:
                 tcl = f.read()
             tcl = tcl.replace('${DEVICE}', self._part_name)
             tcl = tcl.replace('${PROJECT_NAME}', self._prj_name)
+            tcl = tcl.replace('${SOURCE_TYPE}', flavor)
             with open(self._path / 'build_prj.tcl', 'w') as f:
                 f.write(tcl)
 
