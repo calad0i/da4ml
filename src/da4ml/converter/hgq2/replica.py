@@ -192,7 +192,7 @@ class ReplayQBatchNormalization(ReplayOperationBase):
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
         layer: QBatchNormalization = self.op
         scale, bias = map(np.array, layer.qscaler_and_qoffset)
-        shape = layer._shape
+        shape = layer._shape[1:]
         return inputs * scale.reshape(shape) + bias.reshape(shape)
 
 
