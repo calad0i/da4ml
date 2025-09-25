@@ -1,11 +1,11 @@
 from inspect import signature
-from typing import Any, TypeVar
+from typing import TypeVar
 
 import numpy as np
 from numba.typed import List as NumbaList
 from numpy.typing import NDArray
 
-from ..cmvm import solve
+from ..cmvm.api import solve, solver_options_t
 from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, QInterval
 from .ops import einsum, reduce
 
@@ -137,16 +137,17 @@ class FixedVariableArray:
     def __init__(
         self,
         vars: NDArray,
-        solver_options: dict[str, Any] | None = None,
+        solver_options: solver_options_t | None = None,
     ):
-        self._vars = np.array(vars)
+        _vars = np.array(vars)
+        self._vars = _vars
         _solver_options = signature(solve).parameters
         _solver_options = {k: v.default for k, v in _solver_options.items() if v.default is not v.empty}
         if solver_options is not None:
             _solver_options.update(solver_options)
         _solver_options.pop('qintervals', None)
         _solver_options.pop('latencies', None)
-        self.solver_options = _solver_options
+        self.solver_options: solver_options_t = _solver_options  # type: ignore
 
     @classmethod
     def from_lhs(
@@ -156,7 +157,7 @@ class FixedVariableArray:
         step: NDArray[np.floating],
         hwconf: HWConfig,
         latency: np.ndarray | float = 0.0,
-        solver_options: dict[str, Any] | None = None,
+        solver_options: solver_options_t | None = None,
     ):
         shape = low.shape
         assert shape == high.shape == step.shape
@@ -189,7 +190,7 @@ class FixedVariableArray:
         f: NDArray[np.integer],
         hwconf: HWConfig,
         latency: NDArray[np.floating] | float = 0.0,
-        solver_options: dict[str, Any] | None = None,
+        solver_options: solver_options_t | None = None,
     ):
         mask = k + i + f <= 0
         k = np.where(mask, 0, k)
@@ -375,7 +376,7 @@ class FixedVariableArrayInput(FixedVariableArray):
         self,
         shape: tuple[int, ...] | int,
         hwconf: HWConfig = HWConfig(1, -1, -1),
-        solver_options: dict[str, Any] | None = None,
+        solver_options: solver_options_t | None = None,
         latency=0.0,
     ):
         _vars = np.empty(shape, dtype=object)

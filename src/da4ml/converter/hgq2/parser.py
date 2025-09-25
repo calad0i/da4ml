@@ -6,6 +6,7 @@ import keras
 import numpy as np
 from keras import KerasTensor, Operation
 
+from ...cmvm.api import solver_options_t
 from ...trace import FixedVariableArray, FixedVariableArrayInput, HWConfig, comb_trace
 from ...trace.fixed_variable import FixedVariable
 from .replica import _registry
@@ -120,7 +121,7 @@ def _apply_nn(
 def trace_model(  # type: ignore
     model: keras.Model,
     hwconf: HWConfig = HWConfig(1, -1, -1),
-    solver_options: dict[str, Any] | None = None,
+    solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
     dump: Literal[False] = False,
@@ -131,7 +132,7 @@ def trace_model(  # type: ignore
 def trace_model(  # type: ignore
     model: keras.Model,
     hwconf: HWConfig = HWConfig(1, -1, -1),
-    solver_options: dict[str, Any] | None = None,
+    solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
     dump: Literal[True] = False,  # type: ignore
@@ -141,7 +142,7 @@ def trace_model(  # type: ignore
 def trace_model(  # type: ignore
     model: keras.Model,
     hwconf: HWConfig = HWConfig(1, -1, -1),
-    solver_options: dict[str, Any] | None = None,
+    solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | None = None,
     dump=False,

@@ -1,4 +1,5 @@
 from math import ceil, log2
+from typing import TypedDict
 
 import numpy as np
 from numba import jit, prange
@@ -251,3 +252,13 @@ def solve(
         carry_size=carry_size,
     )
     return csol
+
+
+class solver_options_t(TypedDict, total=False):
+    method0: str
+    method1: str
+    hard_dc: int
+    decompose_dc: int
+    adder_size: int
+    carry_size: int
+    search_all_decompose_dc: bool
