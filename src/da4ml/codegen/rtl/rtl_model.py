@@ -158,7 +158,7 @@ class RTLModel:
         o3 : bool | None, optional
             Turn on -O3 flag, by default False
         clean : bool, optional
-            Remove obsolete shared object files, by default True
+            Remove obsolete shared object files and `obj_dir`, by default True
 
         Raises
         ------
@@ -178,12 +178,11 @@ class RTLModel:
         if o3:
             args.append('fast')
 
-        if clean is not False:
+        if clean:
             m = re.compile(r'^lib.*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.so$')
             for p in self._path.iterdir():
                 if not p.is_dir() and m.match(p.name):
                     p.unlink()
-        if clean:
             subprocess.run(
                 ['make', '-f', 'build_binder.mk', 'clean'], env=env, cwd=self._path, check=True, capture_output=not verbose
             )
@@ -198,6 +197,9 @@ class RTLModel:
             print(r.stderr.decode(), file=sys.stderr)
             print(r.stdout.decode(), file=sys.stderr)
             raise RuntimeError('Compilation failed!!')
+
+        if clean:
+            subprocess.run(['rm', '-rf', 'obj_dir'], cwd=self._path, check=True, capture_output=not verbose)
 
         self._load_lib(self._uuid)
 
@@ -230,7 +232,7 @@ class RTLModel:
         o3 : bool | None, optional
             Turn on -O3 flag, by default False
         clean : bool, optional
-            Remove obsolete shared object files, by default True
+            Remove obsolete shared object files and `obj_dir`, by default True
 
         Raises
         ------
