@@ -192,12 +192,12 @@ class HLSModel:
         self.write()
         self._compile(verbose, openmp, o3, clean)
 
-    def predict(self, data: NDArray[T]) -> NDArray[T]:
+    def predict(self, data: NDArray[T] | Sequence[NDArray[T]]) -> NDArray[T]:
         """Run the model on the input data.
 
         Parameters
         ----------
-        data : NDArray[np.floating]
+        data: NDArray[np.floating] | Sequence[NDArray[np.floating]]
             Input data to the model. The shape is ignored, and the number of samples is
             determined by the size of the data.
 
@@ -208,6 +208,9 @@ class HLSModel:
         """
         assert self._lib is not None, 'Library not loaded, call .compile() first.'
         inp_size, out_size = self._solution.shape
+
+        if isinstance(data, Sequence):
+            data = np.concatenate([a.reshape(a.shape[0], -1) for a in data], axis=-1)
 
         dtype = data.dtype
         if dtype not in (np.float32, np.float64):
