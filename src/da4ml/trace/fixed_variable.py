@@ -546,7 +546,7 @@ class FixedVariableInput(FixedVariable):
     def __init__(
         self,
         latency: float | None = None,
-        hwconf=HWConfig(-1, -1, -1),
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, -1, -1),
     ) -> None:
         self.low = Decimal(1e10)
         self.high = Decimal(-1e10)
@@ -556,7 +556,7 @@ class FixedVariableInput(FixedVariable):
         self.opr = 'new'
         self._data = None
         self.id = UUID(int=rd.getrandbits(128), version=4)
-        self.hwconf = hwconf
+        self.hwconf = HWConfig(*hwconf)
 
         self.latency = latency if latency is not None else 0.0
         self.cost = 0.0

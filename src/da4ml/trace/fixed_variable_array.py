@@ -244,7 +244,8 @@ class FixedVariableArray:
             qintervals = NumbaList(_qintervals)  # type: ignore
             latencies = NumbaList(_latencies)  # type: ignore
             hwconf = self._vars.ravel()[0].hwconf
-            kwargs.update(adder_size=hwconf.adder_size, carry_size=hwconf.carry_size)
+            kwargs.setdefault('adder_size', hwconf.adder_size)
+            kwargs.setdefault('carry_size', hwconf.carry_size)
             _mat = np.ascontiguousarray(mat1.astype(np.float32))
             sol = solve(_mat, qintervals=qintervals, latencies=latencies, **kwargs)
             _r = sol(vec._vars)
@@ -380,7 +381,7 @@ class FixedVariableArrayInput(FixedVariableArray):
     def __init__(
         self,
         shape: tuple[int, ...] | int,
-        hwconf: HWConfig = HWConfig(1, -1, -1),
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
         solver_options: solver_options_t | None = None,
         latency=0.0,
     ):
