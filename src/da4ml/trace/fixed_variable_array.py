@@ -1,5 +1,5 @@
 from inspect import signature
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 from numba.typed import List as NumbaList
@@ -8,6 +8,9 @@ from numpy.typing import NDArray
 from ..cmvm.api import solve, solver_options_t
 from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, QInterval
 from .ops import einsum, reduce
+
+if TYPE_CHECKING:
+    from .fixed_variable_array import FixedVariableArray
 
 T = TypeVar('T')
 
@@ -40,6 +43,47 @@ def _min_of(a, b):
         return b.min_of(a)
     else:
         return min(a, b)
+
+def mmm(mat0: np.ndarray, mat1: np.ndarray):
+    shape = mat0.shape[:-1] + mat1.shape[1:]
+    mat0, mat1 = mat0.reshape((-1, mat0.shape[-1])), mat1.reshape((mat1.shape[0], -1))
+    _shape = (mat0.shape[0], mat1.shape[1])
+    _vars = np.empty(_shape, dtype=object)
+    for i in range(mat0.shape[0]):
+        for j in range(mat1.shape[1]):
+            vec0 = mat0[i]
+            vec1 = mat1[:, j]
+            _vars[i, j] = reduce(lambda x, y: x + y, vec0 * vec1)
+    return _vars.reshape(shape)
+
+def cmvm(cm: np.ndarray, v: 'FixedVariableArray', solver_options: solver_options_t) -> np.ndarray:
+    mask = offload_mask(cm, v)
+    if np.any(mask):
+        offload_cm = cm * mask.astype(cm.dtype)
+        cm = cm * (~mask).astype(cm.dtype)
+    else:
+        offload_cm = None
+    _qintervals = [QInterval(float(_v.low), float(_v.high), float(_v.step)) for _v in v._vars]
+    _latencies = [float(_v.latency) for _v in v._vars]
+    qintervals = NumbaList(_qintervals)  # type: ignore
+    latencies = NumbaList(_latencies)  # type: ignore
+    hwconf = v._vars.ravel()[0].hwconf
+    solver_options.setdefault('adder_size', hwconf.adder_size)
+    solver_options.setdefault('carry_size', hwconf.carry_size)
+    _mat = np.ascontiguousarray(cm.astype(np.float32))
+    sol = solve(_mat, qintervals=qintervals, latencies=latencies, **solver_options)
+    _r: np.ndarray = sol(v._vars)
+    if offload_cm is not None:
+        _r = _r + mmm(v._vars, offload_cm)
+    return _r
+
+
+def offload_mask(cm: NDArray, v: 'FixedVariableArray') -> NDArray[np.bool_]:
+    assert v.ndim == 1
+    assert cm.ndim == 2
+    assert cm.shape[0] == v.shape[0]
+    bits = np.sum(v.kif, axis=0)[:, None]
+    return (bits == 0) & (cm != 0)
 
 
 class FixedVariableArray:
@@ -206,9 +250,6 @@ class FixedVariableArray:
         high, low = _high - step, -_high * k
         return cls.from_lhs(low, high, step, hwconf, latency, solver_options)
 
-    def __matmul__(self, other):
-        return self.matmul(other)
-
     def matmul(self, other):
         if isinstance(other, FixedVariableArray):
             other = other._vars
@@ -216,42 +257,25 @@ class FixedVariableArray:
             other = np.array(other)
         if any(isinstance(x, FixedVariable) for x in other.ravel()):
             mat0, mat1 = self._vars, other
-            shape = mat0.shape[:-1] + mat1.shape[1:]
-            mat0, mat1 = (
-                mat0.reshape((-1, mat0.shape[-1])),
-                mat1.reshape((mat1.shape[0], -1)),
-            )
-            _shape = (mat0.shape[0], mat1.shape[1])
-            _vars = np.empty(_shape, dtype=object)
-            for i in range(mat0.shape[0]):
-                for j in range(mat1.shape[1]):
-                    vec0 = mat0[i]
-                    vec1 = mat1[:, j]
-                    _vars[i, j] = reduce(lambda x, y: x + y, vec0 * vec1)
-            return FixedVariableArray(_vars.reshape(shape), self.solver_options)
+            _vars = mmm(mat0, mat1)
+            return FixedVariableArray(_vars, self.solver_options)
 
-        kwargs = (self.solver_options or {}).copy()
+        solver_options = (self.solver_options or {}).copy()
         shape0, shape1 = self.shape, other.shape
         assert shape0[-1] == shape1[0], f'Matrix shapes do not match: {shape0} @ {shape1}'
-        c = shape1[0]
+        contract_len = shape1[0]
         out_shape = shape0[:-1] + shape1[1:]
-        mat0, mat1 = self.reshape((-1, c)), other.reshape((c, -1))
+        mat0, mat1 = self.reshape((-1, contract_len)), other.reshape((contract_len, -1))
         r = []
         for i in range(mat0.shape[0]):
             vec = mat0[i]
-            _qintervals = [QInterval(float(v.low), float(v.high), float(v.step)) for v in vec._vars]
-            _latencies = [float(v.latency) for v in vec._vars]
-            qintervals = NumbaList(_qintervals)  # type: ignore
-            latencies = NumbaList(_latencies)  # type: ignore
-            hwconf = self._vars.ravel()[0].hwconf
-            kwargs.setdefault('adder_size', hwconf.adder_size)
-            kwargs.setdefault('carry_size', hwconf.carry_size)
-            _mat = np.ascontiguousarray(mat1.astype(np.float32))
-            sol = solve(_mat, qintervals=qintervals, latencies=latencies, **kwargs)
-            _r = sol(vec._vars)
+            _r = cmvm(mat1, vec, solver_options)
             r.append(_r)
         r = np.array(r).reshape(out_shape)
         return FixedVariableArray(r, self.solver_options)
+
+    def __matmul__(self, other):
+        return self.matmul(other)
 
     def rmatmul(self, other):
         mat1 = np.moveaxis(other, -1, 0)
@@ -262,7 +286,7 @@ class FixedVariableArray:
         _axes = tuple(range(0, ndim0 + ndim1 - 2))
         axes = _axes[ndim0 - 1 :] + _axes[: ndim0 - 1]
         return r.transpose(axes)
-
+    
     def __rmatmul__(self, other):
         return self.rmatmul(other)
 
@@ -372,6 +396,7 @@ class FixedVariableArray:
 
     @property
     def kif(self):
+        """[k, i, f] array"""
         shape = self._vars.shape
         kif = np.array([v.kif for v in self._vars.ravel()]).reshape(*shape, 3)
         return np.moveaxis(kif, -1, 0)
