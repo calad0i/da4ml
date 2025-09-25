@@ -66,6 +66,7 @@ report_design_analysis -congestion -file "${output_dir}/reports/${project_name}_
 
 phys_opt_design -directive AggressiveExplore
 write_checkpoint -force "${output_dir}/${project_name}_post_place.dcp"
+file delete -force "${output_dir}/${project_name}_post_synth.dcp"
 
 report_design_analysis -congestion -file "${output_dir}/reports/${project_name}_post_place_congestion_final.rpt"
 
@@ -75,6 +76,7 @@ report_utilization -hierarchical -file "${output_dir}/reports/${project_name}_po
 # route
 route_design -directive NoTimingRelaxation
 write_checkpoint -force "${output_dir}/${project_name}_post_route.dcp"
+file delete -force "${output_dir}/${project_name}_post_place.dcp"
 
 
 report_timing_summary -file "${output_dir}/reports/${project_name}_post_route_timing.rpt"
