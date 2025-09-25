@@ -140,6 +140,11 @@ class FixedVariableArray:
         solver_options: solver_options_t | None = None,
     ):
         _vars = np.array(vars)
+        _vars_f = _vars.ravel()
+        hwconf = next(iter(v for v in _vars_f if isinstance(v, FixedVariable))).hwconf
+        for i, v in enumerate(_vars_f):
+            if not isinstance(v, FixedVariable):
+                _vars_f[i] = FixedVariable(float(v), float(v), 1.0, hwconf=hwconf)
         self._vars = _vars
         _solver_options = signature(solve).parameters
         _solver_options = {k: v.default for k, v in _solver_options.items() if v.default is not v.empty}
