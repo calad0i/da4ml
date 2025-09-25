@@ -1,4 +1,5 @@
 import ctypes
+import json
 import os
 import re
 import shutil
@@ -136,7 +137,11 @@ class RTLModel:
         shutil.copy(self.__src_root / 'common_source/binder_util.hh', self._path)
         self._solution.save(self._path / 'model.json')
         with open(self._path / 'misc.json', 'w') as f:
-            f.write(f'{{"cost": {self._solution.cost}}}')
+            misc = {'cost': self._solution.cost}
+            if self._pipe is not None:
+                misc['latency'] = len(self._pipe[0])
+                misc['reg_bits'] = self._pipe.reg_bits
+            f.write(json.dumps(misc))
 
     def _compile(self, verbose=False, openmp=True, nproc=None, o3: bool = False, clean=True):
         """Same as compile, but will not write to the library
