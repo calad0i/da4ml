@@ -86,7 +86,7 @@ class FixedVariableArray:
             assert bind.arguments.get('out', None) is None, 'Output argument is not supported'
             return einsum(eq, *operands)
 
-        if func in (np.dot, np.matmul):
+        if func is np.dot:
             assert len(args) in (2, 3), 'Dot function requires exactly two or three arguments'
 
             assert len(args) == 2
@@ -106,6 +106,29 @@ class FixedVariableArray:
             func(*args, **kwargs),
             self.solver_options,
         )
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        assert method == '__call__', f'Only __call__ method is supported for ufuncs, got {method}'
+
+        match ufunc:
+            case np.add | np.subtract | np.multiply | np.true_divide | np.negative:
+                inputs = [to_raw_arr(x) for x in inputs]
+                return FixedVariableArray(ufunc(*inputs, **kwargs), self.solver_options)
+            case np.negative:
+                assert len(inputs) == 1
+                return FixedVariableArray(ufunc(to_raw_arr(inputs[0]), **kwargs), self.solver_options)
+            case np.maximum | np.minimum:
+                op = _max_of if ufunc is np.maximum else _min_of
+                return reduce(op, *inputs, **kwargs)
+            case np.matmul:
+                assert len(inputs) == 2
+                return inputs[0] @ inputs[1]
+            case np.power:
+                assert len(inputs) == 2
+                base, exp = inputs
+                return base**exp
+
+        raise NotImplementedError(f'Unsupported ufunc: {ufunc}')
 
     def __init__(
         self,
