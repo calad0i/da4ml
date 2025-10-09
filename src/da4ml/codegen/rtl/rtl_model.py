@@ -80,25 +80,27 @@ class RTLModel:
                 with open(self._path / f'{k}.{suffix}', 'w') as f:
                     f.write(v)
 
-            # Build script
-            with open(self.__src_root / 'common_source/build_prj.tcl') as f:
-                tcl = f.read()
-            tcl = tcl.replace('${DEVICE}', self._part_name)
-            tcl = tcl.replace('${PROJECT_NAME}', self._prj_name)
-            tcl = tcl.replace('${SOURCE_TYPE}', flavor)
-            with open(self._path / 'build_prj.tcl', 'w') as f:
-                f.write(tcl)
+            # Build scripts
+            for path in (self.__src_root).glob('common_source/build_*_prj.tcl'):
+                with open(path) as f:
+                    tcl = f.read()
+                tcl = tcl.replace('$::env(DEVICE)', self._part_name)
+                tcl = tcl.replace('$::env(PROJECT_NAME)', self._prj_name)
+                tcl = tcl.replace('$::env(SOURCE_TYPE)', flavor)
+                with open(self._path / path.name, 'w') as f:
+                    f.write(tcl)
 
-            # XDC
-            with open(self.__src_root / 'common_source/template.xdc') as f:
-                xdc = f.read()
-            xdc = xdc.replace('${CLOCK_PERIOD}', str(self._clock_period))
-            xdc = xdc.replace('${UNCERTAINITY_SETUP}', str(self._clock_uncertainty))
-            xdc = xdc.replace('${UNCERTAINITY_HOLD}', str(self._clock_uncertainty))
-            xdc = xdc.replace('${DELAY_MAX}', str(self._io_delay_minmax[1]))
-            xdc = xdc.replace('${DELAY_MIN}', str(self._io_delay_minmax[0]))
-            with open(self._path / f'{self._prj_name}.xdc', 'w') as f:
-                f.write(xdc)
+            # Timing constraint
+            for fmt in ('xdc', 'sdc'):
+                with open(self.__src_root / f'common_source/template.{fmt}') as f:
+                    constraint = f.read()
+                constraint = constraint.replace('$::env(CLOCK_PERIOD)', str(self._clock_period))
+                constraint = constraint.replace('$::env(UNCERTAINITY_SETUP)', str(self._clock_uncertainty))
+                constraint = constraint.replace('$::env(UNCERTAINITY_HOLD)', str(self._clock_uncertainty))
+                constraint = constraint.replace('$::env(DELAY_MAX)', str(self._io_delay_minmax[1]))
+                constraint = constraint.replace('$::env(DELAY_MIN)', str(self._io_delay_minmax[0]))
+                with open(self._path / f'{self._prj_name}.{fmt}', 'w') as f:
+                    f.write(constraint)
 
             # C++ binder w/ HDL wrapper for uniform bw
             binder = binder_gen(self._pipe, f'{self._prj_name}_wrapper', 1, self._register_layers)
@@ -125,8 +127,8 @@ class RTLModel:
             f.write(binder)
 
         # Common resource copy
-        for fname in self.__src_root.glob(f'{flavor}/source/*.{suffix}'):
-            shutil.copy(fname, self._path)
+        for path in self.__src_root.glob(f'{flavor}/source/*.{suffix}'):
+            shutil.copy(path, self._path)
 
         shutil.copy(self.__src_root / 'common_source/build_binder.mk', self._path)
         shutil.copy(self.__src_root / 'common_source/ioutil.hh', self._path)

@@ -84,6 +84,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 if op.opcode == -3 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
                     bw0, v0_name = make_neg(lines, op, ops, bw0, v0_name)
+
                 line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
 
             case 4:  # constant addition
@@ -93,9 +94,11 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 bw0 = widths[op.id0]
                 s0 = int(kifs[op.id0][0])
                 v0 = f'v{op.id0}[{bw0 - 1}:0]'
-                v1 = f"'{bin(mag)[1:]}"
+                v1 = f"{bw1}'{bin(mag)[1:]}"
                 shift = kifs[op.id0][2] - kifs[i][2]
+
                 line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, {shift}, {sign}) op_{i} ({v0}, {v1}, {v});'
+
             case 5:  # constant
                 num = op.data
                 if num < 0:
@@ -114,6 +117,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
                 vk, v0, v1 = f'v{k}[{bwk - 1}]', f'v{a}[{bw0 - 1}:0]', f'v{b}[{bw1 - 1}:0]'
 
                 line = f'{_def} mux #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {inv}) op_{i} ({vk}, {v0}, {v1}, {v});'
+
             case 7:  # Multiplication
                 bw0, bw1 = widths[op.id0], widths[op.id1]  # width
                 s0, s1 = int(kifs[op.id0][0]), int(kifs[op.id1][0])

@@ -23,5 +23,5 @@ set_output_delay -clock sys_clk -max $delay_max [get_ports {model_out[*]}]
 set_output_delay -clock sys_clk -min $delay_min [get_ports {model_out[*]}]
 
 # Apply calculated uncertainty values
-set_clock_uncertainty -setup $uncertainty_setup [get_clocks sys_clk]
-set_clock_uncertainty -hold $uncertainty_hold [get_clocks sys_clk]
+set_clock_uncertainty -setup -to [get_clocks sys_clk] $uncertainty_setup
+set_clock_uncertainty -hold -to [get_clocks sys_clk] $uncertainty_hold

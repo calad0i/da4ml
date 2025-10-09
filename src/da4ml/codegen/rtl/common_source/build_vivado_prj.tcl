@@ -1,6 +1,6 @@
-set project_name "${PROJECT_NAME}"
-set device "${DEVICE}"
-set source_type "${SOURCE_TYPE}"
+set project_name "$::env(PROJECT_NAME)"
+set device "$::env(DEVICE)"
+set source_type "$::env(SOURCE_TYPE)"
 
 set top_module "${project_name}"
 set output_dir "./output_${project_name}"
