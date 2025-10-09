@@ -407,7 +407,7 @@ class FixedVariable:
         f: int,
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
-    ):
+    ) -> 'FixedVariable':
         overflow_mode, round_mode = overflow_mode.upper(), round_mode.upper()
         assert overflow_mode in ('WRAP', 'SAT', 'SAT_SYM')
         assert round_mode in ('TRN', 'RND')
@@ -428,7 +428,9 @@ class FixedVariable:
             _high = Decimal(2) ** i
             high = _high - step
             low = -_high * k if overflow_mode == 'SAT' else -high * k
-            return self.max_of(low).min_of(high).quantize(k, i, f, 'WRAP', round_mode)
+            ff = f + 1 if round_mode == 'RND' else f
+            v = self.quantize(_k, _i, ff, 'WRAP', 'TRN')
+            return v.max_of(low).min_of(high).quantize(k, i, f, 'WRAP', round_mode)
 
         if self.low == self.high:
             val = self.low
