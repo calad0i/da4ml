@@ -122,7 +122,11 @@ class FixedVariableArray:
                 return reduce(op, *inputs, **kwargs)
             case np.matmul:
                 assert len(inputs) == 2
-                return inputs[0] @ inputs[1]
+                assert isinstance(inputs[0], FixedVariableArray) or isinstance(inputs[1], FixedVariableArray)
+                if isinstance(inputs[0], FixedVariableArray):
+                    return inputs[0].matmul(inputs[1])
+                else:
+                    return inputs[1].rmatmul(inputs[0])
             case np.power:
                 assert len(inputs) == 2
                 base, exp = inputs
@@ -197,6 +201,9 @@ class FixedVariableArray:
         return cls.from_lhs(low, high, step, hwconf, latency, solver_options)
 
     def __matmul__(self, other):
+        return self.matmul(other)
+
+    def matmul(self, other):
         if isinstance(other, FixedVariableArray):
             other = other._vars
         if not isinstance(other, np.ndarray):
@@ -204,7 +211,10 @@ class FixedVariableArray:
         if any(isinstance(x, FixedVariable) for x in other.ravel()):
             mat0, mat1 = self._vars, other
             shape = mat0.shape[:-1] + mat1.shape[1:]
-            mat0, mat1 = mat0.reshape((-1, mat0.shape[-1])), mat1.reshape((mat1.shape[0], -1))
+            mat0, mat1 = (
+                mat0.reshape((-1, mat0.shape[-1])),
+                mat1.reshape((mat1.shape[0], -1)),
+            )
             _shape = (mat0.shape[0], mat1.shape[1])
             _vars = np.empty(_shape, dtype=object)
             for i in range(mat0.shape[0]):
@@ -236,7 +246,7 @@ class FixedVariableArray:
         r = np.array(r).reshape(out_shape)
         return FixedVariableArray(r, self.solver_options)
 
-    def __rmatmul__(self, other):
+    def rmatmul(self, other):
         mat1 = np.moveaxis(other, -1, 0)
         mat0 = np.moveaxis(self, 0, -1)  # type: ignore
         ndim0, ndim1 = mat0.ndim, mat1.ndim
@@ -245,6 +255,9 @@ class FixedVariableArray:
         _axes = tuple(range(0, ndim0 + ndim1 - 2))
         axes = _axes[ndim0 - 1 :] + _axes[: ndim0 - 1]
         return r.transpose(axes)
+
+    def __rmatmul__(self, other):
+        return self.rmatmul(other)
 
     def __getitem__(self, item):
         vars = self._vars[item]
@@ -295,7 +308,12 @@ class FixedVariableArray:
         assert _power == power, 'Power must be an integer'
         return FixedVariableArray(self._vars**_power, self.solver_options)
 
-    def relu(self, i: NDArray[np.integer] | None = None, f: NDArray[np.integer] | None = None, round_mode: str = 'TRN'):
+    def relu(
+        self,
+        i: NDArray[np.integer] | None = None,
+        f: NDArray[np.integer] | None = None,
+        round_mode: str = 'TRN',
+    ):
         shape = self._vars.shape
         i = np.broadcast_to(i, shape) if i is not None else np.full(shape, None)
         f = np.broadcast_to(f, shape) if f is not None else np.full(shape, None)
