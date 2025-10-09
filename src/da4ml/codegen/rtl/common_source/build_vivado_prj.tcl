@@ -46,7 +46,7 @@ file mkdir $output_dir
 file mkdir "${output_dir}/reports"
 
 # synth
-synth_design -top $top_module -mode out_of_context -retiming \
+synth_design -top $top_module -mode out_of_context -global_retiming on \
     -flatten_hierarchy full -resource_sharing auto
 
 write_checkpoint -force "${output_dir}/${project_name}_post_synth.dcp"
