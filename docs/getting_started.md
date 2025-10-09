@@ -34,11 +34,12 @@ inp = FixedVariableArrayInput((4, 5))
 out = operation(inp)
 
 # Generate pipelined Verilog code form the traced operation
+# flavor can be 'verilog' or 'vhdl'. VHDL code generated will be in 2008 standard.
 comb_logic = comb_trace(inp, out)
-verilog_model = VerilogModel(comb_logic, 'vmodel', '/tmp/verilog', latency_cutoff=5) # can also be HLSModel
-verilog_model.write()
-# verilog_model.compile() # compile the generated Verilog code with verilator
-# verilog_model.predict(data_inp) # run inference with the compiled model; bit-accurate
+rtl_model = RTLModel(comb_logic, 'vmodel', '/tmp/rtl', flavor='verilog', latency_cutoff=5) # can also be HLSModel
+rtl_model.write()
+# rtl_model.compile() # compile the generated Verilog code with verilator (with GHDL, if using vhdl)
+# rtl_model.predict(data_inp) # run inference with the compiled model; bit-accurate
 ```
 
 ## HGQ2/Keras3 integration:
