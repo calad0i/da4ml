@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, overload
+from typing import Any
 
 import keras
 import numpy as np
@@ -115,28 +115,6 @@ def _apply_nn(
         return tuple(tensor_map[keras_tensor] for keras_tensor in model.outputs)
     else:
         return {k.name: v for k, v in tensor_map.items()}
-
-
-@overload
-def trace_model(  # type: ignore
-    model: keras.Model,
-    hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
-    solver_options: solver_options_t | None = None,
-    verbose: bool = False,
-    inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
-    dump: Literal[False] = False,
-) -> tuple[FixedVariableArray, FixedVariableArray]: ...
-
-
-@overload
-def trace_model(  # type: ignore
-    model: keras.Model,
-    hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
-    solver_options: solver_options_t | None = None,
-    verbose: bool = False,
-    inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
-    dump: Literal[True] = False,  # type: ignore
-) -> dict[str, FixedVariableArray]: ...
 
 
 def trace_model(  # type: ignore
