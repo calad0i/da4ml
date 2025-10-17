@@ -60,14 +60,14 @@ def _get_new_idx(
     return p0_idx
 
 
-def to_pipeline(sol: CombLogic, latency_cutoff: float, retiming=True, verbose=True) -> Pipeline:
+def to_pipeline(comb: CombLogic, latency_cutoff: float, retiming=True, verbose=True) -> Pipeline:
     """Split the record into multiple stages based on the latency of the operations.
     Only useful for HDL generation.
 
     Parameters
     ----------
-    sol : Solution
-        The solution to be split into multiple stages.
+    sol : CombLogic
+        The combinational logic to be pipelined into multiple stages.
     latency_cutoff : float
         The latency cutoff for splitting the operations.
     retiming : bool
@@ -83,8 +83,8 @@ def to_pipeline(sol: CombLogic, latency_cutoff: float, retiming=True, verbose=Tr
     CascadedSolution
         The cascaded solution with multiple stages.
     """
-    assert len(sol.ops) > 0, 'No operations in the record'
-    for i, op in enumerate(sol.ops):
+    assert len(comb.ops) > 0, 'No operations in the record'
+    for i, op in enumerate(comb.ops):
         if op.id1 != -1:
             break
 
@@ -96,9 +96,9 @@ def to_pipeline(sol: CombLogic, latency_cutoff: float, retiming=True, verbose=Tr
 
     locator: list[dict[int, int]] = []
 
-    ops = sol.ops.copy()
-    lat = max(ops[i].latency for i in sol.out_idxs)
-    for i in sol.out_idxs:
+    ops = comb.ops.copy()
+    lat = max(ops[i].latency for i in comb.out_idxs)
+    for i in comb.out_idxs:
         op_out = ops[i]
         ops.append(Op(i, -1001, -1001, 0, op_out.qint, lat, 0.0))
 
@@ -126,19 +126,23 @@ def to_pipeline(sol: CombLogic, latency_cutoff: float, retiming=True, verbose=Tr
             locator.append({stage: len(opd[stage]) - 1})
     sols = []
     max_stage = max(opd.keys())
-    n_in = sol.shape[0]
+    n_in = comb.shape[0]
     for i, stage in enumerate(opd.keys()):
         _ops = opd[stage]
         _out_idx = out_idxd[stage]
         n_out = len(_out_idx)
 
         if i == max_stage:
-            out_shifts = sol.out_shifts
-            out_negs = sol.out_negs
+            out_shifts = comb.out_shifts
+            out_negs = comb.out_negs
         else:
             out_shifts = [0] * len(_out_idx)
             out_negs = [False] * len(_out_idx)
 
+        if comb.lookup_tables is not None:
+            _ops, lookup_tables = remap_table_idxs(comb, _ops)
+        else:
+            lookup_tables = None
         _sol = CombLogic(
             shape=(n_in, n_out),
             inp_shift=[0] * n_in,
@@ -146,8 +150,9 @@ def to_pipeline(sol: CombLogic, latency_cutoff: float, retiming=True, verbose=Tr
             out_shifts=out_shifts,
             out_negs=out_negs,
             ops=_ops,
-            carry_size=sol.carry_size,
-            adder_size=sol.adder_size,
+            carry_size=comb.carry_size,
+            adder_size=comb.adder_size,
+            lookup_tables=lookup_tables,
         )
         sols.append(_sol)
 
@@ -157,3 +162,16 @@ def to_pipeline(sol: CombLogic, latency_cutoff: float, retiming=True, verbose=Tr
     if retiming:
         csol = retime_pipeline(csol, verbose=verbose)
     return csol
+
+
+def remap_table_idxs(comb, _ops):
+    table_idxs = sorted(list({op.data for op in _ops if op.opcode == 8}))
+    remap = {j: i for i, j in enumerate(table_idxs)}
+    _ops_remap = []
+    for op in _ops:
+        if op.opcode == 8:
+            op = Op(op.id0, op.id1, op.opcode, remap[op.data], op.qint, op.latency, op.cost)
+        _ops_remap.append(op)
+    _ops = _ops_remap
+    lookup_tables = tuple(comb.lookup_tables[i] for i in table_idxs)
+    return _ops, lookup_tables

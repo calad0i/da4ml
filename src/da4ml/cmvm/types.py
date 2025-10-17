@@ -11,7 +11,7 @@ from numpy import float32, int8
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
-    from ..trace.tracer import FixedVariable
+    from ..trace.fixed_variable import FixedVariable, LookupTable
 
 
 class QInterval(NamedTuple):
@@ -249,7 +249,7 @@ class CombLogic(NamedTuple):
         Size of the carrier for the adder, used for cost and latency estimation.
     adder_size: int
         Elementary size of the adder, used for cost and latency estimation.
-    lookup_table: dict[str, np.ndarray] | None
+    lookup_tables: tuple[LookupTable, ...] | None
         Lookup table arrays for lookup operations, if any.
 
 
@@ -267,7 +267,7 @@ class CombLogic(NamedTuple):
     ops: list[Op]
     carry_size: int
     adder_size: int
-    lookup_table: dict[str, NDArray[np.uint32]] | None = None
+    lookup_tables: 'tuple[LookupTable, ...] | None' = None
 
     def __call__(self, inp: list | np.ndarray | tuple, quantize=False, debug=False, dump=False):
         """Executes the solution on the input data.
@@ -345,6 +345,12 @@ class CombLogic(NamedTuple):
                 case 7:
                     v0, v1 = buf[op.id0], buf[op.id1]
                     buf[i] = v0 * v1
+                case 8:
+                    v0 = buf[op.id0]
+                    tables = self.lookup_tables
+                    assert tables is not None, 'No lookup table provided for lookup operation'
+                    table = tables[op.data]
+                    buf[i] = table.lookup(v0, self.ops[op.id0].qint)
                 case _:
                     raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
@@ -377,6 +383,8 @@ class CombLogic(NamedTuple):
                         op_str = f'msb(buf[{op.data}]) ? buf[{op.id0}] : {_sign}buf[{op.id1}]'
                     case 7:
                         op_str = f'buf[{op.id0}] * buf[{op.id1}]'
+                    case 8:
+                        op_str = f'tables[{int(op.data)}].lookup(buf[{op.id0}])'
                     case _:
                         raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 

@@ -8,7 +8,7 @@ from uuid import UUID
 import numpy as np
 
 from ..cmvm.types import CombLogic, Op, QInterval
-from .fixed_variable import FixedVariable, _const_f
+from .fixed_variable import FixedVariable, _const_f, table_context
 from .fixed_variable_array import FixedVariableArray
 
 
@@ -51,6 +51,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     variables, index = gather_variables(inputs, outputs)
     ops: list[Op] = []
     inp_uuids = {v.id: i for i, v in enumerate(inputs)}
+    lookup_tables = []
     for i, v in enumerate(variables):
         if v.id in inp_uuids and v.opr != 'const':
             id0 = inp_uuids[v.id]
@@ -109,14 +110,25 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 op = Op(id0, id1, opcode, data, qint, v.latency, v.cost)
             case 'vmul':
                 v0, v1 = v._from
+                opcode = 7
                 id0, id1 = index[v0.id], index[v1.id]
-                op = Op(id0, id1, 7, 0, v.unscaled.qint, v.latency, v.cost)
+                op = Op(id0, id1, opcode, 0, v.unscaled.qint, v.latency, v.cost)
+            case 'lookup':
+                opcode = 8
+                v0 = v._from[0]
+                id0 = index[v0.id]
+                data = v._data
+                assert data is not None, 'lookup must have data'
+                assert id0 < i, f'{id0} {i} {v.id}'
+                op = Op(id0, -1, opcode, int(data), v.unscaled.qint, v.latency, v.cost)
+                lookup_tables.append(table_context.get_table_from_index(int(data)))
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
 
         ops.append(op)
     out_index = [index[v.id] for v in outputs]
-    return ops, out_index
+    lookup_tables = None if not lookup_tables else tuple(lookup_tables)
+    return ops, out_index, lookup_tables
 
 
 @overload
@@ -138,7 +150,7 @@ def comb_trace(inputs, outputs):
             if not isinstance(v, FixedVariable):
                 outputs[i] = FixedVariable.from_const(v, hwconf, latency, 1)
 
-    ops, out_index = _comb_trace(inputs, outputs)
+    ops, out_index, lookup_tables = _comb_trace(inputs, outputs)
     shape = len(inputs), len(outputs)
     inp_shift = [0] * shape[0]
     out_sf = [v._factor for v in outputs]
@@ -154,6 +166,7 @@ def comb_trace(inputs, outputs):
         ops,
         outputs[0].hwconf.carry_size,
         outputs[0].hwconf.adder_size,
+        lookup_tables,
     )
 
     ref_count = sol.ref_count

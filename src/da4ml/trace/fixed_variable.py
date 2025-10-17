@@ -1,14 +1,24 @@
 import random
-from collections.abc import Generator
+import typing
+from collections.abc import Callable, Generator
+from dataclasses import dataclass
 from decimal import Decimal
+from hashlib import sha256
 from math import ceil, floor, log2
-from typing import NamedTuple
+from typing import NamedTuple, overload
 from uuid import UUID
 
+import numpy as np
+from numpy.typing import NDArray
+
 from ..cmvm.core import cost_add
-from ..cmvm.types import QInterval
+from ..cmvm.types import QInterval, _minimal_kif
+from ..cmvm.util.bit_decompose import _shift_centering
 
 rd = random.SystemRandom()
+
+if typing.TYPE_CHECKING:
+    pass
 
 
 class HWConfig(NamedTuple):
@@ -17,7 +27,108 @@ class HWConfig(NamedTuple):
     latency_cutoff: float
 
 
+ufunc_t = Callable[[NDArray[np.floating]], NDArray[np.floating]]
+
+
+class TraceContext:
+    _tables: 'dict[str, tuple[LookupTable, int]]' = {}
+    hwconf: HWConfig = HWConfig(1, -1, -1)
+    _table_counter = 0
+
+    @overload
+    def register_table(self, table: 'LookupTable|np.ndarray', /) -> tuple['LookupTable', int]: ...
+
+    @overload
+    def register_table(self, fn: ufunc_t, /, qint_in: QInterval) -> tuple['LookupTable', int]: ...
+
+    def register_table(self, arg1: 'LookupTable|np.ndarray|ufunc_t', qint_in: QInterval | None = None):
+        if isinstance(arg1, (LookupTable, np.ndarray)):
+            if isinstance(arg1, np.ndarray):
+                arg1 = LookupTable(arg1)
+            table = arg1
+            self._tables[table.spec.hash] = (table, self._table_counter)
+        else:
+            assert callable(arg1) and isinstance(qint_in, QInterval)
+            k1 = f'{arg1.__module__}.{arg1.__name__}'
+            k2 = f'{float(qint_in.min)}:{float(qint_in.max)}:{float(qint_in.step)}'
+            h = sha256((k1 + '::' + k2).encode('utf-8')).hexdigest()
+            if h in self._tables:
+                return self._tables[h]
+            vx = np.linspace(qint_in.min, qint_in.max, round((qint_in.max - qint_in.min) / qint_in.step + 1))
+            table = LookupTable(arg1(vx))
+            self._tables[table.spec.hash] = self._tables[h] = (table, self._table_counter)
+        self._table_counter += 1
+        return self._tables[table.spec.hash]
+
+    def index_table(self, hash: str) -> int:
+        return self._tables[hash][1]
+
+    def get_table_from_index(self, index: int) -> 'LookupTable':
+        for table, idx in self._tables.values():
+            if idx == index:
+                return table
+        raise KeyError(f'No table found with index {index}')
+
+
+table_context = TraceContext()
+
+
+@dataclass
+class TableSpec:
+    hash: str
+    out_qint: QInterval
+    inp_width: int
+
+    @property
+    def out_kif(self) -> tuple[bool, int, int]:
+        return _minimal_kif(self.out_qint)
+
+
+def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32]]:
+    f_out = -_shift_centering(np.array(table))
+    int_table = (table * 2**f_out).astype(np.uint32)
+    h = sha256(int_table.data).hexdigest()
+    inp_width = ceil(log2(table.size))
+    out_qint = QInterval(float(np.min(table)), float(np.max(table)), float(2**-f_out))
+    return TableSpec(hash=h, inp_width=inp_width, out_qint=out_qint), int_table
+
+
+def interpret_as(
+    x: int,
+    k: int,
+    i: int,
+    f: int,
+) -> float:
+    b = k + i + f
+    bias = 2.0 ** (b - 1) * k
+    eps = 2.0**-f
+    return eps * (floor(x + bias) % 2.0**b - bias)
+
+
+class LookupTable:
+    def __init__(self, values: NDArray[np.floating]):
+        assert values.ndim == 1, 'Lookup table values must be 1-dimensional'
+        self.spec, self.table = to_spec(values)
+
+    @overload
+    def lookup(self, var: 'FixedVariable', qint_in: QInterval) -> 'FixedVariable': ...
+
+    @overload
+    def lookup(self, var: np.floating | float, qint_in: QInterval) -> float: ...
+
+    def lookup(self, var, qint_in: QInterval):
+        if isinstance(var, FixedVariable):
+            return var.lookup(self)
+        else:
+            _min, _max, _step = qint_in
+            assert _min <= var <= _max, f'Value {var} out of range [{_min}, {_max}]'
+            index = round((var - _min) / _step)
+            kif = _minimal_kif(self.spec.out_qint)
+            return interpret_as(int(self.table[index]), *kif)
+
+
 def _const_f(const: float | Decimal):
+    """Get the minimum f such that const * 2^f is an integer."""
     const = float(const)
     _low, _high = -32, 32
     while _high - _low > 1:
@@ -31,6 +142,7 @@ def _const_f(const: float | Decimal):
 
 
 def to_csd_powers(x: float) -> Generator[float, None, None]:
+    """Convert a float to a list of +/- powers of two in CSD representation."""
     if x == 0:
         return
     f = _const_f(abs(x))
@@ -48,6 +160,8 @@ def to_csd_powers(x: float) -> Generator[float, None, None]:
 
 
 class FixedVariable:
+    __normal__variable__ = True
+
     def __init__(
         self,
         low: float | Decimal,
@@ -62,7 +176,8 @@ class FixedVariable:
         _data: Decimal | None = None,
         _id: UUID | None = None,
     ) -> None:
-        assert low <= high, f'low {low} must be less than high {high}'
+        if self.__normal__variable__:
+            assert low <= high, f'low {low} must be less than high {high}'
 
         if low != high and opr == 'const':
             raise ValueError('Constant variable must have low == high')
@@ -100,9 +215,19 @@ class FixedVariable:
             if v.opr == 'const':
                 v.latency = self.latency
 
-    def get_cost_and_latency(self):
+    def get_cost_and_latency(self) -> tuple[float, float]:
         if self.opr == 'const':
             return 0.0, 0.0
+
+        if self.opr == 'lookup':
+            assert len(self._from) == 1
+            b_in = sum(self._from[0].kif)
+            b_out = sum(self.kif)
+            _latency = max(b_in - 6, 1) + self._from[0].latency
+            _cost = 2 ** max(b_in - 5, 0) * ceil(b_out / 2)
+            # Assume LUT6 with extra o5 output
+            return _cost, _latency
+
         if self.opr in ('vadd', 'cadd', 'min', 'max', 'vmul'):
             adder_size = self.hwconf.adder_size
             carry_size = self.hwconf.carry_size
@@ -279,11 +404,18 @@ class FixedVariable:
         if log2(abs(other)) % 1 == 0:
             return self._pow2_mul(other)
 
-        variables = [self._pow2_mul(v) for v in to_csd_powers(float(other))]
+        variables = [(self._pow2_mul(v), Decimal(v)) for v in to_csd_powers(float(other))]
         while len(variables) > 1:
-            v = variables.pop() + variables.pop()
-            variables.append(v)
-        return variables[0]
+            v1, p1 = variables.pop()
+            v2, p2 = variables.pop()
+            v, p = v1 + v2, p1 + p2
+            if p > 0:
+                high, low = self.high * p, self.low * p
+            else:
+                high, low = self.low * p, self.high * p
+            v.high, v.low = high, low
+            variables.append((v, p))
+        return variables[0][0]
 
     def _var_mul(self, other: 'FixedVariable') -> 'FixedVariable':
         if other is not self:
@@ -541,25 +673,50 @@ class FixedVariable:
         qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
         return (self - other).msb_mux(self, other, qint=qint)
 
+    def lookup(self, table: LookupTable | np.ndarray | ufunc_t) -> 'FixedVariable':
+        if isinstance(table, LookupTable | np.ndarray):
+            _table, table_id = table_context.register_table(table)
+            size = len(table.table) if isinstance(table, LookupTable) else len(table)
+            assert (
+                round((self.high - self.low) / self.step) + 1 == size
+            ), f'Input variable size does not match lookup table size ({round((self.high - self.low) / self.step) + 1} != {size})'
+        else:
+            _table, table_id = table_context.register_table(table, self.qint)
+
+        return FixedVariable(
+            _table.spec.out_qint.min,
+            _table.spec.out_qint.max,
+            _table.spec.out_qint.step,
+            _from=(self,),
+            _factor=Decimal(1),
+            opr='lookup',
+            hwconf=self.hwconf,
+            _data=Decimal(table_id),
+        )
+
 
 class FixedVariableInput(FixedVariable):
+    __normal__variable__ = False
+
     def __init__(
         self,
         latency: float | None = None,
         hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, -1, -1),
+        opr: str = 'new',
     ) -> None:
-        self.low = Decimal(1e10)
-        self.high = Decimal(-1e10)
-        self.step = Decimal(1e10)
-        self._factor = Decimal(1)
-        self._from: tuple[FixedVariable, ...] = ()
-        self.opr = 'new'
-        self._data = None
-        self.id = UUID(int=rd.getrandbits(128), version=4)
-        self.hwconf = HWConfig(*hwconf)
-
-        self.latency = latency if latency is not None else 0.0
-        self.cost = 0.0
+        super().__init__(
+            low=Decimal(1e10),
+            high=Decimal(-1e10),
+            step=Decimal(1e10),
+            latency=latency if latency is not None else 0.0,
+            hwconf=HWConfig(*hwconf),
+            opr=opr,
+            cost=0.0,
+            _factor=Decimal(1),
+            _from=(),
+            _data=None,
+            _id=None,
+        )
 
     def __add__(self, other):
         if other == 0:
@@ -614,8 +771,10 @@ class FixedVariableInput(FixedVariable):
         if k + i + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
-        if round_mode == 'RND':
+        if round_mode == 'RND' and f < -int(log2(self.step)):
             return (self.quantize(k, i, f + 1) + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
+        else:
+            round_mode = 'TRN'
 
         step = Decimal(2) ** -f
         _high = Decimal(2) ** i
