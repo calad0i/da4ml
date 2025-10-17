@@ -228,9 +228,8 @@ def _(v: Decimal, k: int | bool, i: int, f: int, round_mode: str = 'TRN'):
     return eps * ((floor(v / eps) + bias) % Decimal(2) ** b - bias)
 
 
-class Solution(NamedTuple):
-    """Represents a series of operations that can be applied to a vector of data.
-    May represent a CMVM solution or a general neural network
+class CombLogic(NamedTuple):
+    """A combinational logic that describes a series of operations on input data to produce output data.
 
     Attributes
     ----------
@@ -247,12 +246,14 @@ class Solution(NamedTuple):
     ops: list[Op]
         Core list of operations for generating each buffer element.
     carry_size: int
-        Size of the carrier for the adder.
+        Size of the carrier for the adder, used for cost and latency estimation.
     adder_size: int
-        Elementary size of the adder.
+        Elementary size of the adder, used for cost and latency estimation.
+    lookup_table: dict[str, np.ndarray] | None
+        Lookup table arrays for lookup operations, if any.
 
 
-    The core part of the solution is the operations in the ops list.
+    The core part of the comb logic is the operations in the ops list.
     For the exact operations executed with Op, refer to the Op class.
     After all operations are executed, the output data is read from data[op.out_idx] and multiplied by 2**out_shift.
 
@@ -266,6 +267,7 @@ class Solution(NamedTuple):
     ops: list[Op]
     carry_size: int
     adder_size: int
+    lookup_table: dict[str, NDArray[np.uint32]] | None = None
 
     def __call__(self, inp: list | np.ndarray | tuple, quantize=False, debug=False, dump=False):
         """Executes the solution on the input data.
@@ -534,12 +536,8 @@ class Solution(NamedTuple):
             data.tofile(f)
 
 
-class CascadedSolution(NamedTuple):
-    """A solution that implements cascaded matrix-vector multiplications through multiple CMVM stages.
-
-    CascadedSolution represents a sequence of Solution objects where the output of each stage
-    is fed as input to the next stage.
-
+class Pipeline(NamedTuple):
+    """A pipeline with II=1,with each stage represented by a CombLogic
     Attributes
     ----------
     solutions: tuple[Solution, ...]
@@ -548,12 +546,13 @@ class CascadedSolution(NamedTuple):
     Properties
     ----------
     kernel: NDArray[float32]
+        Only useful when the pipeline describes a linear operation.
         The overall kernel matrix which the cascaded solution implements: vec @ kernel = solution(vec).
         This is calculated as the matrix product of all individual solution kernels.
     cost: float
         The total cost of the cascaded solution, computed as the sum of the costs of all stages.
     latency: tuple[float, float]
-        The minimum and maximum latency of the cascaded solution.
+        The minimum and maximum latency of the pipeline, determined by the last stage.
     inp_qint: list[QInterval]
         Input quantization intervals
     inp_lat: list[float]
@@ -572,7 +571,7 @@ class CascadedSolution(NamedTuple):
         The shape of the corresponding kernel matrix.
     """
 
-    solutions: tuple[Solution, ...]
+    solutions: tuple[CombLogic, ...]
 
     def __call__(self, inp: list | np.ndarray | tuple, quantize=False, debug=False):
         out = np.asarray(inp)
@@ -639,7 +638,7 @@ class CascadedSolution(NamedTuple):
     @classmethod
     def deserialize(cls, data: dict):
         """Load the solution from a file."""
-        return cls(solutions=tuple(Solution.deserialize(sol) for sol in data[0]))
+        return cls(solutions=tuple(CombLogic.deserialize(sol) for sol in data[0]))
 
     @classmethod
     def load(cls, path: str):

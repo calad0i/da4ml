@@ -12,12 +12,12 @@ from uuid import uuid4
 import numpy as np
 from numpy.typing import NDArray
 
-from ...cmvm.types import CascadedSolution, Solution, _minimal_kif
+from ...cmvm.types import CombLogic, Pipeline, _minimal_kif
 from ...trace.pipeline import to_pipeline
 from .. import rtl
 
 
-def get_io_kifs(sol: Solution | CascadedSolution):
+def get_io_kifs(sol: CombLogic | Pipeline):
     inp_kifs = tuple(zip(*map(_minimal_kif, sol.inp_qint)))
     out_kifs = tuple(zip(*map(_minimal_kif, sol.out_qint)))
     return np.array(inp_kifs, np.int8), np.array(out_kifs, np.int8)
@@ -26,7 +26,7 @@ def get_io_kifs(sol: Solution | CascadedSolution):
 class RTLModel:
     def __init__(
         self,
-        solution: Solution | CascadedSolution,
+        solution: CombLogic | Pipeline,
         prj_name: str,
         path: str | Path,
         flavor: str = 'verilog',
@@ -53,9 +53,9 @@ class RTLModel:
 
         assert self._flavor in ('vhdl', 'verilog'), f'Unsupported flavor {flavor}, only vhdl and verilog are supported.'
 
-        self._pipe = solution if isinstance(solution, CascadedSolution) else None
+        self._pipe = solution if isinstance(solution, Pipeline) else None
         if latency_cutoff > 0 and self._pipe is None:
-            assert isinstance(solution, Solution)
+            assert isinstance(solution, CombLogic)
             self._pipe = to_pipeline(solution, latency_cutoff, verbose=False)
 
         if self._pipe is not None:
@@ -112,7 +112,7 @@ class RTLModel:
 
             self._pipe.save(self._path / 'pipeline.json')
         else:  # Comb
-            assert isinstance(self._solution, Solution)
+            assert isinstance(self._solution, CombLogic)
 
             # Main logic
             code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps')
@@ -321,7 +321,7 @@ Estimated cost: {cost} LUTs"""
 class VerilogModel(RTLModel):
     def __init__(
         self,
-        solution: Solution | CascadedSolution,
+        solution: CombLogic | Pipeline,
         prj_name: str,
         path: str | Path,
         latency_cutoff: float = -1,
@@ -350,7 +350,7 @@ class VerilogModel(RTLModel):
 class VHDLModel(RTLModel):
     def __init__(
         self,
-        solution: Solution | CascadedSolution,
+        solution: CombLogic | Pipeline,
         prj_name: str,
         path: str | Path,
         latency_cutoff: float = -1,

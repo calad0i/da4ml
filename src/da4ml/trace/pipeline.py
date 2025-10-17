@@ -1,11 +1,11 @@
 from math import ceil, floor
 
-from ..cmvm.types import CascadedSolution, Op, Solution
+from ..cmvm.types import CombLogic, Op, Pipeline
 from .fixed_variable import FixedVariable, HWConfig
 from .tracer import comb_trace
 
 
-def retime_pipeline(csol: CascadedSolution, verbose=True):
+def retime_pipeline(csol: Pipeline, verbose=True):
     n_stages = len(csol[0])
     cutoff_high = ceil(max(max(sol.out_latency) / (i + 1) for i, sol in enumerate(csol[0])))
     cutoff_low = 0
@@ -60,7 +60,7 @@ def _get_new_idx(
     return p0_idx
 
 
-def to_pipeline(sol: Solution, latency_cutoff: float, retiming=True, verbose=True) -> CascadedSolution:
+def to_pipeline(sol: CombLogic, latency_cutoff: float, retiming=True, verbose=True) -> Pipeline:
     """Split the record into multiple stages based on the latency of the operations.
     Only useful for HDL generation.
 
@@ -139,7 +139,7 @@ def to_pipeline(sol: Solution, latency_cutoff: float, retiming=True, verbose=Tru
             out_shifts = [0] * len(_out_idx)
             out_negs = [False] * len(_out_idx)
 
-        _sol = Solution(
+        _sol = CombLogic(
             shape=(n_in, n_out),
             inp_shift=[0] * n_in,
             out_idxs=_out_idx,
@@ -152,7 +152,7 @@ def to_pipeline(sol: Solution, latency_cutoff: float, retiming=True, verbose=Tru
         sols.append(_sol)
 
         n_in = n_out
-    csol = CascadedSolution(tuple(sols))
+    csol = Pipeline(tuple(sols))
 
     if retiming:
         csol = retime_pipeline(csol, verbose=verbose)

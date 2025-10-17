@@ -12,7 +12,7 @@ from uuid import uuid4
 import numpy as np
 from numpy.typing import NDArray
 
-from da4ml.cmvm.types import Solution
+from da4ml.cmvm.types import CombLogic
 from da4ml.codegen.hls.hls_codegen import get_io_types, hls_logic_and_bridge_gen
 
 from ... import codegen
@@ -24,7 +24,7 @@ T = TypeVar('T', bound=np.floating)
 class HLSModel:
     def __init__(
         self,
-        solution: Solution,
+        solution: CombLogic,
         prj_name: str,
         path: str | Path,
         flavor: str = 'vitis',

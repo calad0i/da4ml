@@ -7,7 +7,7 @@ from uuid import UUID
 
 import numpy as np
 
-from ..cmvm.types import Op, QInterval, Solution
+from ..cmvm.types import CombLogic, Op, QInterval
 from .fixed_variable import FixedVariable, _const_f
 from .fixed_variable_array import FixedVariableArray
 
@@ -120,11 +120,11 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
 
 
 @overload
-def comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]) -> Solution: ...
+def comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]) -> CombLogic: ...
 
 
 @overload
-def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray) -> Solution: ...
+def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray) -> CombLogic: ...
 
 
 def comb_trace(inputs, outputs):
@@ -145,7 +145,7 @@ def comb_trace(inputs, outputs):
     out_shift = [int(log2(abs(sf))) for sf in out_sf]
     out_neg = [sf < 0 for sf in out_sf]
 
-    sol = Solution(
+    sol = CombLogic(
         shape,
         inp_shift,
         out_index,

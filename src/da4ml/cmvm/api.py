@@ -5,7 +5,7 @@ import numpy as np
 from numba import jit, prange
 
 from .core import _solve, create_state, to_solution
-from .types import CascadedSolution, QInterval
+from .types import Pipeline, QInterval
 from .util import kernel_decompose
 
 
@@ -57,7 +57,7 @@ def jit_solve(
     latencies: list[float] | None = None,
     adder_size: int = -1,
     carry_size: int = -1,
-) -> CascadedSolution:
+) -> Pipeline:
     """Optimized implementation of a CMVM computation with cascaded two matrices.
 
     Parameters
@@ -145,7 +145,7 @@ def jit_solve(
     if max(latencies1) > latency_allowed:
         # When latency depends on the bw, may happen
         print(f'Latency constraint not satisfied: {int(latency_allowed)} < {int(max(latencies1))}')
-    return CascadedSolution((sol0, sol1))
+    return Pipeline((sol0, sol1))
 
 
 @jit(cache=True, parallel=True)
@@ -160,7 +160,7 @@ def solve(
     adder_size: int = -1,
     carry_size: int = -1,
     search_all_decompose_dc: bool = True,
-) -> CascadedSolution:
+) -> Pipeline:
     """Solve the CMVM problem with cascaded two matrices.
 
     Parameters

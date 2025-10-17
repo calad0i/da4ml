@@ -2,7 +2,7 @@ from math import ceil, log2
 
 import numpy as np
 
-from ....cmvm.types import Op, QInterval, Solution, _minimal_kif
+from ....cmvm.types import CombLogic, Op, QInterval, _minimal_kif
 
 
 def make_neg(
@@ -23,7 +23,7 @@ def make_neg(
     return bw0, v0_name
 
 
-def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
+def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
     ops = sol.ops
     kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     widths = list(map(sum, kifs))
@@ -134,7 +134,7 @@ def ssa_gen(sol: Solution, neg_defined: set[int], print_latency: bool = False):
     return lines
 
 
-def output_gen(sol: Solution, neg_defined: set[int]):
+def output_gen(sol: CombLogic, neg_defined: set[int]):
     lines = []
     widths = list(map(sum, map(_minimal_kif, sol.out_qint)))
     _widths = np.cumsum([0] + widths)
@@ -161,7 +161,7 @@ def output_gen(sol: Solution, neg_defined: set[int]):
     return lines
 
 
-def comb_logic_gen(sol: Solution, fn_name: str, print_latency: bool = False, timescale: str | None = None):
+def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, timescale: str | None = None):
     inp_bits = sum(map(sum, map(_minimal_kif, sol.inp_qint)))
     out_bits = sum(map(sum, map(_minimal_kif, sol.out_qint)))
 

@@ -4,7 +4,7 @@ from math import log2
 import numpy as np
 from numba import jit
 
-from ..types import DAState, Op, QInterval, Solution
+from ..types import CombLogic, DAState, Op, QInterval
 from .indexers import (
     idx_mc,
     idx_mc_dc,
@@ -194,7 +194,7 @@ def to_solution(
         out_neg.append(sub)
         out_shift[i_out] = out_shift[i_out] + shift0
 
-    return Solution(
+    return CombLogic(
         shape=state.kernel.shape,  # type: ignore
         inp_shift=list(in_shift),
         out_idxs=out_idx,

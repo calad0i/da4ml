@@ -44,6 +44,7 @@ def _min_of(a, b):
     else:
         return min(a, b)
 
+
 def mmm(mat0: np.ndarray, mat1: np.ndarray):
     shape = mat0.shape[:-1] + mat1.shape[1:]
     mat0, mat1 = mat0.reshape((-1, mat0.shape[-1])), mat1.reshape((mat1.shape[0], -1))
@@ -55,6 +56,7 @@ def mmm(mat0: np.ndarray, mat1: np.ndarray):
             vec1 = mat1[:, j]
             _vars[i, j] = reduce(lambda x, y: x + y, vec0 * vec1)
     return _vars.reshape(shape)
+
 
 def cmvm(cm: np.ndarray, v: 'FixedVariableArray', solver_options: solver_options_t) -> np.ndarray:
     mask = offload_mask(cm, v)
@@ -163,7 +165,13 @@ class FixedVariableArray:
                 return FixedVariableArray(ufunc(to_raw_arr(inputs[0]), **kwargs), self.solver_options)
             case np.maximum | np.minimum:
                 op = _max_of if ufunc is np.maximum else _min_of
-                return reduce(op, *inputs, **kwargs)
+                a, b = np.broadcast_arrays(inputs[0], inputs[1])
+                shape = a.shape
+                a, b = a.ravel(), b.ravel()
+                r = np.empty(a.size, dtype=object)
+                for i in range(a.size):
+                    r[i] = op(a[i], b[i])
+                return FixedVariableArray(r.reshape(shape), self.solver_options)
             case np.matmul:
                 assert len(inputs) == 2
                 assert isinstance(inputs[0], FixedVariableArray) or isinstance(inputs[1], FixedVariableArray)
@@ -286,7 +294,7 @@ class FixedVariableArray:
         _axes = tuple(range(0, ndim0 + ndim1 - 2))
         axes = _axes[ndim0 - 1 :] + _axes[: ndim0 - 1]
         return r.transpose(axes)
-    
+
     def __rmatmul__(self, other):
         return self.rmatmul(other)
 

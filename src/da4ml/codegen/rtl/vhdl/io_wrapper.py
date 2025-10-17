@@ -1,6 +1,6 @@
 from itertools import accumulate
 
-from ....cmvm.types import CascadedSolution, QInterval, Solution, _minimal_kif
+from ....cmvm.types import CombLogic, Pipeline, QInterval, _minimal_kif
 
 
 def _loc(i: int, j: int):
@@ -63,26 +63,26 @@ def hetero_io_map(qints: list[QInterval], merge: bool = False):
     return regular, hetero, pads, (width_regular, width_packed)
 
 
-def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipelined: bool = False):
+def generate_io_wrapper(sol: CombLogic | Pipeline, module_name: str, pipelined: bool = False):
     reg_in, het_in, _, shape_in = hetero_io_map(sol.inp_qint, merge=True)
     reg_out, het_out, pad_out, shape_out = hetero_io_map(sol.out_qint, merge=True)
 
     w_reg_in, w_het_in = shape_in
     w_reg_out, w_het_out = shape_out
 
-    inp_assignment = [f'packed_inp{_loc(ih,jh)} <= model_inp{_loc(ir,jr)};' for (ih, jh), (ir, jr) in zip(het_in, reg_in)]
+    inp_assignment = [f'packed_inp{_loc(ih, jh)} <= model_inp{_loc(ir, jr)};' for (ih, jh), (ir, jr) in zip(het_in, reg_in)]
     _out_assignment: list[tuple[int, str]] = []
 
     for i, ((ih, jh), (ir, jr)) in enumerate(zip(het_out, reg_out)):
         if ih == jh - 1:
             continue
-        _out_assignment.append((ih, f'model_out{_loc(ir,jr)} <= packed_out{_loc(ih,jh)};'))
+        _out_assignment.append((ih, f'model_out{_loc(ir, jr)} <= packed_out{_loc(ih, jh)};'))
 
     for i, (i, j, copy_from) in enumerate(pad_out):
         n_bit = i - j + 1
         value = "'0'" if copy_from == -1 else f'packed_out({copy_from})'
         pad = f'(others => {value})' if n_bit > 1 else value
-        _out_assignment.append((i, f'model_out{_loc(i,j)} <= {pad};'))
+        _out_assignment.append((i, f'model_out{_loc(i, j)} <= {pad};'))
     _out_assignment.sort(key=lambda x: x[0])
     out_assignment = [v for _, v in _out_assignment]
 
@@ -97,14 +97,14 @@ def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipe
     return f"""library ieee;
 use ieee.std_logic_1164.all;
 entity {module_name}_wrapper is port({clk_and_rst_inp}
-    model_inp:in std_logic_vector({w_reg_in-1} downto {0});
-    model_out:out std_logic_vector({w_reg_out-1} downto {0})
+    model_inp:in std_logic_vector({w_reg_in - 1} downto {0});
+    model_out:out std_logic_vector({w_reg_out - 1} downto {0})
 );
 end entity {module_name}_wrapper;
 
 architecture rtl of {module_name}_wrapper is
-    signal packed_inp:std_logic_vector({w_het_in-1} downto {0});
-    signal packed_out:std_logic_vector({w_het_out-1} downto {0});
+    signal packed_inp:std_logic_vector({w_het_in - 1} downto {0});
+    signal packed_out:std_logic_vector({w_het_out - 1} downto {0});
 
 begin
     {inp_assignment_str}
@@ -120,12 +120,12 @@ end architecture rtl;
 """
 
 
-def binder_gen(csol: CascadedSolution | Solution, module_name: str, II: int = 1, latency_multiplier: int = 1):
+def binder_gen(csol: Pipeline | CombLogic, module_name: str, II: int = 1, latency_multiplier: int = 1):
     k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
     k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
     max_inp_bw = max(k_in) + max(i_in) + max(f_in)
     max_out_bw = max(k_out) + max(i_out) + max(f_out)
-    if isinstance(csol, Solution):
+    if isinstance(csol, CombLogic):
         II = latency = 0
     else:
         latency = len(csol.solutions) * latency_multiplier

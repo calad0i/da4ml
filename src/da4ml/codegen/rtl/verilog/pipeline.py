@@ -1,9 +1,9 @@
-from ....cmvm.types import CascadedSolution, _minimal_kif
+from ....cmvm.types import Pipeline, _minimal_kif
 from .comb import comb_logic_gen
 
 
 def pipeline_logic_gen(
-    csol: CascadedSolution,
+    csol: Pipeline,
     name: str,
     print_latency=False,
     timescale: str | None = '`timescale 1 ns / 1 ps',
@@ -13,36 +13,36 @@ def pipeline_logic_gen(
     inp_bits = [sum(map(sum, map(_minimal_kif, sol.inp_qint))) for sol in csol.solutions]
     out_bits = inp_bits[1:] + [sum(map(sum, map(_minimal_kif, csol.out_qint)))]
 
-    registers = [f'reg [{width-1}:0] stage{i}_inp;' for i, width in enumerate(inp_bits)]
+    registers = [f'reg [{width - 1}:0] stage{i}_inp;' for i, width in enumerate(inp_bits)]
     for i in range(0, register_layers - 1):
-        registers += [f'reg [{width-1}:0] stage{j}_inp_copy{i};' for j, width in enumerate(inp_bits)]
-    wires = [f'wire [{width-1}:0] stage{i}_out;' for i, width in enumerate(out_bits)]
+        registers += [f'reg [{width - 1}:0] stage{j}_inp_copy{i};' for j, width in enumerate(inp_bits)]
+    wires = [f'wire [{width - 1}:0] stage{i}_out;' for i, width in enumerate(out_bits)]
 
     comb_logic = [f'{name}_stage{i} stage{i} (.model_inp(stage{i}_inp), .model_out(stage{i}_out));' for i in range(N)]
 
     if register_layers == 1:
         serial_logic = ['stage0_inp <= model_inp;']
-        serial_logic += [f'stage{i}_inp <= stage{i-1}_out;' for i in range(1, N)]
+        serial_logic += [f'stage{i}_inp <= stage{i - 1}_out;' for i in range(1, N)]
     else:
         serial_logic = ['stage0_inp_copy0 <= model_inp;']
         for j in range(1, register_layers - 1):
-            serial_logic.append(f'stage0_inp_copy{j} <= stage0_inp_copy{j-1};')
+            serial_logic.append(f'stage0_inp_copy{j} <= stage0_inp_copy{j - 1};')
         serial_logic.append(f'stage0_inp <= stage0_inp_copy{register_layers - 2};')
         for i in range(1, N):
-            serial_logic.append(f'stage{i}_inp_copy0 <= stage{i-1}_out;')
+            serial_logic.append(f'stage{i}_inp_copy0 <= stage{i - 1}_out;')
             for j in range(1, register_layers - 1):
-                serial_logic.append(f'stage{i}_inp_copy{j} <= stage{i}_inp_copy{j-1};')
+                serial_logic.append(f'stage{i}_inp_copy{j} <= stage{i}_inp_copy{j - 1};')
             serial_logic.append(f'stage{i}_inp <= stage{i}_inp_copy{register_layers - 2};')
 
-    serial_logic += [f'model_out <= stage{N-1}_out;']
+    serial_logic += [f'model_out <= stage{N - 1}_out;']
 
     sep0 = '\n    '
     sep1 = '\n        '
 
     module = f"""module {name} (
     input clk,
-    input [{inp_bits[0]-1}:0] model_inp,
-    output reg [{out_bits[-1]-1}:0] model_out
+    input [{inp_bits[0] - 1}:0] model_inp,
+    output reg [{out_bits[-1] - 1}:0] model_out
 );
 
     {sep0.join(registers)}

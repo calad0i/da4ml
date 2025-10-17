@@ -1,6 +1,6 @@
 from itertools import accumulate
 
-from ....cmvm.types import CascadedSolution, QInterval, Solution, _minimal_kif
+from ....cmvm.types import CombLogic, Pipeline, QInterval, _minimal_kif
 
 
 def hetero_io_map(qints: list[QInterval], merge: bool = False):
@@ -59,7 +59,7 @@ def hetero_io_map(qints: list[QInterval], merge: bool = False):
     return regular, hetero, pads, (width_regular, width_packed)
 
 
-def generate_io_wrapper(sol: Solution | CascadedSolution, module_name: str, pipelined: bool = False):
+def generate_io_wrapper(sol: CombLogic | Pipeline, module_name: str, pipelined: bool = False):
     reg_in, het_in, _, shape_in = hetero_io_map(sol.inp_qint, merge=True)
     reg_out, het_out, pad_out, shape_out = hetero_io_map(sol.out_qint, merge=True)
 
@@ -113,12 +113,12 @@ endmodule
 """
 
 
-def binder_gen(csol: CascadedSolution | Solution, module_name: str, II: int = 1, latency_multiplier: int = 1):
+def binder_gen(csol: Pipeline | CombLogic, module_name: str, II: int = 1, latency_multiplier: int = 1):
     k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
     k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
     max_inp_bw = max(k_in) + max(i_in) + max(f_in)
     max_out_bw = max(k_out) + max(i_out) + max(f_out)
-    if isinstance(csol, Solution):
+    if isinstance(csol, CombLogic):
         II = latency = 0
     else:
         latency = len(csol.solutions) * latency_multiplier

@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from ...cmvm.types import QInterval, Solution, _minimal_kif
+from ...cmvm.types import CombLogic, QInterval, _minimal_kif
 from ...trace.fixed_variable import _const_f
 
 
@@ -34,7 +34,7 @@ def get_typestr_fn(flavor: str):
     return typestr_fn
 
 
-def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int, int, int], str]):
+def ssa_gen(sol: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | int, int, int], str]):
     ops = sol.ops
     all_kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     all_types = list(map(lambda x: typestr_fn(*x), all_kifs))
@@ -108,7 +108,7 @@ def ssa_gen(sol: Solution, print_latency: bool, typestr_fn: Callable[[bool | int
     return lines
 
 
-def output_gen(sol: Solution, typestr_fn: Callable[[bool | int, int, int], str]):
+def output_gen(sol: CombLogic, typestr_fn: Callable[[bool | int, int, int], str]):
     lines = []
     for i, idx in enumerate(sol.out_idxs):
         if idx < 0:
@@ -124,7 +124,7 @@ def output_gen(sol: Solution, typestr_fn: Callable[[bool | int, int, int], str])
     return lines
 
 
-def get_io_types(sol: Solution, flavor: str):
+def get_io_types(sol: CombLogic, flavor: str):
     typestr_fn = get_typestr_fn(flavor)
     in_kif = map(max, zip(*map(_minimal_kif, sol.inp_qint)))
     inp_type = typestr_fn(*in_kif)
@@ -134,7 +134,7 @@ def get_io_types(sol: Solution, flavor: str):
 
 
 def hls_logic_and_bridge_gen(
-    sol: Solution,
+    sol: CombLogic,
     fn_name: str,
     flavor: str,
     pragmas: list[str] | None = None,
