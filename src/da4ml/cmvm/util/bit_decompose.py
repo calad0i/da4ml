@@ -15,7 +15,7 @@ def _volatile_int_arr_to_csd(x: NDArray) -> NDArray[np.int8]:
         thres = _2pn / 1.5
         bit = (x > thres).astype(np.int8)
         bit -= (x < -thres).astype(np.int8)
-        x -= _2pn * bit
+        x -= _2pn * bit.astype(x.dtype)
         buf[..., n] = bit
     return buf
 
@@ -50,7 +50,7 @@ def _center(arr: NDArray):
     arr = arr * (2.0**-shift1)
     shift0 = shift_centering(arr, 0)  # d_in
     arr = arr * (2.0 ** -shift0[:, None])
-    return arr, shift0, shift1
+    return arr, shift0.astype(np.int8), shift1.astype(np.int8)
 
 
 @jit

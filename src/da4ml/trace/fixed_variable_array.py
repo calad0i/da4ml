@@ -1,3 +1,4 @@
+from decimal import Decimal
 from inspect import signature
 from typing import TYPE_CHECKING, TypeVar
 
@@ -183,6 +184,26 @@ class FixedVariableArray:
                 assert len(inputs) == 2
                 base, exp = inputs
                 return base**exp
+
+            case np.abs:
+                assert len(inputs) == 1
+                assert inputs[0] is self
+                mask: np.ndarray = (self.kif[0] == 0).ravel()
+                arr = self._vars.ravel()
+
+                r = np.empty(arr.size, dtype=object)
+                for i in range(arr.size):
+                    if mask[i]:
+                        r[i] = arr[i]
+                        continue
+                    v = arr[i]
+                    v = v.msb_mux(-v, v)
+                    v.low = Decimal(0)
+                    r[i] = v
+                return FixedVariableArray(r.reshape(self.shape), self.solver_options)
+
+            case np.sin | np.cos | np.tan | np.exp | np.log | np.invert | np.abs:
+                raise NotImplementedError(f'Unsupported ufunc: {ufunc}')
 
         raise NotImplementedError(f'Unsupported ufunc: {ufunc}')
 
@@ -370,9 +391,11 @@ class FixedVariableArray:
         round_mode: str = 'TRN',
     ):
         shape = self._vars.shape
-        k = np.broadcast_to(k, shape) if k is not None else np.full(shape, None)
-        i = np.broadcast_to(i, shape) if i is not None else np.full(shape, None)
-        f = np.broadcast_to(f, shape) if f is not None else np.full(shape, None)
+        if any(x is None for x in (k, i, f)):
+            kif = self.kif
+        k = np.broadcast_to(k, shape) if k is not None else kif[0]  # type: ignore
+        i = np.broadcast_to(i, shape) if i is not None else kif[1]  # type: ignore
+        f = np.broadcast_to(f, shape) if f is not None else kif[2]  # type: ignore
         ret = []
         for v, k, i, f in zip(self._vars.ravel(), k.ravel(), i.ravel(), f.ravel()):  # type: ignore
             ret.append(v.quantize(k=k, i=i, f=f, overflow_mode=overflow_mode, round_mode=round_mode))
