@@ -17,24 +17,22 @@ if { $source_type != "vhdl" && $source_type != "verilog" } {
 if { $source_type == "vhdl" } {
     set_property TARGET_LANGUAGE VHDL [current_project]
 
+    foreach file [glob -nocomplain "src/static/*.vhd"] {
+        read_vhdl -vhdl2008 $file
+    }
+
     read_vhdl -vhdl2008 "src/${project_name}.vhd"
-    read_vhdl -vhdl2008 "src/static/shift_adder.vhd"
-    read_vhdl -vhdl2008 "src/static/negative.vhd"
-    read_vhdl -vhdl2008 "src/static/mux.vhd"
-    read_vhdl -vhdl2008 "src/static/multiplier.vhd"
-    read_vhdl -vhdl2008 "src/static/lookup_table.vhd"
     foreach file [glob -nocomplain "src/${project_name}_stage*.vhd"] {
         read_vhdl -vhdl2008 $file
     }
 } else {
     set_property TARGET_LANGUAGE Verilog [current_project]
 
+    foreach file [glob -nocomplain "src/static/*.v"] {
+        read_verilog $file
+    }
+
     read_verilog "src/${project_name}.v"
-    read_verilog "src/static/shift_adder.v"
-    read_verilog "src/static/negative.v"
-    read_verilog "src/static/mux.v"
-    read_verilog "src/static/multiplier.v"
-    read_verilog "src/static/lookup_table.v"
     foreach file [glob -nocomplain "src/${project_name}_stage*.v"] {
         read_verilog $file
     }

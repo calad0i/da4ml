@@ -22,24 +22,20 @@ if { "${source_type}" != "vhdl" && "${source_type}" != "verilog" } {
 if { "${source_type}" == "vhdl" } {
     set_global_assignment -name VHDL_INPUT_VERSION VHDL_2008
 
-    set_global_assignment -name VHDL_FILE "src/${project_name}.vhd"
-    set_global_assignment -name VHDL_FILE "src/static/shift_adder.vhd"
-    set_global_assignment -name VHDL_FILE "src/static/negative.vhd"
-    set_global_assignment -name VHDL_FILE "src/static/mux.vhd"
-    set_global_assignment -name VHDL_FILE "src/static/multiplier.vhd"
-    set_global_assignment -name VHDL_FILE "src/static/lookup_table.vhd"
+    foreach file [glob -nocomplain "src/static/*.vhd"] {
+        set_global_assignment -name VHDL_FILE "${file}"
+    }
 
+    set_global_assignment -name VHDL_FILE "src/${project_name}.vhd"
     foreach file [glob -nocomplain "src/${project_name}_stage*.vhd"] {
         set_global_assignment -name VHDL_FILE "${file}"
     }
 } else {
-    set_global_assignment -name VERILOG_FILE "src/${project_name}.v"
-    set_global_assignment -name VERILOG_FILE "src/static/shift_adder.v"
-    set_global_assignment -name VERILOG_FILE "src/static/negative.v"
-    set_global_assignment -name VERILOG_FILE "src/static/mux.v"
-    set_global_assignment -name VERILOG_FILE "src/static/multiplier.v"
-    set_global_assignment -name VERILOG_FILE "src/static/lookup_table.v"
+    foreach file [glob -nocomplain "src/static/*.v"] {
+        set_global_assignment -name VERILOG_FILE "${file}"
+    }
 
+    set_global_assignment -name VERILOG_FILE "src/${project_name}.v"
     foreach file [glob -nocomplain "src/${project_name}_stage*.v"] {
         set_global_assignment -name VERILOG_FILE "${file}"
     }
