@@ -50,7 +50,8 @@ def _generate_mem_file(sol: CombLogic, sig: table_sig_t) -> str:
     if is_signed:
         data = np.concatenate([data[size // 2 :], data[: size // 2]])
     width = sum(table.spec.out_kif)
-    mem_lines = [f'{hex(value)[2:].upper()}' for value in data & ((1 << width) - 1)]
+    ndigits = ceil(width / 4)
+    mem_lines = [f'{hex(value)[2:].upper().zfill(ndigits)}' for value in data & ((1 << width) - 1)]
     return '\n'.join(mem_lines)
 
 

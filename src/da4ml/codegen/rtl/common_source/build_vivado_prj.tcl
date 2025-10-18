@@ -17,31 +17,31 @@ if { $source_type != "vhdl" && $source_type != "verilog" } {
 if { $source_type == "vhdl" } {
     set_property TARGET_LANGUAGE VHDL [current_project]
 
-    read_vhdl -vhdl2008 "${project_name}.vhd"
-    read_vhdl -vhdl2008 "shift_adder.vhd"
-    read_vhdl -vhdl2008 "negative.vhd"
-    read_vhdl -vhdl2008 "mux.vhd"
-    read_vhdl -vhdl2008 "multiplier.vhd"
-    read_vhdl -vhdl2008 "lookup_table.vhd"
-    foreach file [glob -nocomplain "${project_name}_stage*.vhd"] {
+    read_vhdl -vhdl2008 "src/${project_name}.vhd"
+    read_vhdl -vhdl2008 "src/static/shift_adder.vhd"
+    read_vhdl -vhdl2008 "src/static/negative.vhd"
+    read_vhdl -vhdl2008 "src/static/mux.vhd"
+    read_vhdl -vhdl2008 "src/static/multiplier.vhd"
+    read_vhdl -vhdl2008 "src/static/lookup_table.vhd"
+    foreach file [glob -nocomplain "src/${project_name}_stage*.vhd"] {
         read_vhdl -vhdl2008 $file
     }
 } else {
     set_property TARGET_LANGUAGE Verilog [current_project]
 
-    read_verilog "${project_name}.v"
-    read_verilog "shift_adder.v"
-    read_verilog "negative.v"
-    read_verilog "mux.v"
-    read_verilog "multiplier.v"
-    read_verilog "lookup_table.v"
-    foreach file [glob -nocomplain "${project_name}_stage*.v"] {
+    read_verilog "src/${project_name}.v"
+    read_verilog "src/static/shift_adder.v"
+    read_verilog "src/static/negative.v"
+    read_verilog "src/static/mux.v"
+    read_verilog "src/static/multiplier.v"
+    read_verilog "src/static/lookup_table.v"
+    foreach file [glob -nocomplain "src/${project_name}_stage*.v"] {
         read_verilog $file
     }
 }
 
 # Add .mem files for LUT initialization
-set mems [glob -nocomplain "*.mem"]
+set mems [glob -nocomplain "src/memfiles/*.mem"]
 foreach f $mems {
     add_files -fileset [current_fileset] $f
 }
@@ -49,7 +49,7 @@ foreach f $mems {
     set_property used_in_synthesis true [get_files $f]
 }
 
-read_xdc "${project_name}.xdc" -mode out_of_context
+read_xdc "src/${project_name}.xdc" -mode out_of_context
 
 set_property top $top_module [current_fileset]
 

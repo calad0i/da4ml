@@ -4,7 +4,7 @@
 module lookup_table #(
     parameter BW_IN = 8,
     parameter BW_OUT = 8,
-    parameter mem_file = "whatever.mem"
+    parameter MEM_FILE = "whatever.mem"
 ) (
     input [BW_IN-1:0] in,
     output [BW_OUT-1:0] out
@@ -15,7 +15,7 @@ module lookup_table #(
   reg [BW_OUT-1:0] readout;
 
   initial begin
-    $readmemh(mem_file, lut_rom);
+    $readmemh(MEM_FILE, lut_rom);
   end
 
   assign out[BW_OUT-1:0] = readout[BW_OUT-1:0];

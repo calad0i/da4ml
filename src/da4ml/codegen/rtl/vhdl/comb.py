@@ -3,6 +3,7 @@ from math import ceil, log2
 import numpy as np
 
 from ....cmvm.types import CombLogic, Op, QInterval, _minimal_kif
+from ..verilog.comb import _get_table_signature, _table_signature_to_name
 
 
 def make_neg(
@@ -46,10 +47,11 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
         if bw == 0:
             continue
 
+        signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
+
         match op.opcode:
             case -1:  # Input marker
                 i0, i1 = inp_idxs[op.id0]
-                signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
                 line = f'v{i} <= model_inp({i0} downto {i1});'
 
             case 0 | 1:  # Common a+/-b<<shift oprs
@@ -57,7 +59,6 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 bw0, bw1 = widths[op.id0], widths[op.id1]
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
                 shift = op.data + f0 - f1
-                signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
                 line = f'op_{i}:entity work.shift_adder generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw},SHIFT1=>{shift},IS_SUB=>{op.opcode}) port map(in0=>v{op.id0},in1=>v{op.id1},result=>v{i});'
 
             case 2 | -2:  # ReLU
@@ -68,7 +69,6 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 if op.opcode == -2 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
                     bw0, v0_name = make_neg(signals, assigns, op, ops, bw0, v0_name)
-                signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
                 if ops[op.id0].qint.min < 0:
                     if bw > 1:
                         line = f'v{i} <= {v0_name}({i0} downto {i1}) and ({bw - 1} downto 0 => not {v0_name}({bw0 - 1}));'
@@ -85,7 +85,6 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 if op.opcode == -3 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
                     bw0, v0_name = make_neg(signals, assigns, op, ops, bw0, v0_name)
-                signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
                 line = f'v{i} <= {v0_name}({i0} downto {i1});'
 
             case 4:  # constant addition
@@ -95,14 +94,12 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 bw0 = widths[op.id0]
                 s0 = int(kifs[op.id0][0])
                 shift = kifs[op.id0][2] - kifs[i][2]
-                signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
                 bin_val = format(mag, f'0{bw1}b')
                 line = f'op_{i}:entity work.shift_adder generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>0,BW_OUT=>{bw},SHIFT1=>{shift},IS_SUB=>{sign}) port map(in0=>v{op.id0},in1=>"{bin_val}",result=>v{i});'
             case 5:  # constant
                 num = op.data
                 if num < 0:
                     num = 2**bw + num
-                signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
                 bin_val = format(num, f'0{bw}b')
                 line = f'v{i} <= "{bin_val}";'
 
@@ -115,13 +112,18 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 _shift = (op.data >> 32) & 0xFFFFFFFF
                 _shift = _shift if _shift < 0x80000000 else _shift - 0x100000000
                 shift = f0 - f1 + _shift
-                signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
                 line = f'op_{i}:entity work.mux generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw},SHIFT1=>{shift},INVERT1=>{inv}) port map(key=>v{k}({bwk - 1}),in0=>v{a},in1=>v{b},result=>v{i});'
+
             case 7:  # Multiplication
                 bw0, bw1 = widths[op.id0], widths[op.id1]
                 s0, s1 = int(kifs[op.id0][0]), int(kifs[op.id1][0])
-                signals.append(f'signal v{i}:std_logic_vector({bw - 1} downto {0});')
                 line = f'op_{i}:entity work.multiplier generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw}) port map(in0=>v{op.id0},in1=>v{op.id1},result=>v{i});'
+
+            case 8:  # Lookup Table
+                sig = _get_table_signature(sol, op)
+                name = _table_signature_to_name(sig)
+                bw0 = widths[op.id0]
+                line = f'op_{i}:entity work.lookup_table generic map(BW_IN=>{bw0},BW_OUT=>{bw},MEM_FILE=>"{name}") port map(inp=>v{op.id0},outp=>v{i});'
 
             case _:
                 raise ValueError(f'Unknown opcode {op.opcode} for operation {i} ({op})')

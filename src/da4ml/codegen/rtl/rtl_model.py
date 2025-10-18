@@ -85,9 +85,14 @@ class RTLModel:
         if flavor == 'vhdl':
             from .vhdl import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
         else:  # verilog
-            from .verilog import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen, table_mem_gen
+            from .verilog import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
 
-        self._path.mkdir(parents=True, exist_ok=True)
+        from .verilog.comb import table_mem_gen
+
+        (self._path / 'src/static').mkdir(parents=True, exist_ok=True)
+        (self._path / 'sim').mkdir(exist_ok=True)
+        (self._path / 'model').mkdir(exist_ok=True)
+        (self._path / 'src/memfiles').mkdir(exist_ok=True)
         if self._pipe is not None:  # Pipeline
             # Main logic
             codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
@@ -98,7 +103,7 @@ class RTLModel:
                 memfiles.update(table_mem_gen(comb))
 
             for k, v in codes.items():
-                with open(self._path / f'{k}.{suffix}', 'w') as f:
+                with open(self._path / f'src/{k}.{suffix}', 'w') as f:
                     f.write(v)
 
             # Build scripts
@@ -120,7 +125,7 @@ class RTLModel:
                 constraint = constraint.replace('$::env(UNCERTAINITY_HOLD)', str(self._clock_uncertainty))
                 constraint = constraint.replace('$::env(DELAY_MAX)', str(self._io_delay_minmax[1]))
                 constraint = constraint.replace('$::env(DELAY_MIN)', str(self._io_delay_minmax[0]))
-                with open(self._path / f'{self._prj_name}.{fmt}', 'w') as f:
+                with open(self._path / f'src/{self._prj_name}.{fmt}', 'w') as f:
                     f.write(constraint)
 
             # C++ binder w/ HDL wrapper for uniform bw
@@ -129,7 +134,7 @@ class RTLModel:
             # Verilog IO wrapper (non-uniform bw to uniform one, clk passthrough)
             io_wrapper = generate_io_wrapper(self._pipe, self._prj_name, True)
 
-            self._pipe.save(self._path / 'pipeline.json')
+            self._pipe.save(self._path / 'model/pipeline.json')
         else:  # Comb
             assert isinstance(self._solution, CombLogic)
 
@@ -138,7 +143,7 @@ class RTLModel:
 
             # Main logic
             code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps')
-            with open(self._path / f'{self._prj_name}.{suffix}', 'w') as f:
+            with open(self._path / f'src/{self._prj_name}.{suffix}', 'w') as f:
                 f.write(code)
 
             # Verilog IO wrapper (non-uniform bw to uniform one, no clk)
@@ -147,23 +152,23 @@ class RTLModel:
 
         # Write table memory files
         for name, mem in memfiles.items():
-            with open(self._path / name, 'w') as f:
+            with open(self._path / 'src/memfiles' / name, 'w') as f:
                 f.write(mem)
 
-        with open(self._path / f'{self._prj_name}_wrapper.{suffix}', 'w') as f:
+        with open(self._path / f'src/{self._prj_name}_wrapper.{suffix}', 'w') as f:
             f.write(io_wrapper)
-        with open(self._path / f'{self._prj_name}_wrapper_binder.cc', 'w') as f:
+        with open(self._path / f'sim/{self._prj_name}_wrapper_binder.cc', 'w') as f:
             f.write(binder)
 
         # Common resource copy
         for path in self.__src_root.glob(f'{flavor}/source/*.{suffix}'):
-            shutil.copy(path, self._path)
+            shutil.copy(path, self._path / 'src/static')
 
-        shutil.copy(self.__src_root / 'common_source/build_binder.mk', self._path)
-        shutil.copy(self.__src_root / 'common_source/ioutil.hh', self._path)
-        shutil.copy(self.__src_root / 'common_source/binder_util.hh', self._path)
-        self._solution.save(self._path / 'model.json')
-        with open(self._path / 'misc.json', 'w') as f:
+        shutil.copy(self.__src_root / 'common_source/build_binder.mk', self._path / 'sim')
+        shutil.copy(self.__src_root / 'common_source/ioutil.hh', self._path / 'sim')
+        shutil.copy(self.__src_root / 'common_source/binder_util.hh', self._path / 'sim')
+        self._solution.save(self._path / 'model/comb.json')
+        with open(self._path / 'metadata.json', 'w') as f:
             misc = {'cost': self._solution.cost}
             if self._pipe is not None:
                 misc['latency'] = len(self._pipe[0])
@@ -207,15 +212,19 @@ class RTLModel:
 
         if clean:
             m = re.compile(r'^lib.*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.so$')
-            for p in self._path.iterdir():
+            for p in (self._path / 'sim').iterdir():
                 if not p.is_dir() and m.match(p.name):
                     p.unlink()
             subprocess.run(
-                ['make', '-f', 'build_binder.mk', 'clean'], env=env, cwd=self._path, check=True, capture_output=not verbose
+                ['make', '-f', 'build_binder.mk', 'clean'],
+                env=env,
+                cwd=self._path / 'sim',
+                check=True,
+                capture_output=not verbose,
             )
 
         try:
-            r = subprocess.run(args, env=env, check=True, cwd=self._path, capture_output=not verbose)
+            r = subprocess.run(args, env=env, check=True, cwd=self._path / 'sim', capture_output=not verbose)
         except subprocess.CalledProcessError as e:
             print(e.stderr.decode(), file=sys.stderr)
             print(e.stdout.decode(), file=sys.stdout)
@@ -226,7 +235,7 @@ class RTLModel:
             raise RuntimeError('Compilation failed!!')
 
         if clean:
-            subprocess.run(['rm', '-rf', 'obj_dir'], cwd=self._path, check=True, capture_output=not verbose)
+            subprocess.run(['rm', '-rf', 'obj_dir'], cwd=self._path / 'sim', check=True, capture_output=not verbose)
 
         self._load_lib(self._uuid)
 
@@ -234,12 +243,12 @@ class RTLModel:
         uuid = uuid if uuid is not None else self._uuid
         if uuid is None:
             # load .so if there is only one, otherwise raise an error
-            libs = list(self._path.glob(f'lib{self._prj_name}_wrapper_*.so'))
+            libs = list(self._path.glob(f'sim/lib{self._prj_name}_wrapper_*.so'))
             if len(libs) == 0:
                 raise RuntimeError(f'Cannot load library, found {len(libs)} libraries in {self._path}')
             uuid = libs[0].name.split('_')[-1].split('.', 1)[0]
         self._uuid = uuid
-        lib_path = self._path / f'lib{self._prj_name}_wrapper_{uuid}.so'
+        lib_path = self._path / f'sim/lib{self._prj_name}_wrapper_{uuid}.so'
         if not lib_path.exists():
             raise RuntimeError(f'Library {lib_path} does not exist')
         self._lib = ctypes.CDLL(str(lib_path))
@@ -308,7 +317,7 @@ class RTLModel:
         inp_buf = inp_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
         out_buf = out_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
 
-        with at_path(self._path):
+        with at_path(self._path / 'src/memfiles'):
             self._lib.inference(inp_buf, out_buf, n_sample)
 
         # Unscale the output int32 to recover fp values
