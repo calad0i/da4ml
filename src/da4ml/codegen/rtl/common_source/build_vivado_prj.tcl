@@ -56,8 +56,10 @@ foreach f $mems {
     set_property used_in_synthesis true [get_files $f]
 }
 
-
-read_xdc "src/${project_name}.xdc" -mode out_of_context
+# Add XDC constraint if it exists
+if { [file exists "src/${project_name}.xdc"] } {
+    read_xdc "src/${project_name}.xdc" -mode out_of_context
+}
 
 set_property top $top_module [current_fileset]
 

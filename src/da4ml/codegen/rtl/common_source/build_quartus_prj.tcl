@@ -27,6 +27,7 @@ if { "${source_type}" == "vhdl" } {
     set_global_assignment -name VHDL_FILE "src/static/negative.vhd"
     set_global_assignment -name VHDL_FILE "src/static/mux.vhd"
     set_global_assignment -name VHDL_FILE "src/static/multiplier.vhd"
+    set_global_assignment -name VHDL_FILE "src/static/lookup_table.vhd"
 
     foreach file [glob -nocomplain "src/${project_name}_stage*.vhd"] {
         set_global_assignment -name VHDL_FILE "${file}"
@@ -37,14 +38,29 @@ if { "${source_type}" == "vhdl" } {
     set_global_assignment -name VERILOG_FILE "src/static/negative.v"
     set_global_assignment -name VERILOG_FILE "src/static/mux.v"
     set_global_assignment -name VERILOG_FILE "src/static/multiplier.v"
+    set_global_assignment -name VERILOG_FILE "src/static/lookup_table.v"
 
-    foreach file [glob -nocomplain "${project_name}_stage*.v"] {
-        set_global_assignment -name VERILOG_FILE "src/${file}"
+    foreach file [glob -nocomplain "src/${project_name}_stage*.v"] {
+        set_global_assignment -name VERILOG_FILE "${file}"
     }
 }
 
+set mems [glob -nocomplain "src/memfiles/*.mem"]
+
+# VHDL only uses relative path to working dir apparently...
+if { "${source_type}" == "vhdl" } {
+    foreach f $mems {
+        file copy -force $f [file tail $f]
+    }
+    set mems [glob -nocomplain "*.mem"]
+}
+
+foreach f $mems {
+    set_global_assignment -name MIF_FILE "${f}"
+}
+
 # Add SDC constraint file if it exists
-if { [file exists "${project_name}.sdc"] } {
+if { [file exists "src/${project_name}.sdc"] } {
     set_global_assignment -name SDC_FILE "${project_name}.sdc"
 }
 
