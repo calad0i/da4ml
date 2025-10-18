@@ -87,10 +87,11 @@ class TableSpec:
 def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32]]:
     f_out = -_shift_centering(np.array(table))
     int_table = (table * 2**f_out).astype(np.uint32)
-    h = sha256(int_table.data).hexdigest()
+    h = sha256(int_table.data)
+    h.update(f'{f_out}'.encode())
     inp_width = ceil(log2(table.size))
     out_qint = QInterval(float(np.min(table)), float(np.max(table)), float(2**-f_out))
-    return TableSpec(hash=h, inp_width=inp_width, out_qint=out_qint), int_table
+    return TableSpec(hash=h.hexdigest(), inp_width=inp_width, out_qint=out_qint), int_table
 
 
 def interpret_as(
@@ -106,9 +107,14 @@ def interpret_as(
 
 
 class LookupTable:
-    def __init__(self, values: NDArray[np.floating]):
+    def __init__(self, values: NDArray, spec: TableSpec | None = None):
         assert values.ndim == 1, 'Lookup table values must be 1-dimensional'
-        self.spec, self.table = to_spec(values)
+        if spec is not None:
+            assert values.dtype is np.int32
+            self.spec = spec
+            self.table = values
+        else:
+            self.spec, self.table = to_spec(values)
 
     @overload
     def lookup(self, var: 'FixedVariable', qint_in: QInterval) -> 'FixedVariable': ...
@@ -125,6 +131,32 @@ class LookupTable:
             index = round((var - _min) / _step)
             kif = _minimal_kif(self.spec.out_qint)
             return interpret_as(int(self.table[index]), *kif)
+
+    def to_dict(self) -> dict:
+        return {
+            'spec': {
+                'hash': self.spec.hash,
+                'out_qint': {
+                    'min': self.spec.out_qint.min,
+                    'max': self.spec.out_qint.max,
+                    'step': self.spec.out_qint.step,
+                },
+                'inp_width': self.spec.inp_width,
+            },
+            'table': self.table.tolist(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'LookupTable':
+        spec_data = data['spec']
+        out_qint_data = spec_data['out_qint']
+        spec = TableSpec(
+            hash=spec_data['hash'],
+            out_qint=QInterval(out_qint_data['min'], out_qint_data['max'], out_qint_data['step']),
+            inp_width=spec_data['inp_width'],
+        )
+        table = np.array(data['table'], dtype=np.int32)
+        return cls(table, spec=spec)
 
 
 def _const_f(const: float | Decimal):

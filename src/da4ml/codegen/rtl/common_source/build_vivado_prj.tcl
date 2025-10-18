@@ -22,6 +22,7 @@ if { $source_type == "vhdl" } {
     read_vhdl -vhdl2008 "negative.vhd"
     read_vhdl -vhdl2008 "mux.vhd"
     read_vhdl -vhdl2008 "multiplier.vhd"
+    read_vhdl -vhdl2008 "lookup_table.vhd"
     foreach file [glob -nocomplain "${project_name}_stage*.vhd"] {
         read_vhdl -vhdl2008 $file
     }
@@ -33,9 +34,19 @@ if { $source_type == "vhdl" } {
     read_verilog "negative.v"
     read_verilog "mux.v"
     read_verilog "multiplier.v"
+    read_verilog "lookup_table.v"
     foreach file [glob -nocomplain "${project_name}_stage*.v"] {
         read_verilog $file
     }
+}
+
+# Add .mem files for LUT initialization
+set mems [glob -nocomplain "*.mem"]
+foreach f $mems {
+    add_files -fileset [current_fileset] $f
+}
+foreach f $mems {
+    set_property used_in_synthesis true [get_files $f]
 }
 
 read_xdc "${project_name}.xdc" -mode out_of_context
@@ -47,7 +58,7 @@ file mkdir "${output_dir}/reports"
 
 # synth
 synth_design -top $top_module -mode out_of_context -global_retiming on \
-    -flatten_hierarchy full -resource_sharing auto
+    -flatten_hierarchy full -resource_sharing auto -directive PerformanceOptimized
 
 write_checkpoint -force "${output_dir}/${project_name}_post_synth.dcp"
 

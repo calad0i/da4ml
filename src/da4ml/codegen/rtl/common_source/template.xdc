@@ -25,3 +25,6 @@ set_output_delay -clock sys_clk -min $delay_min [get_ports {model_out[*]}]
 # Apply calculated uncertainty values
 set_clock_uncertainty -setup $uncertainty_setup [get_clocks sys_clk]
 set_clock_uncertainty -hold $uncertainty_hold [get_clocks sys_clk]
+
+# Mark lut_rom to be implemented as distributed ROM (*rom_style = "distributed" *)
+set_property rom_style "distributed" [get_cells lut_rom]

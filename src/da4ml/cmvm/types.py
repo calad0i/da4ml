@@ -228,6 +228,13 @@ def _(v: Decimal, k: int | bool, i: int, f: int, round_mode: str = 'TRN'):
     return eps * ((floor(v / eps) + bias) % Decimal(2) ** b - bias)
 
 
+class JSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if hasattr(o, 'to_dict'):
+            return o.to_dict()
+        super().default(o)
+
+
 class CombLogic(NamedTuple):
     """A combinational logic that describes a series of operations on input data to produce output data.
 
@@ -461,7 +468,7 @@ class CombLogic(NamedTuple):
     def save(self, path: str | Path):
         """Save the solution to a file."""
         with open(path, 'w') as f:
-            json.dump(self, f)
+            json.dump(self, f, cls=JSONEncoder)
 
     @classmethod
     def deserialize(cls, data: dict):
@@ -641,7 +648,7 @@ class Pipeline(NamedTuple):
     def save(self, path: str | Path):
         """Save the solution to a file."""
         with open(path, 'w') as f:
-            json.dump(self, f)
+            json.dump(self, f, cls=JSONEncoder)
 
     @classmethod
     def deserialize(cls, data: dict):

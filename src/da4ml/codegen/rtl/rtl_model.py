@@ -23,6 +23,19 @@ def get_io_kifs(sol: CombLogic | Pipeline):
     return np.array(inp_kifs, np.int8), np.array(out_kifs, np.int8)
 
 
+class at_path:
+    def __init__(self, path: str | Path):
+        self._path = Path(path)
+        self._orig_cwd = None
+
+    def __enter__(self):
+        self._orig_cwd = Path.cwd()
+        os.chdir(self._path)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self._orig_cwd)  # type: ignore
+
+
 class RTLModel:
     def __init__(
         self,
@@ -72,12 +85,18 @@ class RTLModel:
         if flavor == 'vhdl':
             from .vhdl import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
         else:  # verilog
-            from .verilog import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
+            from .verilog import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen, table_mem_gen
 
         self._path.mkdir(parents=True, exist_ok=True)
         if self._pipe is not None:  # Pipeline
             # Main logic
             codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
+
+            # Table memory files
+            memfiles: dict[str, str] = {}
+            for comb in self._pipe.solutions:
+                memfiles.update(table_mem_gen(comb))
+
             for k, v in codes.items():
                 with open(self._path / f'{k}.{suffix}', 'w') as f:
                     f.write(v)
@@ -114,6 +133,9 @@ class RTLModel:
         else:  # Comb
             assert isinstance(self._solution, CombLogic)
 
+            # Table memory files
+            memfiles = table_mem_gen(self._solution)
+
             # Main logic
             code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps')
             with open(self._path / f'{self._prj_name}.{suffix}', 'w') as f:
@@ -122,6 +144,11 @@ class RTLModel:
             # Verilog IO wrapper (non-uniform bw to uniform one, no clk)
             io_wrapper = generate_io_wrapper(self._solution, self._prj_name, False)
             binder = binder_gen(self._solution, f'{self._prj_name}_wrapper')
+
+        # Write table memory files
+        for name, mem in memfiles.items():
+            with open(self._path / name, 'w') as f:
+                f.write(mem)
 
         with open(self._path / f'{self._prj_name}_wrapper.{suffix}', 'w') as f:
             f.write(io_wrapper)
@@ -280,7 +307,9 @@ class RTLModel:
 
         inp_buf = inp_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
         out_buf = out_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
-        self._lib.inference(inp_buf, out_buf, n_sample)
+
+        with at_path(self._path):
+            self._lib.inference(inp_buf, out_buf, n_sample)
 
         # Unscale the output int32 to recover fp values
         k, i, f = np.max(k_out), np.max(i_out), np.max(f_out)
