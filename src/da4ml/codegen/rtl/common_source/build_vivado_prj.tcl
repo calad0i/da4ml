@@ -40,14 +40,22 @@ if { $source_type == "vhdl" } {
     }
 }
 
-# Add .mem files for LUT initialization
+
 set mems [glob -nocomplain "src/memfiles/*.mem"]
+
+# VHDL only uses relative path to working dir apparently...
+if { $source_type == "vhdl" } {
+    foreach f $mems {
+        file copy -force $f [file tail $f]
+    }
+    set mems [glob -nocomplain "*.mem"]
+}
+
 foreach f $mems {
     add_files -fileset [current_fileset] $f
-}
-foreach f $mems {
     set_property used_in_synthesis true [get_files $f]
 }
+
 
 read_xdc "src/${project_name}.xdc" -mode out_of_context
 

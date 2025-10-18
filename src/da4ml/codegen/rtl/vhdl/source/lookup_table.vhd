@@ -27,14 +27,15 @@ architecture rtl of lookup_table is
 		variable line_in  : line;
 		variable idx      : integer := 0;
 		variable data_val : std_logic_vector(BW_OUT - 1 downto 0);
+		variable temp_val : std_logic_vector(((BW_OUT + 3) / 4) * 4 - 1 downto 0);
 	begin
 		file_open(rom_file, MEM_FILE, read_mode);
 
 	while not endfile(rom_file) loop
 		exit when idx > rom_index_t'high;
 		readline(rom_file, line_in);
-		hread(line_in, data_val);
-		rom_data(idx) := data_val;
+		hread(line_in, temp_val);
+		rom_data(idx) := temp_val(BW_OUT - 1 downto 0);
 		idx := idx + 1;
 	end loop;
 
@@ -42,7 +43,10 @@ architecture rtl of lookup_table is
 	return rom_data;
 	end function init_rom;
 
-	constant ROM_CONTENTS : rom_array_t := init_rom;
+	signal ROM_CONTENTS : rom_array_t := init_rom;
+
+	attribute rom_style : string;
+	attribute rom_style of ROM_CONTENTS : signal is "distributed";
 begin
 	outp <= ROM_CONTENTS(to_integer(unsigned(inp)));
 end architecture rtl;
