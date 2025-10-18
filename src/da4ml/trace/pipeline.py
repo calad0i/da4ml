@@ -164,7 +164,8 @@ def to_pipeline(comb: CombLogic, latency_cutoff: float, retiming=True, verbose=T
     return csol
 
 
-def remap_table_idxs(comb, _ops):
+def remap_table_idxs(comb: CombLogic, _ops):
+    assert comb.lookup_tables is not None
     table_idxs = sorted(list({op.data for op in _ops if op.opcode == 8}))
     remap = {j: i for i, j in enumerate(table_idxs)}
     _ops_remap = []

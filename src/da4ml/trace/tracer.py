@@ -52,6 +52,18 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     ops: list[Op] = []
     inp_uuids = {v.id: i for i, v in enumerate(inputs)}
     lookup_tables = []
+
+    table_map: dict[int, int] = {}
+    for v in variables:
+        if not v.opr == 'lookup':
+            continue
+        assert v._data is not None
+        idx = int(v._data)
+        if idx in table_map:
+            continue
+        table_map[idx] = len(lookup_tables)
+        lookup_tables.append(table_context.get_table_from_index(idx))
+
     for i, v in enumerate(variables):
         if v.id in inp_uuids and v.opr != 'const':
             id0 = inp_uuids[v.id]
@@ -120,8 +132,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 data = v._data
                 assert data is not None, 'lookup must have data'
                 assert id0 < i, f'{id0} {i} {v.id}'
-                op = Op(id0, -1, opcode, int(data), v.unscaled.qint, v.latency, v.cost)
-                lookup_tables.append(table_context.get_table_from_index(int(data)))
+                op = Op(id0, -1, opcode, table_map[int(data)], v.unscaled.qint, v.latency, v.cost)
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
 
