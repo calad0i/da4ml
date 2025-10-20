@@ -1,17 +1,15 @@
+from collections.abc import Callable
 from decimal import Decimal
 from inspect import signature
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
 import numpy as np
 from numba.typed import List as NumbaList
 from numpy.typing import NDArray
 
 from ..cmvm.api import solve, solver_options_t
-from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, QInterval
-from .ops import einsum, reduce
-
-if TYPE_CHECKING:
-    from .fixed_variable_array import FixedVariableArray
+from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, LookupTable, QInterval
+from .ops import _quantize, einsum, reduce
 
 T = TypeVar('T')
 
@@ -89,7 +87,36 @@ def offload_mask(cm: NDArray, v: 'FixedVariableArray') -> NDArray[np.bool_]:
     return (bits == 0) & (cm != 0)
 
 
+_unary_functions = (
+    np.sin,
+    np.cos,
+    np.tan,
+    np.exp,
+    np.log,
+    np.invert,
+    np.sqrt,
+    np.tanh,
+    np.sinh,
+    np.cosh,
+    np.arccos,
+    np.arcsin,
+    np.arctan,
+    np.arcsinh,
+    np.arccosh,
+    np.arctanh,
+    np.exp2,
+    np.expm1,
+    np.log2,
+    np.log10,
+    np.log1p,
+    np.cbrt,
+    np.reciprocal,
+)
+
+
 class FixedVariableArray:
+    """Symbolic array of FixedVariable for tracing operations. Supports numpy ufuncs and array functions."""
+
     __array_priority__ = 100
 
     def __array_function__(self, func, types, args, kwargs):
@@ -185,7 +212,7 @@ class FixedVariableArray:
                 base, exp = inputs
                 return base**exp
 
-            case np.abs:
+            case np.abs | np.absolute:
                 assert len(inputs) == 1
                 assert inputs[0] is self
                 mask: np.ndarray = (self.kif[0] == 0).ravel()
@@ -202,8 +229,15 @@ class FixedVariableArray:
                     r[i] = v
                 return FixedVariableArray(r.reshape(self.shape), self.solver_options)
 
-            case np.sin | np.cos | np.tan | np.exp | np.log | np.invert | np.abs:
-                raise NotImplementedError(f'Unsupported ufunc: {ufunc}')
+            case np.square:
+                assert len(inputs) == 1
+                assert inputs[0] is self
+                return self**2
+
+        if ufunc in _unary_functions:
+            assert len(inputs) == 1
+            assert inputs[0] is self
+            return self.apply(ufunc)
 
         raise NotImplementedError(f'Unsupported ufunc: {ufunc}')
 
@@ -365,8 +399,10 @@ class FixedVariableArray:
 
     def __pow__(self, power: int | float):
         _power = int(power)
-        assert _power == power, 'Power must be an integer'
-        return FixedVariableArray(self._vars**_power, self.solver_options)
+        if _power == power and _power >= 0:
+            return FixedVariableArray(self._vars**_power, self.solver_options)
+        else:
+            return self.apply(lambda x: x**power)
 
     def relu(
         self,
@@ -432,8 +468,18 @@ class FixedVariableArray:
         kif = np.array([v.kif for v in self._vars.ravel()]).reshape(*shape, 3)
         return np.moveaxis(kif, -1, 0)
 
+    def apply(self, fn: Callable[[NDArray], NDArray]) -> 'RetardedFixedVariableArray':
+        """Apply a unary operator to all elements, returning a RetardedFixedVariableArray."""
+        return RetardedFixedVariableArray(
+            self._vars,
+            self.solver_options,
+            operator=fn,
+        )
+
 
 class FixedVariableArrayInput(FixedVariableArray):
+    """Similar to FixedVariableArray, but initializes all elements as FixedVariableInput - the precisions are unspecified when initialized, and the highest precision requested (i.e., quantized to) will be recorded for generation of the logic."""
+
     def __init__(
         self,
         shape: tuple[int, ...] | int,
@@ -446,3 +492,61 @@ class FixedVariableArrayInput(FixedVariableArray):
         for i in range(_vars.size):
             _vars_f[i] = FixedVariableInput(latency, hwconf)
         super().__init__(_vars, solver_options)
+
+
+def make_table(fn: Callable[[NDArray], NDArray], qint: QInterval) -> LookupTable:
+    low, high, step = qint
+    n = round((high - low) / step) + 1
+    return LookupTable(fn(np.linspace(low, high, n)))
+
+
+class RetardedFixedVariableArray(FixedVariableArray):
+    """Ephemeral FixedVariableArray generated from operations of unspecified output precision.
+    This object translates to normal FixedVariableArray upon quantization.
+    Does not inherit the maximum precision like FixedVariableArrayInput.
+
+    This object can be used in two ways:
+    1. Quantization with specified precision, which converts to FixedVariableArray.
+    2. Apply an further unary operation, which returns another RetardedFixedVariableArray. (e.g., composite functions)
+    """
+
+    def __init__(self, vars: NDArray, solver_options: solver_options_t | None, operator: Callable[[NDArray], NDArray]):
+        self._operator = operator
+        super().__init__(vars, solver_options)
+
+    def __array_function__(self, ufunc, method, *inputs, **kwargs):
+        raise RuntimeError('RetardedFixedVariableArray only supports quantization or further unary operations.')
+
+    def apply(self, fn: Callable[[NDArray], NDArray]) -> 'RetardedFixedVariableArray':
+        return RetardedFixedVariableArray(
+            self._vars,
+            self.solver_options,
+            operator=lambda x: fn(self._operator(x)),
+        )
+
+    def quantize(
+        self,
+        k: NDArray[np.integer] | np.integer | int | None = None,
+        i: NDArray[np.integer] | np.integer | int | None = None,
+        f: NDArray[np.integer] | np.integer | int | None = None,
+        overflow_mode: str = 'WRAP',
+        round_mode: str = 'TRN',
+    ):
+        if any(x is None for x in (k, i, f)):
+            assert all(x is not None for x in (k, i, f)), 'Either all or none of k, i, f must be specified'
+            op = self._operator
+        else:
+            op = lambda x: _quantize(self._operator(x), k, i, f, overflow_mode, round_mode)  # type: ignore
+
+        qints = {v.qint for v in self._vars.ravel()}
+        local_tables = {qint: make_table(op, qint) for qint in qints}
+        vars = [v.lookup(local_tables[v.qint]) for v in self._vars.ravel()]
+        vars = np.array(vars).reshape(self._vars.shape)
+        return FixedVariableArray(vars, self.solver_options)
+
+    def __repr__(self):
+        return 'Retarded' + super().__repr__()
+
+    @property
+    def kif(self):
+        raise RuntimeError('RetardedFixedVariableArray does not have defined kif until quantized.')

@@ -35,28 +35,12 @@ class TraceContext:
     hwconf: HWConfig = HWConfig(1, -1, -1)
     _table_counter = 0
 
-    @overload
-    def register_table(self, table: 'LookupTable|np.ndarray', /) -> tuple['LookupTable', int]: ...
+    def register_table(self, arg1: 'LookupTable|np.ndarray'):
+        if isinstance(arg1, np.ndarray):
+            arg1 = LookupTable(arg1)
+        table = arg1
+        self._tables[table.spec.hash] = (table, self._table_counter)
 
-    @overload
-    def register_table(self, fn: ufunc_t, /, qint_in: QInterval) -> tuple['LookupTable', int]: ...
-
-    def register_table(self, arg1: 'LookupTable|np.ndarray|ufunc_t', qint_in: QInterval | None = None):
-        if isinstance(arg1, (LookupTable, np.ndarray)):
-            if isinstance(arg1, np.ndarray):
-                arg1 = LookupTable(arg1)
-            table = arg1
-            self._tables[table.spec.hash] = (table, self._table_counter)
-        else:
-            assert callable(arg1) and isinstance(qint_in, QInterval)
-            k1 = f'{arg1.__module__}.{arg1.__name__}'
-            k2 = f'{float(qint_in.min)}:{float(qint_in.max)}:{float(qint_in.step)}'
-            h = sha256((k1 + '::' + k2).encode('utf-8')).hexdigest()
-            if h in self._tables:
-                return self._tables[h]
-            vx = np.linspace(qint_in.min, qint_in.max, round((qint_in.max - qint_in.min) / qint_in.step + 1))
-            table = LookupTable(arg1(vx))
-            self._tables[table.spec.hash] = self._tables[h] = (table, self._table_counter)
         self._table_counter += 1
         return self._tables[table.spec.hash]
 
@@ -86,7 +70,7 @@ class TableSpec:
 
 def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32]]:
     f_out = -_shift_centering(np.array(table))
-    int_table = (table * 2**f_out).astype(np.uint32)
+    int_table = (table * 2**f_out).astype(np.int32)
     h = sha256(int_table.data)
     h.update(f'{f_out}'.encode())
     inp_width = ceil(log2(table.size))
@@ -705,15 +689,12 @@ class FixedVariable:
         qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
         return (self - other).msb_mux(self, other, qint=qint)
 
-    def lookup(self, table: LookupTable | np.ndarray | ufunc_t) -> 'FixedVariable':
-        if isinstance(table, LookupTable | np.ndarray):
-            _table, table_id = table_context.register_table(table)
-            size = len(table.table) if isinstance(table, LookupTable) else len(table)
-            assert (
-                round((self.high - self.low) / self.step) + 1 == size
-            ), f'Input variable size does not match lookup table size ({round((self.high - self.low) / self.step) + 1} != {size})'
-        else:
-            _table, table_id = table_context.register_table(table, self.qint)
+    def lookup(self, table: LookupTable | np.ndarray) -> 'FixedVariable':
+        _table, table_id = table_context.register_table(table)
+        size = len(table.table) if isinstance(table, LookupTable) else len(table)
+        assert (
+            round((self.high - self.low) / self.step) + 1 == size
+        ), f'Input variable size does not match lookup table size ({round((self.high - self.low) / self.step) + 1} != {size})'
 
         return FixedVariable(
             _table.spec.out_qint.min,
