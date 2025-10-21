@@ -33,7 +33,8 @@ def _get_table_signature(sol: CombLogic, op: Op) -> table_sig_t:
     qint = sol.ops[op.id0].qint
     is_signed = qint.min < 0
     if is_signed:
-        pad_left = round((qint.min + 2 ** ceil(log2(-qint.min))) / qint.step)
+        _, i, _ = _minimal_kif(qint)
+        pad_left = round((qint.min + 2**i) / qint.step)
     else:
         pad_left = round(qint.min / qint.step)
     return (op.data, table.spec.hash[:24], pad_left, is_signed)
