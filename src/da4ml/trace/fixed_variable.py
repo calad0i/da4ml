@@ -415,7 +415,10 @@ class FixedVariable:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
         if isinstance(other, FixedVariable):
-            return self._var_mul(other)
+            if other.high > other.low:
+                return self._var_mul(other)
+            assert other.high == other.low
+            other = float(other.low)
 
         if log2(abs(other)) % 1 == 0:
             return self._pow2_mul(other)
