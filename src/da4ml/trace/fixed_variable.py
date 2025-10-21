@@ -35,10 +35,11 @@ class TraceContext:
     hwconf: HWConfig = HWConfig(1, -1, -1)
     _table_counter = 0
 
-    def register_table(self, arg1: 'LookupTable|np.ndarray'):
-        if isinstance(arg1, np.ndarray):
-            arg1 = LookupTable(arg1)
-        table = arg1
+    def register_table(self, table: 'LookupTable|np.ndarray'):
+        if isinstance(table, np.ndarray):
+            table = LookupTable(table)
+        if table.spec.hash in self._tables:
+            return self._tables[table.spec.hash]
         self._tables[table.spec.hash] = (table, self._table_counter)
 
         self._table_counter += 1
@@ -787,7 +788,7 @@ class FixedVariableInput(FixedVariable):
         if k + i + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
-        if round_mode == 'RND' and f < -int(log2(self.step)):
+        if round_mode == 'RND':
             return (self.quantize(k, i, f + 1) + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
         else:
             round_mode = 'TRN'
