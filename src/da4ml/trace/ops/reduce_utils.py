@@ -100,6 +100,6 @@ def reduce(operator: Callable[[T, T], T], x: TA, axis: int | Sequence[int] | Non
 
     if isinstance(x, FixedVariableArray):
         r = FixedVariableArray(r, solver_config)
-        if r.size == 1 and not keepdims:
-            return r.ravel()[0]  # type: ignore
-    return r if r.size > 1 or keepdims else r.ravel()[0]  # type: ignore
+        if r.shape == ():
+            return r._vars.item()  # type: ignore
+    return r if r.shape != () or keepdims else r.item()  # type: ignore

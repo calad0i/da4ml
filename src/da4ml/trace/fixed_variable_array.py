@@ -126,17 +126,19 @@ class FixedVariableArray:
             elif len(args) == 2 and isinstance(args[0], np.ndarray) and isinstance(args[1], np.ndarray):
                 return self.__rmatmul__(args[1])
 
-        if func in (np.mean, np.sum, np.amax, np.amin, np.max, np.min):
+        if func in (np.mean, np.sum, np.amax, np.amin, np.prod, np.max, np.min):
             match func:
                 case np.mean:
-                    _x = reduce(lambda x, y: x + y, self, *args[1:], **kwargs)
+                    _x = reduce(lambda x, y: x + y, *args, **kwargs)
                     return _x * (_x.size / self._vars.size)
                 case np.sum:
-                    return reduce(lambda x, y: x + y, self, *args[1:], **kwargs)
+                    return reduce(lambda x, y: x + y, *args, **kwargs)
                 case np.max | np.amax:
-                    return reduce(_max_of, self, *args[1:], **kwargs)
+                    return reduce(_max_of, *args, **kwargs)
                 case np.min | np.amin:
-                    return reduce(_min_of, self, *args[1:], **kwargs)
+                    return reduce(_min_of, *args, **kwargs)
+                case np.prod:
+                    return reduce(lambda x, y: x * y, *args, **kwargs)
                 case _:
                     raise NotImplementedError(f'Unsupported function: {func}')
 
