@@ -536,15 +536,33 @@ class RetardedFixedVariableArray(FixedVariableArray):
     ):
         if any(x is None for x in (k, i, f)):
             assert all(x is not None for x in (k, i, f)), 'Either all or none of k, i, f must be specified'
-            op = self._operator
+            _k = _i = _f = [None] * self.size
         else:
+            _k = np.broadcast_to(k, self.shape).ravel()  # type: ignore
+            _i = np.broadcast_to(i, self.shape).ravel()  # type: ignore
+            _f = np.broadcast_to(f, self.shape).ravel()  # type: ignore
+
             op = lambda x: _quantize(self._operator(x), k, i, f, overflow_mode, round_mode)  # type: ignore
 
-        qints = {v.qint for v in self._vars.ravel()}
-        local_tables = {qint: make_table(op, qint) for qint in qints}
-        vars = [v.lookup(local_tables[v.qint]) for v in self._vars.ravel()]
-        vars = np.array(vars).reshape(self._vars.shape)
-        return FixedVariableArray(vars, self.solver_options)
+        local_tables: dict[tuple[QInterval, tuple[int, int, int] | None], LookupTable] = {}
+        variables = []
+        for v, _kk, _ii, _ff in zip(self._vars.ravel(), _k, _i, _f):
+            if (_kk is None) or (_ii is None) or (_ff is None):
+                op = self._operator
+                _key = v.qint
+            else:
+                op = lambda x: _quantize(self._operator(x), _kk, _ii, _ff, overflow_mode, round_mode)  # type: ignore
+                _key = (v.qint, (int(_kk), int(_ii), int(_ff)))
+
+            if _key in local_tables:
+                table = local_tables[_key]
+            else:
+                table = make_table(op, v.qint)
+                local_tables[_key] = table
+            variables.append(v.lookup(table))
+
+        variables = np.array(variables).reshape(self._vars.shape)
+        return FixedVariableArray(variables, self.solver_options)
 
     def __repr__(self):
         return 'Retarded' + super().__repr__()

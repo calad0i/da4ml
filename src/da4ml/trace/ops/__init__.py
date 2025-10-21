@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
+from quantizers.fixed_point.fixed_point_ops_np import get_fixed_quantizer_np
 
 from ..fixed_variable_array import FixedVariable
 from .conv_utils import conv, pool
@@ -22,9 +23,11 @@ def relu(x: T, i: NDArray[np.integer] | None = None, f: NDArray[np.integer] | No
     elif isinstance(x, list):
         return [xx.relu(i=ii, f=ff, round_mode=round_mode) for xx, ii, ff in zip(x, i, f)]  # type: ignore
     else:
+        round_mode = round_mode.upper()
+        assert round_mode in ('TRN', 'RND')
         x = np.maximum(x, 0)
         if f is not None:
-            if round_mode.upper() == 'RND':
+            if round_mode == 'RND':
                 x += 2.0 ** (-f - 1)
             sf = 2.0**f
             x = np.floor(x * sf) / sf
@@ -41,18 +44,8 @@ def _quantize(
     overflow_mode: str = 'WRAP',
     round_mode: str = 'TRN',
 ) -> NDArray[np.floating]:
-    if overflow_mode in ('SAT', 'SAT_SYM'):
-        step = 2.0**-f
-        _high = 2.0**i
-        high = _high - step
-        low = -_high * k if overflow_mode == 'SAT' else -high * k
-        x = np.clip(x, low, high)  # type: ignore
-    if round_mode.upper() == 'RND':
-        x = x + 2.0 ** (-f - 1)  # type: ignore
-    b = k + i + f
-    bias = 2.0 ** (b - 1) * k
-    eps = 2.0**-f
-    return eps * ((np.floor(x / eps) + bias) % 2.0**b - bias)  # type: ignore
+    q = get_fixed_quantizer_np(round_mode=round_mode, overflow_mode=overflow_mode)
+    return q(x, k=k, i=i, f=f)  # type: ignore
 
 
 def quantize(
@@ -65,7 +58,7 @@ def quantize(
 ) -> T:
     from ..fixed_variable_array import FixedVariableArray
 
-    if isinstance(x, FixedVariableArray):
+    if isinstance(x, (FixedVariableArray, FixedVariable)):
         return x.quantize(k=k, i=i, f=f, overflow_mode=overflow_mode, round_mode=round_mode)
     elif isinstance(x, list):
         ret: list[FixedVariable] = []

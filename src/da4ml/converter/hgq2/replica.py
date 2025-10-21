@@ -21,8 +21,11 @@ from hgq.layers import (
     QMaximum,
     QMeanPow2,
     QMinimum,
+    QMultiply,
+    QSoftmax,
     QSubtract,
     QSum,
+    QUnaryFunctionLUT,
 )
 from hgq.layers.core.base import MultipleQuantizers, Quantizer
 from hgq.quantizer.internal import FixedPointQuantizerBase
@@ -68,7 +71,9 @@ def mirror_quantizer(q: Quantizer, v: FixedVariableArray) -> FixedVariableArray:
 _registry: dict[type, 'type[ReplayOperationBase]'] = {}
 
 
-class ReplayOperationMeta(type):
+class HandlerRegMeta(type):
+    """Metaclass for automatic registration of handler classes."""
+
     def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, typing.Any]):
         cls = super().__new__(mcs, name, bases, namespace)
         if name == 'ReplayOperationBase':
@@ -83,8 +88,9 @@ class ReplayOperationMeta(type):
         return cls
 
 
-class ReplayOperationBase(metaclass=ReplayOperationMeta):
+class ReplayOperationBase(metaclass=HandlerRegMeta):
     handles: tuple[type, ...] = ()
+    __activation_handled__ = False
 
     def __init__(self, layer: 'keras.Operation'):
         assert isinstance(layer, self.handles)
@@ -114,18 +120,19 @@ class ReplayOperationBase(metaclass=ReplayOperationMeta):
 
         outputs = self.call(inputs, **kwargs)
 
-        activation = getattr(layer, 'activation', keras.activations.linear)
-        if activation is not keras.activations.linear:
-            if activation is keras.activations.relu:
-                if isinstance(outputs, tuple):
-                    assert len(outputs) == 1, 'ReLU activation is expected to have a single output'
-                    outputs = (relu(outputs[0]),)
+        if not self.__activation_handled__:
+            activation = getattr(layer, 'activation', keras.activations.linear)
+            if activation is not keras.activations.linear:
+                if activation is keras.activations.relu:
+                    if isinstance(outputs, tuple):
+                        assert len(outputs) == 1, 'ReLU activation is expected to have a single output'
+                        outputs = (relu(outputs[0]),)
+                    else:
+                        outputs = relu(outputs)
                 else:
-                    outputs = relu(outputs)
-            else:
-                raise NotImplementedError(f'Activation {activation} is not supported in mirror operation')
+                    raise NotImplementedError(f'Activation {activation} is not supported in mirror operation')
 
-        if layer.enable_oq:
+        if layer.enable_oq and not layer.__output_quantizer_handled__:
             if isinstance(outputs, tuple):
                 assert isinstance(layer.oq, MultipleQuantizers)
                 outputs = tuple(mirror_quantizer(q, v) for q, v in zip(layer.oq.quantizers, outputs))
@@ -366,7 +373,7 @@ class ReplayQReduction(ReplayOperationBase):
 
 
 class ReplayArithmetic(ReplayOperationBase):
-    handles = (Add, Subtract, Multiply, TrueDivide, Divide, QSubtract, QMaximum, QMinimum, Maximum, Minimum)
+    handles = (Add, Subtract, Multiply, QMultiply, TrueDivide, Divide, QSubtract, QMaximum, QMinimum, Maximum, Minimum)
 
     def call(self, x1: FixedVariableArray, x2: FixedVariableArray):
         name = self.op.__class__.__name__
@@ -470,3 +477,39 @@ class ReplayAbs(ReplayOperationBase):
 
     def call(self, x: FixedVariableArray) -> FixedVariableArray:
         return np.abs(x)  # type: ignore
+
+
+class ReplayQFunctionLUT(ReplayOperationBase):
+    __activation_handled__ = True
+    handles = (QUnaryFunctionLUT,)
+
+    def call(self, x: FixedVariableArray) -> FixedVariableArray:
+        op: QUnaryFunctionLUT = self.op
+
+        def activation(x) -> np.ndarray:
+            kx = keras.ops.convert_to_tensor(x[None])
+            kx = op.activation(kx)
+            return keras.ops.convert_to_numpy(kx[0])  # type: ignore
+
+        return x.apply(activation)
+
+
+class ReplayQSoftmax(ReplayOperationBase):
+    handles = (QSoftmax,)
+
+    def call(self, inputs: FixedVariableArray, mask: None | FixedVariableArray = None) -> FixedVariableArray:
+        op: QSoftmax = self.op
+        inputs = inputs[None]
+
+        if op.stable:
+            inputs = np.amax(inputs, axis=op.axes, keepdims=True) - inputs  # type: ignore
+
+        exp_inp = ReplayQFunctionLUT(op.exp_table)(inputs[0])[0]
+
+        if mask is not None:
+            exp_inp = mask[0] * exp_inp
+
+        sums = np.sum(exp_inp[None], axis=op.axes, keepdims=True)[0]  # type: ignore
+        divisor = ReplayQFunctionLUT(op.inv_table)(sums)[0]
+
+        return exp_inp * divisor

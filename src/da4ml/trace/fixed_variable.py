@@ -80,15 +80,16 @@ def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32]]:
 
 
 def interpret_as(
-    x: int,
+    x: int | NDArray[np.integer],
     k: int,
     i: int,
     f: int,
-) -> float:
+) -> float | NDArray[np.floating]:
     b = k + i + f
     bias = 2.0 ** (b - 1) * k
     eps = 2.0**-f
-    return eps * (floor(x + bias) % 2.0**b - bias)
+    floor_fn = np.floor if isinstance(x, np.ndarray) else floor
+    return eps * (floor_fn(x + bias) % 2.0**b - bias)
 
 
 class LookupTable:
@@ -105,17 +106,21 @@ class LookupTable:
     def lookup(self, var: 'FixedVariable', qint_in: QInterval) -> 'FixedVariable': ...
 
     @overload
-    def lookup(self, var: np.floating | float, qint_in: QInterval) -> float: ...
+    def lookup(self, var: np.floating | float, qint_in: QInterval | tuple[float, float, float]) -> float: ...
 
-    def lookup(self, var, qint_in: QInterval):
+    def lookup(self, var, qint_in: QInterval | tuple[float, float, float]):
         if isinstance(var, FixedVariable):
             return var.lookup(self)
         else:
             _min, _max, _step = qint_in
             assert _min <= var <= _max, f'Value {var} out of range [{_min}, {_max}]'
             index = round((var - _min) / _step)
-            kif = _minimal_kif(self.spec.out_qint)
-            return interpret_as(int(self.table[index]), *kif)
+            return interpret_as(int(self.table[index]), *self.spec.out_kif)
+
+    @property
+    def float_table(self) -> NDArray[np.floating]:
+        k, i, f = self.spec.out_kif
+        return interpret_as(self.table, k, i, f)  # type: ignore
 
     def to_dict(self) -> dict:
         return {
