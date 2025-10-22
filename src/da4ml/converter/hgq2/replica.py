@@ -18,6 +18,7 @@ from hgq.layers import (
     QEinsum,
     QEinsumDense,
     QEinsumDenseBatchnorm,
+    QLinformerAttention,
     QMaximum,
     QMeanPow2,
     QMinimum,
@@ -623,3 +624,35 @@ class ReplayMHA(ReplayOperationBase):
         if return_attention_scores:
             return attention_output, attention_scores[0]
         return attention_output
+
+
+class ReplayQLinformerAttention(ReplayMHA):
+    handles = (QLinformerAttention,)
+
+    def call(
+        self,
+        query,
+        value,
+        key=None,
+        query_mask=None,
+        value_mask=None,
+        key_mask=None,
+        attention_mask=None,
+        return_attention_scores=False,
+        use_causal_mask=False,
+    ):
+        assert use_causal_mask is False, 'Causal mask is not supported in QLinformerAttention.'
+        key = key if key is not None else value
+        op: QLinformerAttention = self.op
+        key = ReplayQDense(op._lin_k_proj)(key)[0]
+        value = ReplayQDense(op._lin_v_proj)(value)[0]
+        return super().call(
+            query,
+            value,
+            key,
+            query_mask=query_mask,
+            value_mask=value_mask,
+            key_mask=key_mask,
+            attention_mask=attention_mask,
+            return_attention_scores=return_attention_scores,
+        )
