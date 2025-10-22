@@ -383,7 +383,7 @@ class FixedVariable:
         if self.high == self.low:
             return other._const_add(self.low)
 
-        assert self.hwconf == other.hwconf, 'FixedVariable must have the same hwconf'
+        assert self.hwconf == other.hwconf, f'FixedVariable must have the same hwconf, got {self.hwconf} and {other.hwconf}'
 
         f0, f1 = self._factor, other._factor
         if f0 < 0:
@@ -488,6 +488,7 @@ class FixedVariable:
             high,
             step,
             _from=(self, other),
+            hwconf=self.hwconf,
             _factor=_factor,
             opr=opr,
         )
