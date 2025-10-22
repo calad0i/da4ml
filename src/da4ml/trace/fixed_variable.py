@@ -441,14 +441,14 @@ class FixedVariable:
         return self * (1 / other)
 
     def __mul__(self, other: 'FixedVariable|int|float|Decimal') -> 'FixedVariable':
-        if other == 0:
-            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
-
         if isinstance(other, FixedVariable):
             if other.high > other.low:
                 return self._var_mul(other)
             assert other.high == other.low
             other = float(other.low)
+
+        if other == 0:
+            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
         if log2(abs(other)) % 1 == 0:
             return self._pow2_mul(other)
