@@ -148,6 +148,30 @@ class LookupTable:
         table = np.array(data['table'], dtype=np.int32)
         return cls(table, spec=spec)
 
+    def _get_pads(self, qint: QInterval) -> tuple[int, int]:
+        k, i, f = _minimal_kif(qint)
+        if k:
+            pad_left = round((qint.min + 2**i) / qint.step)
+        else:
+            pad_left = round(qint.min / qint.step)
+        size = 2 ** (k + i + f)
+        pad_right = size - len(self.table) - pad_left
+        return pad_left, pad_right
+
+    def padded_table(self, qint: QInterval) -> NDArray[np.int32]:
+        pad_left, pad_right = self._get_pads(qint)
+        data = np.pad(self.table, (pad_left, pad_right), mode='constant', constant_values=0)
+        if qint.min < 0:
+            size = len(data)
+            # data = np.concatenate((data[size // 2 :], data[: size // 2]))
+            data = np.roll(data, size // 2)
+        return data
+
+    def get_uuid(self, qint: QInterval) -> UUID:
+        pad_left, _ = self._get_pads(qint)
+        _int = int(self.spec.hash[:32], 16) ^ pad_left
+        return UUID(int=_int, version=4)
+
 
 def _const_f(const: float | Decimal):
     """Get the minimum f such that const * 2^f is an integer."""

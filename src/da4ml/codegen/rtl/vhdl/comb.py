@@ -3,7 +3,7 @@ from math import ceil, log2
 import numpy as np
 
 from ....cmvm.types import CombLogic, Op, QInterval, _minimal_kif
-from ..verilog.comb import _get_table_signature, _table_signature_to_name
+from ..verilog.comb import get_table_name
 
 
 def make_neg(
@@ -120,8 +120,7 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 line = f'op_{i}:entity work.multiplier generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw}) port map(in0=>v{op.id0},in1=>v{op.id1},result=>v{i});'
 
             case 8:  # Lookup Table
-                sig = _get_table_signature(sol, op)
-                name = _table_signature_to_name(sig)
+                name = get_table_name(sol, op)
                 bw0 = widths[op.id0]
                 line = f'op_{i}:entity work.lookup_table generic map(BW_IN=>{bw0},BW_OUT=>{bw},MEM_FILE=>"{name}") port map(inp=>v{op.id0},outp=>v{i});'
 

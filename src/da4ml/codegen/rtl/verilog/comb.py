@@ -23,43 +23,23 @@ def make_neg(
     return bw0, v0_name
 
 
-table_sig_t = tuple[int, str, int, bool]
-
-
-def _get_table_signature(sol: CombLogic, op: Op) -> table_sig_t:
+def gen_mem_file(sol: CombLogic, op: Op) -> str:
     assert op.opcode == 8
     assert sol.lookup_tables is not None
     table = sol.lookup_tables[op.data]
-    qint = sol.ops[op.id0].qint
-    is_signed = qint.min < 0
-    if is_signed:
-        _, i, _ = _minimal_kif(qint)
-        pad_left = round((qint.min + 2**i) / qint.step)
-    else:
-        pad_left = round(qint.min / qint.step)
-    return (op.data, table.spec.hash[:24], pad_left, is_signed)
-
-
-def _generate_mem_file(sol: CombLogic, sig: table_sig_t) -> str:
-    table_idx, _, pad_left, is_signed = sig
-    assert sol.lookup_tables is not None
-    table = sol.lookup_tables[table_idx]
-    size = 2 ** ceil(log2(len(table.table)))
-    pad_right = size - len(table.table) - pad_left
-    assert pad_right >= 0
-    data = np.pad(table.table, (pad_left, pad_right), mode='constant', constant_values=0)
-    if is_signed:
-        data = np.concatenate([data[size // 2 :], data[: size // 2]])
     width = sum(table.spec.out_kif)
     ndigits = ceil(width / 4)
+    data = table.padded_table(sol.ops[op.id0].qint)
     mem_lines = [f'{hex(value)[2:].upper().zfill(ndigits)}' for value in data & ((1 << width) - 1)]
     return '\n'.join(mem_lines)
 
 
-def _table_signature_to_name(sig: table_sig_t) -> str:
-    _, _hash, pad_left, is_signed = sig
-    sign_str = 's' if is_signed else 'u'
-    return f'lut_table_{_hash}_pad{pad_left}_{sign_str}.mem'
+def get_table_name(sol: CombLogic, op: Op) -> str:
+    assert sol.lookup_tables is not None
+    assert op.opcode == 8
+    qint_in = sol.ops[op.id0].qint
+    uuid = sol.lookup_tables[op.data].get_uuid(qint_in)
+    return f'lut_{uuid}.mem'
 
 
 def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False) -> list[str]:
@@ -165,8 +145,7 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False) 
                 line = f'{_def} multiplier #({bw0}, {bw1}, {s0}, {s1}, {bw}) op_{i} ({v0}, {v1}, {v});'
 
             case 8:  # Lookup Table
-                sig = _get_table_signature(sol, op)
-                name = _table_signature_to_name(sig)
+                name = get_table_name(sol, op)
                 bw0 = widths[op.id0]
 
                 line = f'{_def} lookup_table #({bw0}, {bw}, "{name}") op_{i} (v{op.id0}, {v});'
@@ -246,6 +225,5 @@ def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, ti
 def table_mem_gen(sol: CombLogic) -> dict[str, str]:
     if not sol.lookup_tables:
         return {}
-    table_signatures = {_get_table_signature(sol, op) for op in sol.ops if op.opcode == 8}
-    mem_files = {_table_signature_to_name(sig): _generate_mem_file(sol, sig) for sig in table_signatures}
+    mem_files = {get_table_name(sol, op): gen_mem_file(sol, op) for op in sol.ops if op.opcode == 8}
     return mem_files
