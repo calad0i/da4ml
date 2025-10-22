@@ -113,7 +113,10 @@ def to_pipeline(comb: CombLogic, latency_cutoff: float, retiming=True, verbose=T
         p0_idx = _get_new_idx(op.id0, locator, opd, out_idxd, ops, stage, latency_cutoff)
         p1_idx = _get_new_idx(op.id1, locator, opd, out_idxd, ops, stage, latency_cutoff)
         if op.opcode in (6, -6):
-            data = _get_new_idx(op.data, locator, opd, out_idxd, ops, stage, latency_cutoff)
+            k = op.data & 0xFFFFFFFF
+            _shift = (op.data >> 32) & 0xFFFFFFFF
+            k = _get_new_idx(k, locator, opd, out_idxd, ops, stage, latency_cutoff)
+            data = _shift << 32 | k
         else:
             data = op.data
 

@@ -124,6 +124,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 v0, v1 = v._from
                 opcode = 7
                 id0, id1 = index[v0.id], index[v1.id]
+                assert id0 < i and id1 < i, f'{id0} {id1} {i} {v.id}'
                 op = Op(id0, id1, opcode, 0, v.unscaled.qint, v.latency, v.cost)
             case 'lookup':
                 opcode = 8
