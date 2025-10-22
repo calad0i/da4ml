@@ -134,6 +134,10 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False) 
                 _shift = _shift if _shift < 0x80000000 else _shift - 0x100000000
                 shift = f0 - f1 + _shift
                 vk, v0, v1 = f'v{k}[{bwk - 1}]', f'v{a}[{bw0 - 1}:0]', f'v{b}[{bw1 - 1}:0]'
+                if bw0 == 0:
+                    v0, bw0 = "1'b0", 1
+                if bw1 == 0:
+                    v1, bw1 = "1'b0", 1
 
                 line = f'{_def} mux #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {inv}) op_{i} ({vk}, {v0}, {v1}, {v});'
 

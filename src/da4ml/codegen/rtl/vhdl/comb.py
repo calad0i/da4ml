@@ -112,7 +112,12 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 _shift = (op.data >> 32) & 0xFFFFFFFF
                 _shift = _shift if _shift < 0x80000000 else _shift - 0x100000000
                 shift = f0 - f1 + _shift
-                line = f'op_{i}:entity work.mux generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw},SHIFT1=>{shift},INVERT1=>{inv}) port map(key=>v{k}({bwk - 1}),in0=>v{a},in1=>v{b},result=>v{i});'
+                v0, v1 = f'v{a}', f'v{b}'
+                if bw0 == 0:
+                    v0, bw0 = 'B"0"', 1
+                if bw1 == 0:
+                    v1, bw1 = 'B"0"', 1
+                line = f'op_{i}:entity work.mux generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>{s1},BW_OUT=>{bw},SHIFT1=>{shift},INVERT1=>{inv}) port map(key=>v{k}({bwk - 1}),in0=>{v0},in1=>{v1},result=>v{i});'
 
             case 7:  # Multiplication
                 bw0, bw1 = widths[op.id0], widths[op.id1]

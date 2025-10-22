@@ -92,6 +92,11 @@ def ssa_gen(sol: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | in
                 ref_k = f'v{id_c}[{bw_k - 1}]'
                 sign = '-' if op.opcode == -6 else ''
                 ref1 = f'v{op.id1}' if shift == 0 else f'bit_shift<{shift}>(v{op.id1})'
+                bw0, bw1 = sum(all_kifs[op.id0]), sum(all_kifs[op.id1])
+                if bw0 == 0:
+                    ref0 = '0'
+                if bw1 == 0:
+                    ref1 = '0'
                 val = f'{ref_k} ? {_type}({ref0}) : {_type}({sign}{ref1})'
             case 7:
                 # Multiplication
