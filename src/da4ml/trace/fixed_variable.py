@@ -15,7 +15,7 @@ from ..cmvm.core import cost_add
 from ..cmvm.types import QInterval, _minimal_kif
 from ..cmvm.util.bit_decompose import _shift_centering
 
-rd = random.SystemRandom()
+rd = random.Random()
 
 if typing.TYPE_CHECKING:
     pass
@@ -442,6 +442,8 @@ class FixedVariable:
 
     def __mul__(self, other: 'FixedVariable|int|float|Decimal') -> 'FixedVariable':
         if isinstance(other, FixedVariable):
+            if self.high == self.low:
+                return other * self.low
             if other.high > other.low:
                 return self._var_mul(other)
             assert other.high == other.low
