@@ -16,15 +16,10 @@ namespace dais {
         n_out = binary_data[1];
         n_ops = binary_data[2];
         n_tables = binary_data[3];
-        std::cout << "n_in=" << n_in << ", n_out=" << n_out << ", n_ops=" << n_ops
-                  << ", n_tables=" << n_tables << std::endl;
 
         size_t fixed_offset = 4;
 
         size_t table_offset = fixed_offset + n_in + 3 * n_out + 8 * n_ops;
-
-        std::cout << "table_offset=" << table_offset << std::endl;
-        std::cout << "n_tables=" << n_tables << std::endl;
 
         size_t expect_length = table_offset;
         if (n_tables > 0) {
