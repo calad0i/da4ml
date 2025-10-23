@@ -49,13 +49,20 @@ namespace dais {
             const DType &dtype_out
         ) const;
 
-        int64_t const_add(int64_t value, DType dtype_from, DType dtype_to, int32_t data_high, int32_t data_low) const;
+        int64_t const_add(
+            int64_t value,
+            DType dtype_from,
+            DType dtype_to,
+            int32_t data_high,
+            int32_t data_low
+        ) const;
 
         // 2, -2
         int64_t relu(int64_t value, const DType &dtype_from, const DType &dtype_to) const;
 
         // 3, -3
-        int64_t quantize(int64_t value, const DType &dtype_from, const DType &dtype_to) const;
+        int64_t
+        quantize(int64_t value, const DType &dtype_from, const DType &dtype_to) const;
 
         // 6, -6
         bool get_msb(int64_t value, const DType &dtype) const;

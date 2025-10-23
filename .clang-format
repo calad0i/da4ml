@@ -37,7 +37,7 @@ SpacesInContainerLiterals: false
 Standard: Cpp11
 BinPackArguments: false
 BinPackParameters: false
-ColumnLimit: 120
+ColumnLimit: 90
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never

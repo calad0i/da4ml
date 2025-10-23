@@ -9,7 +9,8 @@ constexpr bool _openmp = false;
 #endif
 
 template <typename CONFIG_T>
-std::enable_if_t<CONFIG_T::II != 0> _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
+std::enable_if_t<CONFIG_T::II != 0>
+_inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
     auto dut = std::make_unique<typename CONFIG_T::dut_t>();
 
     size_t clk_req = n_samples * CONFIG_T::II + CONFIG_T::latency + 1;
@@ -40,19 +41,25 @@ std::enable_if_t<CONFIG_T::II != 0> _inference(int32_t *c_inp, int32_t *c_out, s
 }
 
 template <typename CONFIG_T>
-std::enable_if_t<CONFIG_T::II == 0> _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
+std::enable_if_t<CONFIG_T::II == 0>
+_inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
     auto dut = std::make_unique<typename CONFIG_T::dut_t>();
 
     for (size_t i = 0; i < n_samples; ++i) {
-        write_input<CONFIG_T::N_inp, CONFIG_T::max_inp_bw>(dut->model_inp, &c_inp[i * CONFIG_T::N_inp]);
+        write_input<CONFIG_T::N_inp, CONFIG_T::max_inp_bw>(
+            dut->model_inp, &c_inp[i * CONFIG_T::N_inp]
+        );
         dut->eval();
-        read_output<CONFIG_T::N_out, CONFIG_T::max_out_bw>(dut->model_out, &c_out[i * CONFIG_T::N_out]);
+        read_output<CONFIG_T::N_out, CONFIG_T::max_out_bw>(
+            dut->model_out, &c_out[i * CONFIG_T::N_out]
+        );
     }
 
     dut->final();
 }
 
-template <typename CONFIG_T> void batch_inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
+template <typename CONFIG_T>
+void batch_inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
 #ifdef _OPENMP
     size_t n_max_threads = omp_get_max_threads();
     size_t n_samples_per_thread = std::max<size_t>(n_samples / n_max_threads, 32);
@@ -66,7 +73,9 @@ template <typename CONFIG_T> void batch_inference(int32_t *c_inp, int32_t *c_out
         size_t n_samples_this_thread = end - start;
         size_t offset_in = start * CONFIG_T::N_inp;
         size_t offset_out = start * CONFIG_T::N_out;
-        _inference<CONFIG_T>(&c_inp[offset_in], &c_out[offset_out], n_samples_this_thread);
+        _inference<CONFIG_T>(
+            &c_inp[offset_in], &c_out[offset_out], n_samples_this_thread
+        );
     }
 #else
     _inference<CONFIG_T>(c_inp, c_out, n_samples);

@@ -9,7 +9,8 @@ constexpr bool _openmp = true;
 constexpr bool _openmp = false;
 #endif
 
-template <typename CONFIG_T, typename T> void _inference(T *c_inp, T *c_out, size_t n_samples) {
+template <typename CONFIG_T, typename T>
+void _inference(T *c_inp, T *c_out, size_t n_samples) {
     typename CONFIG_T::inp_t in_fixed_buf[CONFIG_T::N_inp];
     typename CONFIG_T::out_t out_fixed_buf[CONFIG_T::N_out];
 
@@ -28,7 +29,8 @@ template <typename CONFIG_T, typename T> void _inference(T *c_inp, T *c_out, siz
     }
 }
 
-template <typename CONFIG_T, typename T> void batch_inference(T *c_inp, T *c_out, size_t n_samples) {
+template <typename CONFIG_T, typename T>
+void batch_inference(T *c_inp, T *c_out, size_t n_samples) {
 #ifdef _OPENMP
     size_t n_max_threads = omp_get_max_threads();
     size_t n_samples_per_thread = std::max<size_t>(n_samples / n_max_threads, 32);
@@ -42,7 +44,9 @@ template <typename CONFIG_T, typename T> void batch_inference(T *c_inp, T *c_out
         size_t n_samples_this_thread = end - start;
         size_t offset_in = start * CONFIG_T::N_inp;
         size_t offset_out = start * CONFIG_T::N_out;
-        _inference<CONFIG_T, T>(&c_inp[offset_in], &c_out[offset_out], n_samples_this_thread);
+        _inference<CONFIG_T, T>(
+            &c_inp[offset_in], &c_out[offset_out], n_samples_this_thread
+        );
     }
 #else
     _inference<CONFIG_T, T>(c_inp, c_out, n_samples);

@@ -33,7 +33,8 @@ template <size_t bw, size_t N_in> std::vector<int32_t> bitpack(const int32_t *va
     return result;
 }
 
-template <size_t bw, size_t N_out> std::vector<int32_t> bitunpack(const std::vector<int32_t> &packed) {
+template <size_t bw, size_t N_out>
+std::vector<int32_t> bitunpack(const std::vector<int32_t> &packed) {
     static_assert(bw > 0 && bw <= 32, "Bit width must be between 1 and 32");
 
     constexpr size_t total_bits = N_out * bw;
@@ -77,7 +78,8 @@ _write_input(inp_buf_t &inp_buf, const std::vector<int32_t> &input) {
     }
 }
 
-template <size_t bits_in, size_t N_in> void _write_input(VlWide<N_in> &inp_buf, const std::vector<int32_t> &input) {
+template <size_t bits_in, size_t N_in>
+void _write_input(VlWide<N_in> &inp_buf, const std::vector<int32_t> &input) {
     assert(input.size() == (bits_in + 31) / 32);
     for (size_t i = 0; i < input.size(); ++i) {
         inp_buf[i] = input[i];
@@ -85,7 +87,8 @@ template <size_t bits_in, size_t N_in> void _write_input(VlWide<N_in> &inp_buf, 
 }
 
 template <size_t bits_out, typename out_buf_t>
-std::enable_if_t<std::is_integral_v<out_buf_t>, std::vector<int32_t>> _read_output(out_buf_t &out_buf) {
+std::enable_if_t<std::is_integral_v<out_buf_t>, std::vector<int32_t>>
+_read_output(out_buf_t &out_buf) {
     std::vector<int32_t> output((bits_out + 31) / 32);
     output[0] = out_buf & 0xFFFFFFFF;
     if (bits_out > 32) {
@@ -94,7 +97,8 @@ std::enable_if_t<std::is_integral_v<out_buf_t>, std::vector<int32_t>> _read_outp
     return output;
 }
 
-template <size_t bits_out, size_t N_out> std::vector<int32_t> _read_output(VlWide<N_out> out_buf) {
+template <size_t bits_out, size_t N_out>
+std::vector<int32_t> _read_output(VlWide<N_out> out_buf) {
     std::vector<int32_t> output((bits_out + 31) / 32);
     for (size_t i = 0; i < output.size(); ++i) {
         output[i] = out_buf[i] & 0xFFFFFFFF;
@@ -102,13 +106,15 @@ template <size_t bits_out, size_t N_out> std::vector<int32_t> _read_output(VlWid
     return output;
 }
 
-template <size_t N, size_t max_bw, typename inp_buf_t> void write_input(inp_buf_t &inp_buf, const int32_t *c_inp) {
+template <size_t N, size_t max_bw, typename inp_buf_t>
+void write_input(inp_buf_t &inp_buf, const int32_t *c_inp) {
     constexpr size_t bits_in = N * max_bw;
     std::vector<int32_t> input = bitpack<max_bw, N>(c_inp);
     _write_input<bits_in>(inp_buf, input);
 }
 
-template <size_t N, size_t max_bw, typename out_buf_t> void read_output(out_buf_t out_buf, int32_t *c_out) {
+template <size_t N, size_t max_bw, typename out_buf_t>
+void read_output(out_buf_t out_buf, int32_t *c_out) {
     constexpr size_t bits_out = N * max_bw;
     std::vector<int32_t> packed = _read_output<bits_out>(out_buf);
     std::vector<int32_t> unpacked = bitunpack<max_bw, N>(packed);
