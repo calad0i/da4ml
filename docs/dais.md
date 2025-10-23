@@ -55,8 +55,11 @@ The operation codes are defined as follows:
   - `buf[i] = data * qint.step`
 - `6/-6`: Mux by MSB
   - `buf[i] = MSB(buf[int32(data_lower_i32)]) ? buf[id0] : +/- buf[id1] * 2^int32(data_higher_i32)`
-- `*`: Multiplication
+- `7`: Multiplication
   - `buf[i] = buf[id0] * buf[id1]`
+- `8`: Logic Lookup
+  - `buf[i] = lookup_table[data_lower_i32][index(buf[id0])]`
+  - `index()` converts the fixed-point representation to integer index by `(buf[id0] - qint.min) / qint.step` or `(buf[id0] + signed*2^integer_bits) * 2^fractional_bits - data_higher_i32` depending on the dtype format.
 
 In all cases, unused id0 or id1 **must** be set to `-1`; id0, id1 (and data for opcode=+/-6) **must** be smaller than the index of the operation itself to ensure causality. All quantization are direct bit-drop in binary format (i.e., WRAP for overflow and TRUNC for rounding).
 

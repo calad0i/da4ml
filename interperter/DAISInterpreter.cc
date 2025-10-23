@@ -15,15 +15,34 @@ namespace dais {
         n_in = binary_data[0];
         n_out = binary_data[1];
         n_ops = binary_data[2];
-        size_t expect_length = 3 + n_in + 3 * n_out + 8 * n_ops;
+        n_tables = binary_data[3];
+        std::cout << "n_in=" << n_in << ", n_out=" << n_out << ", n_ops=" << n_ops
+                  << ", n_tables=" << n_tables << std::endl;
+
+        size_t fixed_offset = 4;
+
+        size_t table_offset = fixed_offset + n_in + 3 * n_out + 8 * n_ops;
+
+        std::cout << "table_offset=" << table_offset << std::endl;
+        std::cout << "n_tables=" << n_tables << std::endl;
+
+        size_t expect_length = table_offset;
+        if (n_tables > 0) {
+            for (size_t i = 0; i < n_tables; ++i) {
+                int32_t table_size = binary_data[table_offset + i];
+                expect_length += 1 + table_size;
+            }
+        }
+
         const static size_t d_size = sizeof(int32_t);
 
-        if (binary_data.size() != expect_length)
+        if (binary_data.size() != expect_length) {
             throw std::runtime_error(
                 "Binary data size mismatch: expected " +
-                std::to_string(expect_length * d_size) + "bytes , got " +
+                std::to_string(expect_length * d_size) + " bytes , got " +
                 std::to_string(binary_data.size() * d_size) + " bytes"
             );
+        }
 
         ops.resize(n_ops);
         inp_shift.resize(n_in);
@@ -31,11 +50,28 @@ namespace dais {
         out_shifts.resize(n_out);
         out_negs.resize(n_out);
 
-        std::memcpy(inp_shift.data(), &binary_data[3], n_in * d_size);
-        std::memcpy(out_idxs.data(), &binary_data[3 + n_in], n_out * d_size);
-        std::memcpy(out_shifts.data(), &binary_data[3 + n_in + n_out], n_out * d_size);
-        std::memcpy(out_negs.data(), &binary_data[3 + n_in + 2 * n_out], n_out * d_size);
-        std::memcpy(ops.data(), &binary_data[3 + n_in + 3 * n_out], n_ops * 8 * d_size);
+        std::memcpy(inp_shift.data(), &binary_data[fixed_offset], n_in * d_size);
+        std::memcpy(out_idxs.data(), &binary_data[fixed_offset + n_in], n_out * d_size);
+        std::memcpy(
+            out_shifts.data(), &binary_data[fixed_offset + n_in + n_out], n_out * d_size
+        );
+        std::memcpy(
+            out_negs.data(), &binary_data[fixed_offset + n_in + 2 * n_out], n_out * d_size
+        );
+        std::memcpy(
+            ops.data(), &binary_data[fixed_offset + n_in + 3 * n_out], n_ops * 8 * d_size
+        );
+
+        size_t curr_table_offset = table_offset + n_tables;
+        for (size_t i = 0; i < n_tables; ++i) {
+            int32_t table_size = binary_data[table_offset + i];
+            std::vector<int32_t> table_data(table_size);
+            std::memcpy(
+                table_data.data(), &binary_data[curr_table_offset], table_size * d_size
+            );
+            lookup_tables.emplace_back(table_data);
+            curr_table_offset += table_size;
+        }
 
         for (const auto &op : ops) {
             int32_t width = op.dtype.width();
@@ -113,8 +149,8 @@ namespace dais {
 
     int64_t DAISInterpreter::const_add(
         int64_t value,
-        DType dtype_from,
-        DType dtype_to,
+        const DType dtype_from,
+        const DType dtype_to,
         int32_t data_high,
         int32_t data_low
     ) const {
@@ -149,6 +185,23 @@ namespace dais {
             return shifted_v0;
         else
             return shifted_v1;
+    }
+
+    int64_t
+    DAISInterpreter::logic_lookup(const int64_t v1, const Op &op, const DType dtype_in)
+        const {
+        int32_t table_idx = op.data_low;
+        const auto &table = lookup_tables[table_idx];
+        size_t table_size = table.size();
+        size_t zero = -dtype_in.is_signed * (1LL << (dtype_in.width() - 1));
+        size_t index = v1 - zero - op.data_high;
+        if (index < 0 || index >= table_size) {
+            throw std::runtime_error(
+                "Logic lookup index out of bounds: index=" + std::to_string(index) +
+                ", table_size=" + std::to_string(table_size)
+            );
+        }
+        return static_cast<int64_t>(table[index]);
     }
 
     std::vector<int64_t> DAISInterpreter::exec_ops(const std::vector<double> &inputs) {
@@ -227,6 +280,10 @@ namespace dais {
                 );
                 break;
             case 7: buffer[i] = buffer[op.id0] * buffer[op.id1]; break;
+            case 8:
+                buffer[i] = logic_lookup(buffer[op.id0], op, ops[op.id0].dtype);
+                break;
+
             default:
                 throw std::runtime_error(
                     "Unknown opcode: " + std::to_string(op.opcode) + " at index " +
@@ -302,21 +359,25 @@ namespace dais {
                       << " exceeds 64 bits. This may comppromise bit-exactness of the "
                          "interpreter.\n"
                       << "This high wdith is very unusual for a properly quantized "
-                         "network, so you may want to "
-                         "check your "
-                         "model.\n";
+                         "network, so you may want to check your model.\n";
         }
     }
 } // namespace dais
 
 extern "C"
 {
-    void
-    run_interp(const int32_t *data, double *inputs, double *outputs, size_t n_samples) {
+    void run_interp(
+        const int32_t *data,
+        const size_t size,
+        double *inputs,
+        double *outputs,
+        size_t n_samples
+    ) {
         int32_t n_in = data[0];
         int32_t n_out = data[1];
         int32_t n_ops = data[2];
-        size_t size = 3 + n_in + 3 * n_out + 8 * n_ops;
+        int32_t n_table = data[4];
+        size_t expected_size = 4 + n_in + 3 * n_out + 8 * n_ops;
         std::vector<int32_t> binary_data(data, data + size);
         dais::DAISInterpreter interp;
         interp.load_from_binary(binary_data);
@@ -332,6 +393,7 @@ extern "C"
 #ifdef _OPENMP
     void run_interp_openmp(
         const int32_t *data,
+        const size_t size,
         double *inputs,
         double *outputs,
         size_t n_samples
@@ -339,7 +401,6 @@ extern "C"
         int32_t n_in = data[0];
         int32_t n_out = data[1];
         int32_t n_ops = data[2];
-        size_t size = 3 + n_in + 3 * n_out + 8 * n_ops;
 
         size_t n_max_threads = omp_get_max_threads();
         size_t n_samples_per_thread = std::max<size_t>(n_samples / n_max_threads, 32);
@@ -354,7 +415,7 @@ extern "C"
             size_t offset_in = start * n_in;
             size_t offset_out = start * n_out;
             run_interp(
-                data, &inputs[offset_in], &outputs[offset_out], n_samples_this_thread
+                data, size, &inputs[offset_in], &outputs[offset_out], n_samples_this_thread
             );
         }
     }

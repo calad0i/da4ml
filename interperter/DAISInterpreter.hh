@@ -28,13 +28,14 @@ namespace dais {
 
     class DAISInterpreter {
       private:
-        int32_t n_in, n_out, n_ops;
+        int32_t n_in, n_out, n_ops, n_tables;
         int32_t max_ops_width = 0, max_inp_width = 0, max_out_width = 0;
         std::vector<int32_t> inp_shift;
         std::vector<int32_t> out_idxs;
         std::vector<int32_t> out_shifts;
         std::vector<int32_t> out_negs;
         std::vector<Op> ops;
+        std::vector<std::vector<int32_t>> lookup_tables;
 
         void validate() const;
 
@@ -79,6 +80,9 @@ namespace dais {
         ) const;
 
         std::vector<int64_t> exec_ops(const std::vector<double> &inputs);
+
+        // 8
+        int64_t logic_lookup(int64_t v1, const Op &op, const DType dtype_in) const;
 
       public:
         void load_from_file(const std::string &filename);

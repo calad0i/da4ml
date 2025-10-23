@@ -516,13 +516,14 @@ class CombLogic(NamedTuple):
             ref_count[i] += 1
         return ref_count
 
-    def to_binary(self):
+    def to_binary(self) -> NDArray[np.int32]:
         n_in, n_out = self.shape
-        header_size_i32 = 2 + n_in + n_out * 3 + 1
+        header_size_i32 = 4 + n_in + n_out * 3
+        n_tables = len(self.lookup_tables) if self.lookup_tables is not None else 0
 
         header = np.concatenate(
             [
-                [n_in, n_out, len(self.ops)],
+                [n_in, n_out, len(self.ops), n_tables],
                 self.inp_shift,
                 self.out_idxs,
                 self.out_shifts,
@@ -540,8 +541,21 @@ class CombLogic(NamedTuple):
             buf[2] = op.id1
             buf[5:] = _minimal_kif(op.qint)
             buf_i64 = buf[3:5].view(np.int64)
-            buf_i64[0] = op.data
+            if op.opcode != 8:
+                buf_i64[0] = op.data
+            else:
+                assert self.lookup_tables is not None
+                pad_left = self.lookup_tables[op.data]._get_pads(self.ops[op.id0].qint)[0]
+                buf_i64[0] = (pad_left << 32) | op.data
         data = np.concatenate([header, code.flatten()])
+
+        if self.lookup_tables is None:
+            return data
+
+        tables = [table.table for table in self.lookup_tables]
+        table_sizes = [len(tab) for tab in tables]
+        table_data = np.concatenate([table_sizes] + tables, axis=0, dtype=np.int32)
+        data = np.concatenate([data, table_data])
         return data
 
     def save_binary(self, path: str | Path):
