@@ -120,12 +120,6 @@ class FixedVariableArray:
     __array_priority__ = 100
 
     def __array_function__(self, func, types, args, kwargs):
-        if func is np.matmul:
-            if len(args) == 1 and isinstance(args[0], np.ndarray):
-                return self.__matmul__(args[0])
-            elif len(args) == 2 and isinstance(args[0], np.ndarray) and isinstance(args[1], np.ndarray):
-                return self.__rmatmul__(args[1])
-
         if func in (np.mean, np.sum, np.amax, np.amin, np.prod, np.max, np.min):
             match func:
                 case np.mean:
@@ -316,6 +310,24 @@ class FixedVariableArray:
         return cls.from_lhs(low, high, step, hwconf, latency, solver_options)
 
     def matmul(self, other):
+        if self.collapsed:
+            self_mat = np.array([v.low for v in self._vars.ravel()], dtype=np.float64).reshape(self._vars.shape)
+            if isinstance(other, FixedVariableArray):
+                if not other.collapsed:
+                    return self_mat @ other
+                other_mat = np.array([v.low for v in other._vars.ravel()], dtype=np.float64).reshape(other._vars.shape)
+            else:
+                other_mat = np.array(other, dtype=np.float64)
+
+            r = self_mat @ other_mat
+            return FixedVariableArray.from_lhs(
+                low=r,
+                high=r,
+                step=np.ones_like(r),
+                hwconf=self._vars.ravel()[0].hwconf,
+                solver_options=self.solver_options,
+            )
+
         if isinstance(other, FixedVariableArray):
             other = other._vars
         if not isinstance(other, np.ndarray):
@@ -469,6 +481,17 @@ class FixedVariableArray:
         shape = self._vars.shape
         kif = np.array([v.kif for v in self._vars.ravel()]).reshape(*shape, 3)
         return np.moveaxis(kif, -1, 0)
+
+    @property
+    def lhs(self):
+        """[low, high, step] array"""
+        shape = self._vars.shape
+        lhs = np.array([(v.low, v.high, v.step) for v in self._vars.ravel()], dtype=np.float32).reshape(*shape, 3)
+        return np.moveaxis(lhs, -1, 0)
+
+    @property
+    def collapsed(self):
+        return all(v.low == v.high for v in self._vars.ravel())
 
     def apply(self, fn: Callable[[NDArray], NDArray]) -> 'RetardedFixedVariableArray':
         """Apply a unary operator to all elements, returning a RetardedFixedVariableArray."""
