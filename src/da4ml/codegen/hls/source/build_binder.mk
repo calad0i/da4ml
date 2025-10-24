@@ -1,6 +1,4 @@
 default: slow
-CXX = g++
-CC = gcc
 INCLUDES = -I ap_types -I .
 CXXFLAGS = -fPIC
 CFLAGS = -std=c++17 -fPIC
