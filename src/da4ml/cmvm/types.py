@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from decimal import Decimal
 from functools import reduce, singledispatch
 from math import ceil, floor, log2
@@ -9,6 +10,8 @@ import numpy as np
 from numba import jit
 from numpy import float32, int8
 from numpy.typing import NDArray
+
+from .._binary import dais_interp_run
 
 if TYPE_CHECKING:
     from ..trace.fixed_variable import FixedVariable, LookupTable
@@ -563,6 +566,35 @@ class CombLogic(NamedTuple):
         data = self.to_binary()
         with open(path, 'wb') as f:
             data.tofile(f)
+
+    def predict(self, data: NDArray[np.floating] | Sequence[NDArray[np.floating]], n_threads: int = -1) -> NDArray[np.float64]:
+        """Predict the output of the solution for a batch of input data with cpp backed DAIS interpreter.
+        Cannot be used if the binary interpreter is not installed.
+
+        Parameters
+        ----------
+        data : NDArray[np.floating]|Sequence[NDArray[np.floating]]
+            Input data to the model. The shape is ignored, and the number of samples is
+            determined by the size of the data.
+        n_threads: int
+            Number of threads to use for prediction.
+            Negative or zero values will use maximum available threads. Default is -1.
+            If OpenMP is not supported, this parameter is ignored.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Output of the model in shape (n_samples, output_size).
+        """
+
+        if isinstance(data, Sequence):
+            data = np.concatenate([a.reshape(a.shape[0], -1) for a in data], axis=-1)
+
+        if n_threads == 0:
+            n_threads = -1
+
+        bin_logic = self.to_binary()
+        return dais_interp_run(bin_logic, data, n_threads)
 
 
 class Pipeline(NamedTuple):
