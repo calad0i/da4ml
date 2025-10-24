@@ -44,6 +44,9 @@ packages = [ "da4ml" ]
 include-package-data = true
 package-dir = { "" = "src" }
 
+[tool.setuptools.exclude-package-data]
+"da4ml._binary" = [ "*.so", "*.dll", "*.dylib" ]
+
 [tool.setuptools_scm]
 write_to = "src/da4ml/_version.py"
 
