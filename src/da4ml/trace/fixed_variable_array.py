@@ -296,7 +296,7 @@ class FixedVariableArray:
         k: NDArray[np.bool_ | np.integer],
         i: NDArray[np.integer],
         f: NDArray[np.integer],
-        hwconf: HWConfig,
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
         latency: NDArray[np.floating] | float = 0.0,
         solver_options: solver_options_t | None = None,
     ):
@@ -521,7 +521,7 @@ class FixedVariableArrayInput(FixedVariableArray):
 
 def make_table(fn: Callable[[NDArray], NDArray], qint: QInterval) -> LookupTable:
     low, high, step = qint
-    n = round((high - low) / step) + 1
+    n = round(abs(high - low) / step) + 1
     return LookupTable(fn(np.linspace(low, high, n)))
 
 
@@ -567,20 +567,22 @@ class RetardedFixedVariableArray(FixedVariableArray):
 
             op = lambda x: _quantize(self._operator(x), k, i, f, overflow_mode, round_mode)  # type: ignore
 
-        local_tables: dict[tuple[QInterval, tuple[int, int, int] | None], LookupTable] = {}
+        local_tables: dict[tuple[QInterval, tuple[int, int, int]] | QInterval, LookupTable] = {}
         variables = []
         for v, _kk, _ii, _ff in zip(self._vars.ravel(), _k, _i, _f):
+            v: FixedVariable
+            qint = v.qint if v._factor >= 0 else QInterval(v.qint.max, v.qint.min, v.qint.step)
             if (_kk is None) or (_ii is None) or (_ff is None):
                 op = self._operator
-                _key = v.qint
+                _key = qint
             else:
                 op = lambda x: _quantize(self._operator(x), _kk, _ii, _ff, overflow_mode, round_mode)  # type: ignore
-                _key = (v.qint, (int(_kk), int(_ii), int(_ff)))
+                _key = (qint, (int(_kk), int(_ii), int(_ff)))
 
             if _key in local_tables:
                 table = local_tables[_key]
             else:
-                table = make_table(op, v.qint)
+                table = make_table(op, qint)
                 local_tables[_key] = table
             variables.append(v.lookup(table))
 
