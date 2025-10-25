@@ -128,9 +128,9 @@ def conv(
     if groups is None:
         groups = ch_in // _ch_in
     else:
-        assert (
-            groups == ch_in // _ch_in
-        ), f'groups {groups} does not match input channels {ch_in} and kernel input channels {_ch_in}'
+        assert groups == ch_in // _ch_in, (
+            f'groups {groups} does not match input channels {ch_in} and kernel input channels {_ch_in}'
+        )
     assert ch_out % groups == 0, f'groups is not integer (total_ch_out={ch_out}, groups={groups})'
     _ch_out = ch_out // groups
 

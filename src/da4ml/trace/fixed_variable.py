@@ -311,9 +311,9 @@ class FixedVariable:
             _latency = dlat + base_latency
             if latency_cutoff > 0 and ceil(_latency / latency_cutoff) > ceil(base_latency / latency_cutoff):
                 # Crossed the latency cutoff boundry
-                assert (
-                    dlat <= latency_cutoff
-                ), f'Latency of an atomic operation {dlat} is larger than the pipelining latency cutoff {latency_cutoff}'
+                assert dlat <= latency_cutoff, (
+                    f'Latency of an atomic operation {dlat} is larger than the pipelining latency cutoff {latency_cutoff}'
+                )
                 _latency = ceil(base_latency / latency_cutoff) * latency_cutoff + dlat
 
         elif self.opr in ('relu', 'wrap'):
@@ -730,9 +730,9 @@ class FixedVariable:
     def lookup(self, table: LookupTable | np.ndarray) -> 'FixedVariable':
         _table, table_id = table_context.register_table(table)
         size = len(table.table) if isinstance(table, LookupTable) else len(table)
-        assert (
-            round((self.high - self.low) / self.step) + 1 == size
-        ), f'Input variable size does not match lookup table size ({round((self.high - self.low) / self.step) + 1} != {size})'
+        assert round((self.high - self.low) / self.step) + 1 == size, (
+            f'Input variable size does not match lookup table size ({round((self.high - self.low) / self.step) + 1} != {size})'
+        )
 
         return FixedVariable(
             _table.spec.out_qint.min,
