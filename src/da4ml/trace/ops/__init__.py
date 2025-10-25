@@ -45,7 +45,7 @@ def _quantize(
     round_mode: str = 'TRN',
 ) -> NDArray[np.floating]:
     q = get_fixed_quantizer_np(round_mode=round_mode, overflow_mode=overflow_mode)
-    return q(x, k=k, i=i, f=f)  # type: ignore
+    return np.where(k + i + f <= 0, 0, q(x, k=k, i=i, f=f))  # type: ignore
 
 
 def quantize(

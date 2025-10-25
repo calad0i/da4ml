@@ -454,8 +454,8 @@ class FixedVariableArray:
     def flatten(self):
         return FixedVariableArray(self._vars.flatten(), self.solver_options)
 
-    def reshape(self, shape):
-        return FixedVariableArray(self._vars.reshape(shape), self.solver_options)
+    def reshape(self, *shape):
+        return FixedVariableArray(self._vars.reshape(*shape), self.solver_options)
 
     def transpose(self, axes=None):
         return FixedVariableArray(self._vars.transpose(axes), self.solver_options)

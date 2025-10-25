@@ -176,6 +176,8 @@ class LookupTable:
 def _const_f(const: float | Decimal):
     """Get the minimum f such that const * 2^f is an integer."""
     const = float(const)
+    if const == 0:
+        return 0
     _low, _high = -32, 32
     while _high - _low > 1:
         _mid = (_high + _low) // 2
@@ -214,7 +216,7 @@ class FixedVariable:
         high: float | Decimal,
         step: float | Decimal,
         latency: float | None = None,
-        hwconf=HWConfig(-1, -1, -1),
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, -1, -1),
         opr: str = 'new',
         cost: float | None = None,
         _from: tuple['FixedVariable', ...] = (),
@@ -231,6 +233,7 @@ class FixedVariable:
         if low == high:
             opr = 'const'
             _from = ()
+            step = 2.0 ** -_const_f(low)
 
         low, high, step = Decimal(low), Decimal(high), Decimal(step)
         self.low = low
@@ -242,7 +245,7 @@ class FixedVariable:
         self.opr = opr
         self._data = _data
         self.id = _id or UUID(int=rd.getrandbits(128), version=4)
-        self.hwconf = hwconf
+        self.hwconf = HWConfig(*hwconf)
 
         if opr == 'cadd':
             assert _data is not None, 'cadd must have data'
@@ -349,10 +352,8 @@ class FixedVariable:
         return k, i, f
 
     @classmethod
-    def from_const(cls, const: float | Decimal, hwconf: HWConfig, latency: float, _factor: float | Decimal):
-        f = _const_f(const)
-        step = Decimal(2) ** -f
-        return cls(const, const, step, hwconf=hwconf, opr='const', _factor=_factor, latency=latency)
+    def from_const(cls, const: float | Decimal, hwconf: HWConfig, latency: float | None = None, _factor: float | Decimal = 1):
+        return cls(const, const, -1, hwconf=hwconf, opr='const', _factor=_factor, latency=latency)
 
     def __repr__(self) -> str:
         if self._factor == 1:
@@ -555,7 +556,7 @@ class FixedVariable:
             i = ceil(log2(val + step)) if not i else i
             eps = step / 2 if round_mode == 'RND' else 0
             val = (floor(val / step + eps) * step) % (Decimal(2) ** i)
-            return FixedVariable(val, val, step, hwconf=self.hwconf, opr='const')
+            return self.from_const(val, hwconf=self.hwconf)
 
         step = max(Decimal(2) ** -f, self.step) if f is not None else self.step
         if step > self.step and round_mode == 'RND':
@@ -613,7 +614,7 @@ class FixedVariable:
             high = _high - step
             low = -_high * k if overflow_mode == 'SAT' else -high * k
             ff = f + 1 if round_mode == 'RND' else f
-            v = self.quantize(_k, _i, ff, 'WRAP', 'TRN')
+            v = self.quantize(_k, _i, ff, 'WRAP', 'TRN') if _k + _i + ff > 0 else self
             return v.max_of(low).min_of(high).quantize(k, i, f, 'WRAP', round_mode)
 
         if self.low == self.high:
@@ -622,19 +623,21 @@ class FixedVariable:
             _high = Decimal(2) ** i
             high, low = _high - step, -_high * k
             val = (floor(val / step) * step - low) % (2 * _high) + low
-            return FixedVariable(val, val, step, hwconf=self.hwconf, opr='const')
+            return FixedVariable.from_const(val, hwconf=self.hwconf, latency=None, _factor=1)
 
-        # TODO: corner cases exists (e.g., overflow to negative, or negative overflow to high value)
-        # bit-exactness will be lost in these cases, but they should never happen (quantizers are used in a weird way)
-        # Keeping this for now; change if absolutely necessary
         f = min(f, _f)
         k = min(k, _k) if i >= _i else k
+
+        step = Decimal(2) ** -f
+
+        if self.low < 0:
+            _low = floor(self.low / step) * step
+            _i = max(_i, ceil(log2(-_low)))
+
         i = min(i, _i)
 
         if i + k + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
-
-        step = Decimal(2) ** -f
 
         low = -k * Decimal(2) ** i
 
@@ -642,9 +645,8 @@ class FixedVariable:
         _low, _high = self.low, self.high
 
         if _low >= low and _high <= high:
-            low, high = _low, _high
-            low = floor(low / step) * step
-            high = ceil(high / step) * step
+            low = floor(_low / step) * step
+            high = floor(_high / step) * step
 
         return FixedVariable(
             low,
@@ -690,8 +692,6 @@ class FixedVariable:
         )
 
     def max_of(self, other):
-        if other == 0:
-            return self.relu()
         if other == -float('inf'):
             return self
         if other == float('inf'):
@@ -703,13 +703,13 @@ class FixedVariable:
             return self
         if self.high <= other.low:
             return other
+        if other.high == other.low == 0:
+            return self.relu()
 
         qint = (max(self.low, other.low), max(self.high, other.high), min(self.step, other.step))
         return (self - other).msb_mux(other, self, qint=qint)
 
     def min_of(self, other):
-        if other == 0:
-            return (-self).relu()
         if other == float('inf'):
             return self
         if other == -float('inf'):
@@ -721,6 +721,8 @@ class FixedVariable:
             return self
         if self.low >= other.high:
             return other
+        if other.high == other.low == 0:
+            return -(-self).relu()
 
         qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
         return (self - other).msb_mux(self, other, qint=qint)
