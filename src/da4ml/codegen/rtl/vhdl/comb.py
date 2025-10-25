@@ -85,7 +85,20 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 if op.opcode == -3 and op.id0 not in neg_defined:
                     neg_defined.add(op.id0)
                     bw0, v0_name = make_neg(signals, assigns, op, ops, bw0, v0_name)
-                line = f'v{i} <= {v0_name}({i0} downto {i1});'
+
+                if i0 >= bw0:
+                    if op.opcode == 3:
+                        assert ops[op.id0].qint.min < 0, f'{i}, {op.id0}'
+                    else:
+                        assert ops[op.id0].qint.max > 0, f'{i}, {op.id0}'
+
+                    if i1 >= bw0:
+                        v0_name = f'({i0 - i1} downto 0 => {v0_name}({bw0 - 1}))'
+                    else:
+                        v0_name = f'({i0 - bw0} downto 0 => {v0_name}({bw0 - 1})) & {v0_name}({bw0 - 1} downto {i1})'
+                    line = f'v{i} <= {v0_name};'
+                else:
+                    line = f'v{i} <= {v0_name}({i0} downto {i1});'
 
             case 4:  # constant addition
                 num = op.data
