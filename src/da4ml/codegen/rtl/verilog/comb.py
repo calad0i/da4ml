@@ -5,21 +5,18 @@ import numpy as np
 from ....cmvm.types import CombLogic, Op, QInterval, _minimal_kif
 
 
-def make_neg(
-    lines: list[str],
-    op: Op,
-    ops: list[Op],
-    bw0: int,
-    v0_name: str,
-):
-    _min, _max, step = ops[op.id0].qint
+def make_neg(lines: list[str], idx: int, qint: QInterval, bw0: int, v0_name: str, neg_repo: dict[int, tuple[int, str]]):
+    if idx in neg_repo:
+        return neg_repo[idx]
+    _min, _max, step = qint
     bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
     was_signed = int(_min < 0)
     lines.append(
-        f'wire [{bw_neg - 1}:0] v{op.id0}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{op.id0} ({v0_name}, v{op.id0}_neg);'
+        f'wire [{bw_neg - 1}:0] v{idx}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{idx} ({v0_name}, v{idx}_neg);'
     )
     bw0 = bw_neg
-    v0_name = f'v{op.id0}_neg'
+    v0_name = f'v{idx}_neg'
+    neg_repo[idx] = (bw0, v0_name)
     return bw0, v0_name
 
 
@@ -42,7 +39,7 @@ def get_table_name(sol: CombLogic, op: Op) -> str:
     return f'lut_{uuid}.mem'
 
 
-def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False) -> list[str]:
+def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency: bool = False) -> list[str]:
     ops = sol.ops
     kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     widths: list[int] = list(map(sum, kifs))
@@ -86,9 +83,8 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False) 
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
 
-                if op.opcode == -2 and op.id0 not in neg_defined:
-                    neg_defined.add(op.id0)
-                    bw0, v0_name = make_neg(lines, op, ops, bw0, v0_name)
+                if op.opcode == -2:
+                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, bw0, v0_name, neg_repo)
                 if ops[op.id0].qint.min < 0:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0 - 1}]}}}};'
                 else:
@@ -100,9 +96,8 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False) 
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
 
-                if op.opcode == -3 and op.id0 not in neg_defined:
-                    neg_defined.add(op.id0)
-                    bw0, v0_name = make_neg(lines, op, ops, bw0, v0_name)
+                if op.opcode == -3:
+                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, bw0, v0_name, neg_repo)
 
                 if i0 >= bw0:
                     if op.opcode == 3:
@@ -175,7 +170,7 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False) 
     return lines
 
 
-def output_gen(sol: CombLogic, neg_defined: set[int]):
+def output_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]]) -> list[str]:
     lines = []
     widths = list(map(sum, map(_minimal_kif, sol.out_qint)))
     _widths = np.cumsum([0] + widths)
@@ -188,14 +183,8 @@ def output_gen(sol: CombLogic, neg_defined: set[int]):
             continue
         bw = widths[i]
         if sol.out_negs[i]:
-            if idx not in neg_defined:
-                neg_defined.add(idx)
-                bw0 = sum(_minimal_kif(sol.ops[idx].qint))
-                was_signed = int(sol.ops[idx].qint[0] < 0)
-                lines.append(
-                    f'wire [{bw - 1}:0] v{idx}_neg; negative #({bw0}, {bw}, {was_signed}) op_neg_{idx} (v{idx}, v{idx}_neg);'
-                )
-            lines.append(f'assign model_out[{i0}:{i1}] = v{idx}_neg[{bw - 1}:0];')
+            _, name = make_neg(lines, idx, sol.ops[idx].qint, bw, f'v{idx}', neg_repo)
+            lines.append(f'assign model_out[{i0}:{i1}] = {name}[{bw - 1}:0];')
 
         else:
             lines.append(f'assign model_out[{i0}:{i1}] = v{idx}[{bw - 1}:0];')
@@ -213,9 +202,9 @@ def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, ti
         ');',
     ]
 
-    neg_defined = set()
-    ssa_lines = ssa_gen(sol, neg_defined=neg_defined, print_latency=print_latency)
-    output_lines = output_gen(sol, neg_defined)
+    neg_repo: dict[int, tuple[int, str]] = {}
+    ssa_lines = ssa_gen(sol, neg_repo=neg_repo, print_latency=print_latency)
+    output_lines = output_gen(sol, neg_repo)
 
     indent = '    '
     base_indent = '\n'

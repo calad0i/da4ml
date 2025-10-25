@@ -2,31 +2,35 @@ from math import ceil, log2
 
 import numpy as np
 
-from ....cmvm.types import CombLogic, Op, QInterval, _minimal_kif
+from ....cmvm.types import CombLogic, QInterval, _minimal_kif
 from ..verilog.comb import get_table_name
 
 
 def make_neg(
     signals: list[str],
     assigns: list[str],
-    op: Op,
-    ops: list[Op],
+    idx: int,
+    qint: QInterval,
     bw0: int,
     v0_name: str,
+    neg_repo: dict[int, tuple[int, str]],
 ):
-    _min, _max, step = ops[op.id0].qint
-    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
+    if idx in neg_repo:
+        return neg_repo[idx]
+    _min, _max, step = qint
     was_signed = int(_min < 0)
-    signals.append(f'signal v{op.id0}_neg : std_logic_vector({bw_neg - 1} downto {0});')
+    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
+    signals.append(f'signal v{idx}_neg : std_logic_vector({bw_neg - 1} downto {0});')
     assigns.append(
-        f'op_neg_{op.id0} : entity work.negative generic map (BW_IN => {bw0}, BW_OUT => {bw_neg}, IN_SIGNED => {was_signed}) port map (neg_in => {v0_name}, neg_out => v{op.id0}_neg);'
+        f'op_neg_{idx} : entity work.negative generic map (BW_IN => {bw0}, BW_OUT => {bw_neg}, IN_SIGNED => {was_signed}) port map (neg_in => {v0_name}, neg_out => v{idx}_neg);'
     )
     bw0 = bw_neg
-    v0_name = f'v{op.id0}_neg'
+    v0_name = f'v{idx}_neg'
+    neg_repo[idx] = (bw0, v0_name)
     return bw0, v0_name
 
 
-def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
+def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency: bool = False):
     ops = sol.ops
     kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     widths = list(map(sum, kifs))
@@ -66,9 +70,8 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
-                if op.opcode == -2 and op.id0 not in neg_defined:
-                    neg_defined.add(op.id0)
-                    bw0, v0_name = make_neg(signals, assigns, op, ops, bw0, v0_name)
+                if op.opcode == -2:
+                    bw0, v0_name = make_neg(signals, assigns, op.id0, ops[op.id0].qint, bw0, v0_name, neg_repo)
                 if ops[op.id0].qint.min < 0:
                     if bw > 1:
                         line = f'v{i} <= {v0_name}({i0} downto {i1}) and ({bw - 1} downto 0 => not {v0_name}({bw0 - 1}));'
@@ -82,9 +85,8 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
-                if op.opcode == -3 and op.id0 not in neg_defined:
-                    neg_defined.add(op.id0)
-                    bw0, v0_name = make_neg(signals, assigns, op, ops, bw0, v0_name)
+                if op.opcode == -3:
+                    bw0, v0_name = make_neg(signals, assigns, op.id0, ops[op.id0].qint, bw0, v0_name, neg_repo)
 
                 if i0 >= bw0:
                     if op.opcode == 3:
@@ -151,7 +153,7 @@ def ssa_gen(sol: CombLogic, neg_defined: set[int], print_latency: bool = False):
     return signals, assigns
 
 
-def output_gen(sol: CombLogic, neg_defined: set[int]):
+def output_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]]):
     assigns = []
     signals = []
     widths = list(map(sum, map(_minimal_kif, sol.out_qint)))
@@ -165,15 +167,8 @@ def output_gen(sol: CombLogic, neg_defined: set[int]):
             continue
         bw = widths[i]
         if sol.out_negs[i]:
-            if idx not in neg_defined:
-                neg_defined.add(idx)
-                bw0 = sum(_minimal_kif(sol.ops[idx].qint))
-                was_signed = int(_minimal_kif(sol.ops[idx].qint)[0])
-                signals.append(f'signal v{idx}_neg:std_logic_vector({bw - 1} downto {0});')
-                assigns.append(
-                    f'op_neg_{idx}:entity work.negative generic map(BW_IN=>{bw0},BW_OUT=>{bw},IN_SIGNED=>{was_signed}) port map(neg_in=>v{idx},neg_out=>v{idx}_neg);'
-                )
-            assigns.append(f'model_out({i0} downto {i1}) <= v{idx}_neg({bw - 1} downto {0});')
+            _, name = make_neg(signals, assigns, idx, sol.out_qint[i], widths[idx], f'v{idx}', neg_repo)
+            assigns.append(f'model_out({i0} downto {i1}) <= {name}({bw - 1} downto {0});')
         else:
             assigns.append(f'model_out({i0} downto {i1}) <= v{idx}({bw - 1} downto {0});')
     return signals, assigns
@@ -183,9 +178,9 @@ def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, ti
     inp_bits = sum(map(sum, map(_minimal_kif, sol.inp_qint)))
     out_bits = sum(map(sum, map(_minimal_kif, sol.out_qint)))
 
-    neg_defined = set()
-    ssa_signals, ssa_assigns = ssa_gen(sol, neg_defined=neg_defined, print_latency=print_latency)
-    output_signals, output_assigns = output_gen(sol, neg_defined)
+    neg_repo: dict[int, tuple[int, str]] = {}
+    ssa_signals, ssa_assigns = ssa_gen(sol, neg_repo=neg_repo, print_latency=print_latency)
+    output_signals, output_assigns = output_gen(sol, neg_repo)
     blk = '\n    '
 
     code = f"""library ieee;
