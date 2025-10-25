@@ -263,7 +263,7 @@ class FixedVariableArray:
         low: NDArray[np.floating],
         high: NDArray[np.floating],
         step: NDArray[np.floating],
-        hwconf: HWConfig,
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
         latency: np.ndarray | float = 0.0,
         solver_options: solver_options_t | None = None,
     ):
@@ -309,12 +309,12 @@ class FixedVariableArray:
         high, low = _high - step, -_high * k
         return cls.from_lhs(low, high, step, hwconf, latency, solver_options)
 
-    def matmul(self, other):
+    def matmul(self, other) -> 'FixedVariableArray':
         if self.collapsed:
             self_mat = np.array([v.low for v in self._vars.ravel()], dtype=np.float64).reshape(self._vars.shape)
             if isinstance(other, FixedVariableArray):
                 if not other.collapsed:
-                    return self_mat @ other
+                    return self_mat @ other  # type: ignore
                 other_mat = np.array([v.low for v in other._vars.ravel()], dtype=np.float64).reshape(other._vars.shape)
             else:
                 other_mat = np.array(other, dtype=np.float64)
