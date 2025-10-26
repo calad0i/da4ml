@@ -108,8 +108,8 @@ def _apply_nn(
             for keras_tensor, da_tensor in zip(op.produces, outputs):
                 tensor_map[keras_tensor] = da_tensor
             if verbose:
-                cost = comb_trace(_inputs, _flatten_arr(outputs)).cost
-                print(f' cumcost: {cost}')
+                comb = comb_trace(_inputs, _flatten_arr(outputs))
+                print(f' cumcost: {comb.cost}, latency: {comb.latency[1]}')
 
     if not dump:
         return tuple(tensor_map[keras_tensor] for keras_tensor in model.outputs)

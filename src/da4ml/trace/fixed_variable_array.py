@@ -490,6 +490,11 @@ class FixedVariableArray:
         return np.moveaxis(lhs, -1, 0)
 
     @property
+    def latency(self):
+        """Maximum latency among all elements."""
+        return np.array([v.latency for v in self._vars.ravel()]).reshape(self._vars.shape)
+
+    @property
     def collapsed(self):
         return all(v.low == v.high for v in self._vars.ravel())
 

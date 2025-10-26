@@ -52,8 +52,7 @@ class Precision(NamedTuple):
 
     def __str__(self):
         k, i, f = self.keep_negative, self.integers, self.fractional
-        k, B, I = k, i + f + k, i + k
-        return f'fixed({k}, {B}, {I})'
+        return f'fixed({k=}, {i=}, {f=})'
 
     def __repr__(self):
         return str(self)
