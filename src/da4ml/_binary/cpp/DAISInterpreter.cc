@@ -130,9 +130,11 @@ namespace dais {
         return value;
     }
 
-    int64_t
-    DAISInterpreter::relu(int64_t value, const DType &dtype_from, const DType &dtype_to)
-        const {
+    int64_t DAISInterpreter::relu(
+        int64_t value,
+        const DType &dtype_from,
+        const DType &dtype_to
+    ) const {
         if (value < 0)
             return 0;
         return quantize(value, dtype_from, dtype_to);
@@ -170,26 +172,40 @@ namespace dais {
     ) const {
         bool cond = get_msb(v_cond, dtype_cond);
         int32_t shift = dtype0.fractionals - dtype1.fractionals + _shift;
-        int64_t shifted_v0 = shift > 0 ? v0 : (v0 << -shift);
-        int64_t shifted_v1 = shift > 0 ? (v1 << shift) : v1;
-        if (cond)
-            return shifted_v0;
-        else
-            return shifted_v1;
+        int32_t shift0 = shift > 0 ? 0 : -shift;
+        int32_t shift1 = shift > 0 ? shift : 0;
+        int64_t result;
+        DType dtype_in;
+
+        if (cond) {
+            dtype_in = (dtype0 << shift0).with_fractionals(dtype_out.fractionals);
+            result = v0 << shift0;
+        }
+        else {
+            dtype_in = (dtype1 << shift1).with_fractionals(dtype_out.fractionals);
+            result = v1 << shift1;
+        }
+
+        return quantize(result, dtype_in, dtype_out);
     }
 
-    int64_t
-    DAISInterpreter::logic_lookup(const int64_t v1, const Op &op, const DType dtype_in)
-        const {
+    int64_t DAISInterpreter::logic_lookup(
+        const int64_t v0,
+        const Op &op,
+        const DType dtype_in
+    ) const {
         int32_t table_idx = op.data_low;
         const auto &table = lookup_tables[table_idx];
         size_t table_size = table.size();
-        size_t zero = -dtype_in.is_signed * (1LL << (dtype_in.width() - 1));
-        size_t index = v1 - zero - op.data_high;
+        int64_t zero = -dtype_in.is_signed * (1LL << (dtype_in.width() - 1));
+
+        int64_t index = v0 - zero - op.data_high;
         if (index < 0 || index >= table_size) {
             throw std::runtime_error(
                 "Logic lookup index out of bounds: index=" + std::to_string(index) +
-                ", table_size=" + std::to_string(table_size)
+                ", table_size=" + std::to_string(table_size) + ", zero=" +
+                std::to_string(zero) + ", data_high=" + std::to_string(op.data_high) +
+                ", v0=" + std::to_string(v0)
             );
         }
         return static_cast<int64_t>(table[index]);

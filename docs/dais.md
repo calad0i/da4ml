@@ -54,7 +54,7 @@ The operation codes are defined as follows:
 - `5`: Define a constant
   - `buf[i] = data * qint.step`
 - `6/-6`: Mux by MSB
-  - `buf[i] = MSB(buf[int32(data_lower_i32)]) ? buf[id0] : +/- buf[id1] * 2^int32(data_higher_i32)`
+  - `buf[i] = MSB(buf[int32(data_lower_i32)]) ? buf[id0] : +/- buf[id1] * 2^int32(data_higher_i32)` (**implies msb chopping**)
 - `7`: Multiplication
   - `buf[i] = buf[id0] * buf[id1]`
 - `8`: Logic Lookup

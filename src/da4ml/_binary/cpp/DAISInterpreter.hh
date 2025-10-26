@@ -22,6 +22,30 @@ namespace dais {
         int32_t width() const { return integers + fractionals + (is_signed ? 1 : 0); }
         int32_t int_max() const { return (1 << (width() - (is_signed ? 1 : 0))) - 1; }
         int32_t int_min() const { return is_signed ? -(1 << (width() - 1)) : 0; }
+
+        DType operator<<(int32_t shift) const {
+            return DType{is_signed, integers + shift, fractionals - shift};
+        }
+
+        DType operator>>(int32_t shift) const {
+            return DType{is_signed, integers - shift, fractionals + shift};
+        }
+
+        DType with_fractionals(int32_t new_fractionals) const {
+            return DType{
+                is_signed, integers + (fractionals - new_fractionals), new_fractionals
+            };
+        }
+
+        DType with_integers(int32_t new_integers) const {
+            return DType{
+                is_signed, new_integers, fractionals + (integers - new_integers)
+            };
+        }
+
+        DType with_signed(int32_t new_is_signed) const {
+            return DType{new_is_signed, integers, fractionals};
+        }
     };
 
     struct alignas(4) Op {
