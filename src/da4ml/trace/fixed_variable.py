@@ -96,7 +96,7 @@ class LookupTable:
     def __init__(self, values: NDArray, spec: TableSpec | None = None):
         assert values.ndim == 1, 'Lookup table values must be 1-dimensional'
         if spec is not None:
-            assert values.dtype is np.int32
+            assert values.dtype == np.int32, f'{values.dtype}'
             self.spec = spec
             self.table = values
         else:

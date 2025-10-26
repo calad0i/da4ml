@@ -474,12 +474,17 @@ class CombLogic(NamedTuple):
             json.dump(self, f, cls=JSONEncoder)
 
     @classmethod
-    def deserialize(cls, data: dict):
+    def deserialize(cls, data: list):
         """Load the solution from a file."""
         ops = []
         for _op in data[5]:
             op = Op(*_op[:4], QInterval(*_op[4]), *_op[5:])  # type: ignore
             ops.append(op)
+        lookup_tables = data[8]
+        if lookup_tables is not None:
+            from ..trace.fixed_variable import LookupTable
+
+            lookup_tables = tuple(LookupTable.from_dict(tab) for tab in lookup_tables)
         return cls(
             shape=tuple(data[0]),
             inp_shift=data[1],
@@ -489,6 +494,7 @@ class CombLogic(NamedTuple):
             ops=ops,
             carry_size=data[6],
             adder_size=data[7],
+            lookup_tables=lookup_tables,
         )
 
     @classmethod
