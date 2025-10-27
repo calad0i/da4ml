@@ -12,13 +12,14 @@ import numpy as np
 
 from da4ml.trace import FixedVariableArrayInput, comb_trace
 from da4ml.trace.ops import einsum, quantize, relu
-from da4ml.codegen import HLSModel, VerilogModel
+from da4ml.codegen import HLSModel, RTLModel
 
 w = np.random.randint(-2**7, 2**7, (4, 5, 6)) / 2**7
 
 def operation(inp):
    inp = quantize(inp, 1, 7, 0) # Input must be quantized before any non-trivial operation
    out1 = relu(inp) # Only activation supported for now; can attach quantization at the same time
+   out2 = quantize(np.sin(out1), 1, 0, 7, 'SAT', 'RND')
 
    # many native numpy operations are supported
    out2 = inp[:, 1:3].transpose()
@@ -40,6 +41,10 @@ rtl_model = RTLModel(comb_logic, 'vmodel', '/tmp/rtl', flavor='verilog', latency
 rtl_model.write()
 # rtl_model.compile() # compile the generated Verilog code with verilator (with GHDL, if using vhdl)
 # rtl_model.predict(data_inp) # run inference with the compiled model; bit-accurate
+
+# Now in 0.5.0: run bit-exact (all int64 arithmetic) inference with the combinational logic model
+# Backed by cpp-based DAIS interpreter for speed
+# comb_logic.predict(data_inp)
 ```
 
 ## HGQ2/Keras3 integration:

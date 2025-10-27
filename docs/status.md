@@ -15,9 +15,9 @@ Most common high-level operations can be represented in [DAIS](dais.html) is sup
  - element-wise addition/subtraction/multiplication
  - rearrangement of tensors (reshape, transpose, slicing, etc.)
  - fixed-point quantization
+ - Arbitrary unary mapping through logic lookup tables (no to be confused with LUT primitives)
 
 
 ## Unsupported Operations
- - general non-linear activation functions: each instruction in DAIS supports only a 64-bit data size, so general non-linear functions are not supported yet. In the future, general non-linear unary operations may be added as an external table lookup attached to the DAIS program.
  - Anything requires stateful operations/time dependencies: due to the SSA nature of DAIS, we do not plan to support stateful operations (e.g., not-unrolled RNNs) within the da4ml framework. We believe these operations shall be implemented in higher-level frameworks that orchestrate the DAIS programs.
- - Division: division is not yet supported in DAIS. Albeit not impossible, we do not have short term plans to support it.
+ - Bit-exact integer division: We do not support real division or bit-exact integer division. Users are advised to approximate division with multiplication and inverse table lookup where necessary.
