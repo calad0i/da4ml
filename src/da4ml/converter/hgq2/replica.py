@@ -32,6 +32,7 @@ from hgq.layers import (
 from hgq.layers.core.base import MultipleQuantizers, Quantizer
 from hgq.quantizer.internal import FixedPointQuantizerBase
 from keras.layers import ReLU
+from keras.ops import convert_to_numpy
 from keras.src.layers.pooling.base_global_pooling import BaseGlobalPooling
 from keras.src.layers.pooling.base_pooling import BasePooling
 from keras.src.ops.numpy import (
@@ -63,9 +64,13 @@ from ...trace import FixedVariableArray
 from ...trace.ops import conv, einsum, pool, quantize, relu
 
 
+def to_np_arr(x: Any) -> np.ndarray:
+    return np.asarray(convert_to_numpy(x))
+
+
 def mirror_quantizer(q: Quantizer, v: FixedVariableArray) -> FixedVariableArray:
     q_internal: FixedPointQuantizerBase = q.quantizer
-    k, i, f = (np.array(x, dtype=np.int8)[0] for x in q_internal.kif)
+    k, i, f = (to_np_arr(x).astype(np.int8)[0] for x in q_internal.kif)
     round_mode, overflow_mode = q_internal.round_mode, q_internal.overflow_mode
     return quantize(v, k, i, f, overflow_mode=overflow_mode, round_mode=round_mode)
 
@@ -186,8 +191,8 @@ class ReplayQDense(ReplayOperationBase):
         else:
             raise TypeError(f'Unsupported layer type: {type(op)}')
 
-        qkernel = np.array(qkernel)
-        qbias = np.array(qbias) if qbias is not None else None
+        qkernel = to_np_arr(qkernel)
+        qbias = to_np_arr(qbias) if qbias is not None else None
         return (einsum(eq, inputs[None], qkernel) + qbias)[0]
 
 
@@ -207,7 +212,7 @@ class ReplayQBatchNormalization(ReplayOperationBase):
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
         layer: QBatchNormalization = self.op
-        scale, bias = map(np.array, layer.qscaler_and_qoffset)
+        scale, bias = map(to_np_arr, layer.qscaler_and_qoffset)
         shape = layer._shape[1:]
         return inputs * scale.reshape(shape) + bias.reshape(shape)
 
@@ -217,8 +222,8 @@ class ReplayQConv(ReplayOperationBase):
 
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
         layer: QConv1D | QConv2D | QConv3D = self.op
-        qkernel = np.array(layer.qkernel)
-        qbias = np.array(layer.qbias) if layer.qbias is not None else None
+        qkernel = to_np_arr(layer.qkernel)
+        qbias = to_np_arr(layer.qbias) if layer.qbias is not None else None
         strides = layer.strides
         padding = layer.padding
         dilation_rate = layer.dilation_rate
