@@ -593,6 +593,22 @@ class FixedVariable:
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
     ) -> 'FixedVariable':
+        """Quantize the variable to the specified fixed-point format.
+
+        Parameters
+        ----------
+        k : int | bool
+            Sign bit (True for signed, False for unsigned)
+        i : int
+            Integer bits, excluding sign bit
+        f : int
+            Fraction bits
+        overflow_mode : str, optional
+            Overflow mode, one of 'WRAP', 'SAT', 'SAT_SYM', by default 'WRAP'
+        round_mode : str, optional
+            Rounding mode, one of 'TRN' (truncate), 'RND' (round to nearest, half up), by default 'TRN'
+        """
+
         overflow_mode, round_mode = overflow_mode.upper(), round_mode.upper()
         assert overflow_mode in ('WRAP', 'SAT', 'SAT_SYM')
         assert round_mode in ('TRN', 'RND')
@@ -672,6 +688,9 @@ class FixedVariable:
         b: 'FixedVariable|float|Decimal',
         qint: tuple[Decimal, Decimal, Decimal] | None = None,
     ):
+        """If the MSB of this variable is 1, return a, else return b.
+        When the variable is signed, the MSB is determined by the sign bit (1 for <0, 0 for >=0)
+        """
         if not isinstance(a, FixedVariable):
             a = FixedVariable.from_const(a, hwconf=self.hwconf, latency=self.latency, _factor=1)
         if not isinstance(b, FixedVariable):
@@ -700,6 +719,7 @@ class FixedVariable:
         )
 
     def max_of(self, other):
+        """Get the maximum of this variable and another variable or constant."""
         if other == -float('inf'):
             return self
         if other == float('inf'):
@@ -718,6 +738,8 @@ class FixedVariable:
         return (self - other).msb_mux(other, self, qint=qint)
 
     def min_of(self, other):
+        """Get the minimum of this variable and another variable or constant."""
+
         if other == float('inf'):
             return self
         if other == -float('inf'):
@@ -736,6 +758,25 @@ class FixedVariable:
         return (self - other).msb_mux(self, other, qint=qint)
 
     def lookup(self, table: LookupTable | np.ndarray) -> 'FixedVariable':
+        """Use a lookup table to map the variable.
+        When the table is a numpy array, the table starts at the lowest possible value of the variable
+        When the table is in LookupTable format, the table starts at the normalized lowest value of the variable. (i.e., if the variable has negative _factor, the table is reversed)
+
+        Parameters
+        ----------
+        table : LookupTable | np.ndarray
+            Lookup table to use
+
+        Returns
+        -------
+        FixedVariable
+        """
+        if isinstance(table, np.ndarray):
+            if len(table) == 1:
+                return self.from_const(float(table[0]), hwconf=self.hwconf)
+            if self._factor < 0:
+                table = table[::-1]  # Reverse the table for negative factor
+
         _table, table_id = table_context.register_table(table)
         size = len(table.table) if isinstance(table, LookupTable) else len(table)
         assert round((self.high - self.low) / self.step) + 1 == size, (
