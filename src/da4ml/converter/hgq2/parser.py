@@ -9,7 +9,7 @@ from keras import KerasTensor, Operation
 from ...cmvm.api import solver_options_t
 from ...trace import FixedVariableArray, FixedVariableArrayInput, HWConfig, comb_trace
 from ...trace.fixed_variable import FixedVariable
-from .replica import _registry
+from .layers import _registry
 
 
 @dataclass
