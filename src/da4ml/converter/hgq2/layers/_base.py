@@ -18,10 +18,20 @@ def to_np_arr(x: Any) -> np.ndarray:
 
 
 def mirror_quantizer(q: Quantizer, v: FixedVariableArray) -> FixedVariableArray:
+    if q.scaler is not None:
+        v = v * (1.0 / q.scaler)
     q_internal: FixedPointQuantizerBase = q.quantizer
-    k, i, f = (to_np_arr(x).astype(np.int8)[0] for x in q_internal.kif)
+    kk, ki, kf = q_internal.kif
+    shape = (1,) + v.shape
+    kk = q_internal.bw_mapper.bw_to_x(kk, shape)
+    ki = q_internal.bw_mapper.bw_to_x(ki, shape)
+    kf = q_internal.bw_mapper.bw_to_x(kf, shape)
+    k, i, f = (to_np_arr(x).astype(np.int8)[0] for x in (kk, ki, kf))
     round_mode, overflow_mode = q_internal.round_mode, q_internal.overflow_mode
-    return quantize(v, k, i, f, overflow_mode=overflow_mode, round_mode=round_mode)
+    rq = quantize(v, k, i, f, overflow_mode=overflow_mode, round_mode=round_mode)
+    if q.affine:
+        rq = rq * q.affine[0] + q.affine[1]
+    return rq
 
 
 _registry: dict[type, 'type[ReplayOperationBase]'] = {}
