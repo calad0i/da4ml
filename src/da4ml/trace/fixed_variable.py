@@ -666,8 +666,16 @@ class FixedVariable:
         low, high = k * _high, _high - step
         return cls(low, high, step, **kwargs)
 
-    def msb_mux(self, a: 'FixedVariable', b: 'FixedVariable', qint: tuple[Decimal, Decimal, Decimal] | None = None):
-        assert isinstance(a, FixedVariable) and isinstance(b, FixedVariable), 'msb_mux requires two FixedVariables'
+    def msb_mux(
+        self,
+        a: 'FixedVariable|float|Decimal',
+        b: 'FixedVariable|float|Decimal',
+        qint: tuple[Decimal, Decimal, Decimal] | None = None,
+    ):
+        if not isinstance(a, FixedVariable):
+            a = FixedVariable.from_const(a, hwconf=self.hwconf, latency=self.latency, _factor=1)
+        if not isinstance(b, FixedVariable):
+            b = FixedVariable.from_const(b, hwconf=self.hwconf, latency=self.latency, _factor=1)
         if self._factor < 0:
             return (-self).msb_mux(b, a, qint)
 
