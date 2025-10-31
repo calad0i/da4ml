@@ -1,5 +1,6 @@
 import argparse
 
+from .. import _version
 from .convert import _add_convert_args, convert_main
 from .report import _add_report_args, report_main
 
@@ -12,6 +13,7 @@ def main():
     report_parser = subparsers.add_parser('report', help='Generate report from an existing RTL projects')
     _add_convert_args(convert_parser)
     _add_report_args(report_parser)
+    parser.add_argument('--version', '-v', action='version', version=f'%(prog)s {_version.__version__}')
     args = parser.parse_args()
 
     match args.command:
