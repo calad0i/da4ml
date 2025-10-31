@@ -169,11 +169,11 @@ class RTLModel:
         shutil.copy(self.__src_root / 'common_source/binder_util.hh', self._path / 'sim')
         self._solution.save(self._path / 'model/comb.json')
         with open(self._path / 'metadata.json', 'w') as f:
-            misc = {'cost': self._solution.cost}
+            metadata = {'cost': self._solution.cost, 'flavor': self._flavor}
             if self._pipe is not None:
-                misc['latency'] = len(self._pipe[0])
-                misc['reg_bits'] = self._pipe.reg_bits
-            f.write(json.dumps(misc))
+                metadata['latency'] = len(self._pipe[0])
+                metadata['reg_bits'] = self._pipe.reg_bits
+            f.write(json.dumps(metadata))
 
     def _compile(self, verbose=False, openmp=True, nproc=None, o3: bool = False, clean=True):
         """Same as compile, but will not write to the library
