@@ -524,14 +524,14 @@ class CombLogic(NamedTuple):
             ref_count[i] += 1
         return ref_count
 
-    def to_binary(self) -> NDArray[np.int32]:
+    def to_binary(self, version: int = 0) -> NDArray[np.int32]:
         n_in, n_out = self.shape
-        header_size_i32 = 4 + n_in + n_out * 3
+        header_size_i32 = 6 + n_in + n_out * 3
         n_tables = len(self.lookup_tables) if self.lookup_tables is not None else 0
 
         header = np.concatenate(
             [
-                [n_in, n_out, len(self.ops), n_tables],
+                [0, version, n_in, n_out, len(self.ops), n_tables],
                 self.inp_shift,
                 self.out_idxs,
                 self.out_shifts,
@@ -566,9 +566,9 @@ class CombLogic(NamedTuple):
         data = np.concatenate([data, table_data])
         return data
 
-    def save_binary(self, path: str | Path):
+    def save_binary(self, path: str | Path, version: int = 0):
         """Dump the solution to a binary file."""
-        data = self.to_binary()
+        data = self.to_binary(version=version)
         with open(path, 'wb') as f:
             data.tofile(f)
 

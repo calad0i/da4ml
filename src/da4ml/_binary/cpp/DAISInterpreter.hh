@@ -68,6 +68,8 @@ namespace dais {
         std::vector<Op> ops;
         std::vector<std::vector<int32_t>> lookup_tables;
 
+        const int dais_version = 0;
+
         void validate() const;
 
         // 0, 1

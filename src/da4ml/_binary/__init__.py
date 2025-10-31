@@ -63,7 +63,7 @@ def dais_interp_run(bin_logic: NDArray[np.int32], data: NDArray, n_threads: int 
     if dais_lib is None:
         raise ImportError(msg)
 
-    inp_size, out_size = map(int, bin_logic[:2])
+    inp_size, out_size = map(int, bin_logic[2:4])
 
     assert data.size % inp_size == 0, f'Input size {data.size} is not divisible by {inp_size}'
     n_sample = data.size // inp_size

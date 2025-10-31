@@ -8,12 +8,25 @@
 namespace dais {
 
     void DAISInterpreter::load_from_binary(const std::vector<int32_t> &binary_data) {
-        n_in = binary_data[0];
-        n_out = binary_data[1];
-        n_ops = binary_data[2];
-        n_tables = binary_data[3];
+        if (binary_data.size() < 6) {
+            throw std::runtime_error(
+                "Binary data too small to contain valid DAIS model file"
+            );
+        }
+        if (binary_data[0] != dais_version) {
+            throw std::runtime_error(
+                "DAIS version mismatch: expected version " +
+                std::to_string(dais_version) + ", got version " +
+                std::to_string(binary_data[0])
+            );
+        }
 
-        size_t fixed_offset = 4;
+        n_in = binary_data[2];
+        n_out = binary_data[3];
+        n_ops = binary_data[4];
+        n_tables = binary_data[5];
+
+        size_t fixed_offset = 6;
 
         size_t table_offset = fixed_offset + n_in + 3 * n_out + 8 * n_ops;
 
@@ -382,8 +395,8 @@ extern "C"
         double *outputs,
         size_t n_samples
     ) {
-        int32_t n_in = data[0];
-        int32_t n_out = data[1];
+        int32_t n_in = data[2];
+        int32_t n_out = data[3];
         std::vector<int32_t> binary_data(data, data + size);
         dais::DAISInterpreter interp;
         interp.load_from_binary(binary_data);
@@ -405,8 +418,8 @@ extern "C"
         size_t n_samples,
         size_t n_threads
     ) {
-        int32_t n_in = data[0];
-        int32_t n_out = data[1];
+        int32_t n_in = data[2];
+        int32_t n_out = data[3];
 
         size_t n_max_threads = std::max<size_t>(n_threads, omp_get_max_threads());
         size_t n_samples_per_thread = std::max<size_t>(n_samples / n_max_threads, 32);

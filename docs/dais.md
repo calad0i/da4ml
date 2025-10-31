@@ -7,6 +7,10 @@ One program represented in DAIS consists of the following components:
 
 ## Program Structure
 
+- `spec version`: int
+    - The spec version of the DAIS program. Currently, the version is `0`.
+- `firmware version`: int
+    - Reserved for downstream firmware versioning. The DAIS interpreter **must** ignore this field.
 - `shape`: tuple<int, int>
     - The number of inputs and outputs of the program.
 - `inp_shift`: vector<int>
@@ -65,19 +69,31 @@ In all cases, unused id0 or id1 **must** be set to `-1`; id0, id1 (and data for 
 
 ### Binary Representation
 The binary representation of the program is as follows, in order:
+- `spec version`: int32
+- `firmware version`: int32
 - `shape`: int32[2]
 - `len(ops)`: int32
+- `len(tables)`: int32
 - `inp_shift`: int32[shape[0]]
 - `out_idxs`: int32[shape[1]]
 - `out_shifts`: int32[shape[1]]
 - `out_negs`: int32[shape[1]]
-- `ops`: Op[len(ops)]
-    - `opcode`: int32
-    - `id0`: int32
-    - `id1`: int32
-    - `data_higher`: int32
-    - `data_lower`: int32
-    - `dtype`: int32[3] (only (signed, integer_bits, fractional_bits) format for binary representation)
+- `ops`: `Op[len(ops)]`
+- `tables`: variable length
+
+Each `Op` is represented as follows:
+- `opcode`: int32
+- `id0`: int32
+- `id1`: int32
+- `data_higher`: int32
+- `data_lower`: int32
+- `dtype`: int32[3] (only (signed, integer_bits, fractional_bits) format for binary representation)
+
+The table block is represented as follows:
+- [`table_size`: int32] * `len(tables)`
+- [table data: int32[`table_size`]] * `len(tables)`
+
+Each table is in the order of increasing index on the order of the smallest to largest inputs in the corresponding fixed-point representation. (**NOT** in the order of binary representation.)
 
 In execution, the internal buffer **must** have larger bitwidth than the maximum bitwidth appears in any of the operations. When an operation implies quantization, the program **must** apply the quantization explicitly. When an operation does not imply quantization, the program **may** apply quantization and verify no value change is incurred as a result.
 
