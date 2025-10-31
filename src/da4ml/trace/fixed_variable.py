@@ -274,6 +274,8 @@ class FixedVariable:
             b_out = sum(self.kif)
             _latency = max(b_in - 6, 1) + self._from[0].latency
             _cost = 2 ** max(b_in - 5, 0) * ceil(b_out / 2)
+            if b_in < 5:
+                _cost *= b_in / 5
             # Assume LUT6 with extra o5 output
             return _cost, _latency
 
