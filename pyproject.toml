@@ -27,6 +27,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
 dynamic = [ "version" ]
 dependencies = [ "llvmlite>=0.44", "numba>=0.61", "quantizers>=1,<2" ]
@@ -38,6 +39,7 @@ optional-dependencies.docs = [
   "sphinx-rtd-theme",
 ]
 urls.repository = "https://github.com/calad0i/da4ml"
+scripts.da4ml = "da4ml._cli:main"
 
 [tool.setuptools]
 packages = [ "da4ml" ]
