@@ -1,6 +1,8 @@
 import argparse
 import json
+import os
 import re
+from math import ceil, log10
 from pathlib import Path
 
 
@@ -94,6 +96,8 @@ def load_project(path: str | Path):
         d.update(util)
 
         d['actual_period'] = d['clock_period'] - d['WNS(ns)']
+        d['Fmax(MHz)'] = 1000.0 / d['actual_period']
+        d['latency(ns)'] = d['latency'] * d['actual_period']
 
     return d
 
@@ -120,6 +124,78 @@ def extra_info_from_fname(fname: str):
     return d
 
 
+def pretty_print(arr: list[list]):
+    n_cols = len(arr[0])
+    terminal_width = os.get_terminal_size().columns
+    default_width = [
+        max(min(6, len(str(arr[i][j]))) if isinstance(arr[i][j], float) else len(str(arr[i][j])) for i in range(len(arr)))
+        for j in range(n_cols)
+    ]
+    if sum(default_width) + 2 * n_cols + 1 <= terminal_width:
+        col_width = default_width
+    else:
+        th = max(8, (terminal_width - 2 * n_cols - 1) // n_cols)
+        col_width = [min(w, th) for w in default_width]
+
+    header = [
+        '| ' + ' | '.join(f'{str(arr[0][i]).ljust(col_width[i])[: col_width[i]]}' for i in range(n_cols)) + ' |',
+        '|-' + '-|-'.join('-' * col_width[i] for i in range(n_cols)) + '-|',
+    ]
+    content = []
+    for row in arr[1:]:
+        _row = []
+        for i, v in enumerate(row):
+            w = col_width[i]
+            if type(v) is float:
+                n_int = ceil(log10(abs(v) + 1)) if v != 0 else 1 + (v < 0)
+                v = round(v, 10 - n_int)
+                if type(v) is int:
+                    fmt = f'{{:>{w}d}}'
+                    _v = fmt.format(v)
+                else:
+                    _v = str(v)
+                    if len(_v) > w:
+                        fmt = f'{{:.{w - n_int - 1}f}}'
+                        _v = fmt.format(v).ljust(w)
+                    else:
+                        _v = _v.ljust(w)
+            else:
+                _v = str(v).ljust(w)[:w]
+            _row.append(_v)
+        content.append('| ' + ' | '.join(_row) + ' |')
+    print('\n'.join(header + content))
+
+
+def stdout_print(arr: list[list], full: bool):
+    whitelist = [
+        'epoch',
+        'flavor',
+        'actual_period',
+        'clock_period',
+        'ebops',
+        'cost',
+        'latency',
+        'DSP',
+        'LUT',
+        'FF',
+        'comb_metric',
+        'Fmax(MHz)',
+        'latency(ns)',
+    ]
+
+    if not full:
+        idx_row = arr[0]
+        keep_cols = [idx_row.index(col) for col in whitelist if col in idx_row]
+        arr = [[row[i] for i in keep_cols] for row in arr]
+
+    if len(arr) == 2:  # One sample
+        k_width = max(len(str(h)) for h in arr[0])
+        for k, v in zip(arr[0], arr[1]):
+            print(f'{str(k).ljust(k_width)} : {v}')
+    else:
+        pretty_print(arr)
+
+
 def report_main(args):
     vals = [load_project(Path(p)) for p in args.paths]
     for path, val in zip(args.paths, vals):
@@ -127,41 +203,22 @@ def report_main(args):
         for k, v in d.items():
             val.setdefault(k, v)
 
-    attrs: set[str] = set()
+    _key = [x.get(args.sort_by, float('inf')) for x in vals]
+    _order = sorted(range(len(vals)), key=lambda i: -_key[i])
+    vals = [vals[i] for i in _order]
+
+    _attrs: set[str] = set()
     for v in vals:
-        attrs.update(v.keys())
-    arr: list[list] = [list(attrs)]
+        _attrs.update(v.keys())
+    attrs = sorted(_attrs)
+    arr: list[list] = [attrs]
     for v in vals:
         arr.append([v.get(a, '') for a in attrs])
 
     output = args.output
     if output == 'stdout':
-        if not args.full:
-            whitelist = [
-                'epoch',
-                'flavor',
-                'actual_period',
-                'clock_period',
-                'ebops',
-                'cost',
-                'latency',
-                'DSP',
-                'LUT',
-                'FF',
-                'comb_metric',
-            ]
-
-            arr = [list(filter(lambda x: x in whitelist, arr[0]))]
-            for row in vals:
-                arr.append([row[a] for a in arr[0]])
-
-        col_widths = [min(max(len(str(row[i])) for row in arr), 8) for i in range(len(arr[0]))]
-        print('| ' + ' | '.join(f'{str(arr[0][i]).ljust(col_widths[i])[:8]}' for i in range(len(arr[0]))) + ' |')
-        print('|-' + '-|-'.join('-' * col_widths[i] for i in range(len(arr[0]))) + '-|')
-        for row in arr[1:]:
-            print('| ' + ' | '.join(f'{str(row[i]).ljust(col_widths[i])[:8]}' for i in range(len(row))) + ' |')
-
-        exit(0)
+        stdout_print(arr, args.full)
+        return
 
     with open(output, 'w') as f:
         ext = Path(output).suffix
@@ -195,6 +252,13 @@ def _add_report_args(parser: argparse.ArgumentParser):
         type=str,
         default='stdout',
         help='Output file name for the summary. Can be stdout, .json, .csv, .tsv, .md, .html',
+    )
+    parser.add_argument(
+        '--sort-by',
+        '-s',
+        type=str,
+        default='comb_metric',
+        help='Attribute to sort the summary by. Default is cost.',
     )
     parser.add_argument(
         '--full',
