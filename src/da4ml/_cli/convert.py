@@ -12,6 +12,8 @@ def to_da4ml(
     period: float,
     unc: float,
     flavor: str,
+    latency_cutoff: int,
+    part_name: str,
     verbose: int = 1,
     rtl_validation: bool = False,
     hw_config: tuple[int, int, int] = (1, -1, -1),
@@ -40,7 +42,17 @@ def to_da4ml(
     else:
         raise ValueError(f'Unsupported model file format: {model_path}')
 
-    rtl_model = RTLModel(comb, 'model', path, flavor, True, clock_uncertainty=unc / 100, clock_period=period)
+    rtl_model = RTLModel(
+        comb,
+        'model',
+        path,
+        flavor=flavor,
+        latency_cutoff=latency_cutoff,
+        print_latency=True,
+        clock_uncertainty=unc / 100,
+        clock_period=period,
+        part_name=part_name,
+    )
     rtl_model.write()
     if verbose > 1:
         print('Model written')
@@ -123,6 +135,8 @@ def convert_main(args):
         args.n_test_sample,
         args.clock_period,
         args.unc,
+        latency_cutoff=args.latency_cutoff,
+        part_name=args.part_name,
         flavor=args.flavor,
         verbose=args.verbose,
         rtl_validation=args.validate_rtl,
@@ -139,6 +153,8 @@ def _add_convert_args(parser: argparse.ArgumentParser):
     parser.add_argument('--clock-period', '-c', type=float, default=5.0, help='Clock period in ns')
     parser.add_argument('--unc', type=float, default=10.0, help='Clock uncertainty in percent')
     parser.add_argument('--flavor', type=str, default='verilog', help='Flavor for DA4ML (verilog/vhdl)')
+    parser.add_argument('--latency-cutoff', '-l', type=int, default=5, help='Latency cutoff for pipelining')
+    parser.add_argument('--part-name', '-p', type=str, default='xcvu13p-flga2577-2-e', help='FPGA part name')
     parser.add_argument('--verbose', '-v', default=1, type=int, help='Set verbosity level (0: silent, 1: info, 2: debug)')
     parser.add_argument('--validate-rtl', '-vr', action='store_true', help='Validate RTL by Verilator (and GHDL)')
     parser.add_argument(
