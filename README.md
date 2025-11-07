@@ -14,6 +14,20 @@ da4ml is a library for implementing distributed arithmetic (DA) based algorithms
    Alternatively, da4ml also be used as a plugin in hls4ml to optimize the CMVM operations in the network.
 
 
+# Citation
+
+If you find the da4ml useful, please cite our paper:
+```{=latex}
+@article{sun2025da4ml,
+  title={da4ml: Distributed Arithmetic for Real-time Neural Networks on FPGAs},
+  author={Sun, Chang and Que, Zhiqiang and Loncar, Vladimir and Luk, Wayne and Spiropulu, Maria},
+  journal={ACM Transactions on Reconfigurable Technology and Systems},
+  year={2025},
+  publisher={ACM New York, NY}
+}
+```
+
+
 Key Features
 ------------
 
@@ -34,4 +48,7 @@ pip install da4ml
 Getting Started
 ---------------
 
-See the [Getting Started](https://calad0i.github.io/da4ml/getting_started.html) guide for a quick introduction to using da4ml.
+- See the [Getting Started](https://calad0i.github.io/da4ml/getting_started.html) guide for a quick introduction to using da4ml.
+- See [JEDI-linear](https://github.com/calad0i/JEDI-linear) project which is based on da4ml
+
+
