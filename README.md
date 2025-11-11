@@ -14,9 +14,10 @@ da4ml is a library for implementing distributed arithmetic (DA) based algorithms
    Alternatively, da4ml also be used as a plugin in hls4ml to optimize the CMVM operations in the network.
 
 
-# Citation
+# Publications
 
-If you find the da4ml useful, please cite our paper:
+Please refer to our TRETS'25 paper for more details. If you use da4ml in your research, please use the following bibtex entry to cite us:
+
 ```{=latex}
 @article{sun2025da4ml,
   title={da4ml: Distributed Arithmetic for Real-time Neural Networks on FPGAs},
@@ -26,7 +27,6 @@ If you find the da4ml useful, please cite our paper:
   publisher={ACM New York, NY}
 }
 ```
-
 
 Key Features
 ------------
