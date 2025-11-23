@@ -479,7 +479,8 @@ class CombLogic(NamedTuple):
         for _op in data[5]:
             op = Op(*_op[:4], QInterval(*_op[4]), *_op[5:])  # type: ignore
             ops.append(op)
-        lookup_tables = data[8]
+        assert len(data) in (7, 8)
+        lookup_tables = data[8] if len(data) > 8 else None
         if lookup_tables is not None:
             from ..trace.fixed_variable import LookupTable
 
@@ -572,13 +573,17 @@ class CombLogic(NamedTuple):
         with open(path, 'wb') as f:
             data.tofile(f)
 
-    def predict(self, data: NDArray[np.floating] | Sequence[NDArray[np.floating]], n_threads: int = -1) -> NDArray[np.float64]:
+    def predict(
+        self,
+        data: NDArray | Sequence[NDArray],
+        n_threads: int = -1,
+    ) -> NDArray[np.float64]:
         """Predict the output of the solution for a batch of input data with cpp backed DAIS interpreter.
         Cannot be used if the binary interpreter is not installed.
 
         Parameters
         ----------
-        data : NDArray[np.floating]|Sequence[NDArray[np.floating]]
+        data : NDArray|Sequence[NDArray]
             Input data to the model. The shape is ignored, and the number of samples is
             determined by the size of the data.
         n_threads: int

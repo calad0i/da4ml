@@ -506,6 +506,10 @@ class FixedVariableArray:
             operator=fn,
         )
 
+    @property
+    def T(self):
+        return self.transpose()
+
 
 class FixedVariableArrayInput(FixedVariableArray):
     """Similar to FixedVariableArray, but initializes all elements as FixedVariableInput - the precisions are unspecified when initialized, and the highest precision requested (i.e., quantized to) will be recorded for generation of the logic."""

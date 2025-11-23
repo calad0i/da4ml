@@ -2,14 +2,12 @@ from collections.abc import Sequence
 from decimal import Decimal
 from itertools import chain
 from math import log2
-from typing import overload
 from uuid import UUID
 
 import numpy as np
 
 from ..cmvm.types import CombLogic, Op, QInterval
 from .fixed_variable import FixedVariable, _const_f, table_context
-from .fixed_variable_array import FixedVariableArray
 
 
 def _recursive_gather(v: FixedVariable, gathered: dict[UUID, FixedVariable]):
@@ -141,14 +139,6 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     out_index = [index[v.id] for v in outputs]
     lookup_tables = None if not lookup_tables else tuple(lookup_tables)
     return ops, out_index, lookup_tables
-
-
-@overload
-def comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]) -> CombLogic: ...
-
-
-@overload
-def comb_trace(inputs: FixedVariableArray, outputs: FixedVariableArray) -> CombLogic: ...
 
 
 def comb_trace(inputs, outputs):

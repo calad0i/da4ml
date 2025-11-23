@@ -79,7 +79,8 @@ The binary representation of the program is as follows, in order:
 - `out_shifts`: int32[shape[1]]
 - `out_negs`: int32[shape[1]]
 - `ops`: `Op[len(ops)]`
-- `tables`: variable length
+- `table_size`: int32[`len(tables)`]
+- `tables`: int32[sum of table sizes]
 
 Each `Op` is represented as follows:
 - `opcode`: int32
