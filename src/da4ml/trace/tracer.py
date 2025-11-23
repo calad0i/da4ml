@@ -142,7 +142,12 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
 
 
 def comb_trace(inputs, outputs):
-    inputs, outputs = list(np.ravel(inputs)), list(np.ravel(outputs))
+    if isinstance(inputs, FixedVariable):
+        inputs = [inputs]
+    if isinstance(outputs, FixedVariable):
+        outputs = [outputs]
+
+    inputs, outputs = list(np.ravel(inputs)), list(np.ravel(outputs))  # type: ignore
 
     if any(not isinstance(v, FixedVariable) for v in outputs):
         hwconf = inputs[0].hwconf
