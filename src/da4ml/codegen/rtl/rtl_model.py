@@ -7,6 +7,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import numpy as np
@@ -79,7 +80,15 @@ class RTLModel:
         self._lib = None
         self._uuid = None
 
-    def write(self):
+    def write(self, metadata: None | dict[str, Any] = None):
+        """Write the RTL project to the specified path.
+
+        Parameters
+        ----------
+        metadata : dict[str, Any] | None, optional
+            Additional metadata to write to `metadata.json`, by default None
+        """
+
         flavor = self._flavor
         suffix = 'v' if flavor == 'verilog' else 'vhd'
         if flavor == 'vhdl':
@@ -169,11 +178,15 @@ class RTLModel:
         shutil.copy(self.__src_root / 'common_source/binder_util.hh', self._path / 'sim')
         self._solution.save(self._path / 'model/comb.json')
         with open(self._path / 'metadata.json', 'w') as f:
-            metadata = {'cost': self._solution.cost, 'flavor': self._flavor}
+            _metadata = {'cost': self._solution.cost, 'flavor': self._flavor}
             if self._pipe is not None:
-                metadata['latency'] = len(self._pipe[0])
-                metadata['reg_bits'] = self._pipe.reg_bits
-            f.write(json.dumps(metadata))
+                _metadata['latency'] = len(self._pipe[0])
+                _metadata['reg_bits'] = self._pipe.reg_bits
+
+            if metadata is not None:
+                _metadata.update(metadata)
+
+            f.write(json.dumps(_metadata))
 
     def _compile(self, verbose=False, openmp=True, nproc=None, o3: bool = False, clean=True):
         """Same as compile, but will not write to the library
@@ -253,7 +266,15 @@ class RTLModel:
             raise RuntimeError(f'Library {lib_path} does not exist')
         self._lib = ctypes.CDLL(str(lib_path))
 
-    def compile(self, verbose=False, openmp=True, nproc: int | None = None, o3: bool = False, clean=True):
+    def compile(
+        self,
+        verbose=False,
+        openmp=True,
+        nproc: int | None = None,
+        o3: bool = False,
+        clean=True,
+        metadata: None | dict[str, Any] = None,
+    ):
         """Compile the generated code to a emulator for logic simulation.
 
         Parameters
@@ -269,13 +290,16 @@ class RTLModel:
             Turn on -O3 flag, by default False
         clean : bool, optional
             Remove obsolete shared object files and `obj_dir`, by default True
+        metadata : dict[str, Any] | None, optional
+            Additional metadata to write to `metadata.json`, by default None
 
         Raises
         ------
         RuntimeError
             If compilation fails
         """
-        self.write()
+
+        self.write(metadata=metadata)
         self._compile(verbose=verbose, openmp=openmp, nproc=nproc, o3=o3, clean=clean)
 
     def predict(self, data: NDArray[np.floating] | Sequence[NDArray[np.floating]]) -> NDArray[np.float32]:
