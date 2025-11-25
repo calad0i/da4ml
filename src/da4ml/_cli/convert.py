@@ -29,7 +29,7 @@ def to_da4ml(
         import hgq  # noqa: F401
         import keras
 
-        model: keras.Model = keras.models.load_model(model_path)  # type: ignore
+        model: keras.Model = keras.models.load_model(model_path, compile=False)  # type: ignore
         if verbose > 1:
             model.summary()
         inp, out = trace_model(model, HWConfig(*hw_config), {'hard_dc': hard_dc}, verbose > 1)
@@ -141,7 +141,7 @@ def convert_main(args):
         verbose=args.verbose,
         rtl_validation=args.validate_rtl,
         hw_config=hw_conf,
-        hard_dc=args.hard_dc,
+        hard_dc=args.delay_constraint,
         openmp=not args.no_openmp,
     )
 
@@ -166,8 +166,13 @@ def _add_convert_args(parser: argparse.ArgumentParser):
         default=[1, -1, -1],
         help='Size of accumulator and adder, and cutoff threshold during tracing. No need to modify unless you know what you are doing.',
     )
-    parser.add_argument('--hard-dc', '-hd', type=int, default=2, help='Hard delay constraint for each CMVM block')
-    parser.add_argument('--no-openmp', '--no-omp', action='store_true', help='Disable OpenMP in RTL simulation')
+    parser.add_argument('--delay-constraint', '-dc', type=int, default=2, help='Delay constraint for each CMVM block')
+    parser.add_argument(
+        '--no-openmp',
+        '--no-omp',
+        action='store_true',
+        help='Disable OpenMP in RTL simulation; no effect if --validate-rtl is not set',
+    )
 
 
 if __name__ == '__main__':

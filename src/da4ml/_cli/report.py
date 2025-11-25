@@ -166,7 +166,7 @@ def pretty_print(arr: list[list]):
     print('\n'.join(header + content))
 
 
-def stdout_print(arr: list[list], full: bool):
+def stdout_print(arr: list[list], full: bool, columns: list[str] | None):
     whitelist = [
         'epoch',
         'flavor',
@@ -182,10 +182,12 @@ def stdout_print(arr: list[list], full: bool):
         'Fmax(MHz)',
         'latency(ns)',
     ]
+    if columns is None:
+        columns = whitelist
 
     if not full:
         idx_row = arr[0]
-        keep_cols = [idx_row.index(col) for col in whitelist if col in idx_row]
+        keep_cols = [idx_row.index(col) for col in columns if col in idx_row]
         arr = [[row[i] for i in keep_cols] for row in arr]
 
     if len(arr) == 2:  # One sample
@@ -217,7 +219,7 @@ def report_main(args):
 
     output = args.output
     if output == 'stdout':
-        stdout_print(arr, args.full)
+        stdout_print(arr, args.full, args.columns)
         return
 
     with open(output, 'w') as f:
@@ -265,6 +267,14 @@ def _add_report_args(parser: argparse.ArgumentParser):
         '-f',
         action='store_true',
         help='Include full information for stdout output. For file output, all information will always be included.',
+    )
+    parser.add_argument(
+        '--columns',
+        '-c',
+        type=str,
+        nargs='+',
+        default=None,
+        help='Specify columns to include in the report. Only applicable for stdout output. Ignored if --full is set.',
     )
 
 
