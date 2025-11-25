@@ -18,7 +18,7 @@ Distributed Arithmetic for Machine Learning
    :width: 600
 
 
-da4ml is a library for implementing distributed arithmetic (DA) based algorithms for ultra-low latency machine learning (ML) applications on FPGAs. It as two major components:
+da4ml is a static computation graph to RTL/HLS design compiler targeting ultra-low latency applications on FPGAs. It as two major components:
  - A fast and performant constant-matrix-vector multiplications (CMVM) optimizer to implement them as
    efficient adder trees. Common sub-expressions elimination (CSE) with graph-based pre-optimization are
    performed to reduce the firmware footprint and improve the performance.
@@ -67,3 +67,23 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+Publications
+==================
+
+Please refer to our TRETS'25 paper for more details. If you use da4ml in your research, please use the following bibtex entry to cite us:
+
+.. code-block:: bibtex
+
+   @article{sun2025da4ml,
+      author = {Sun, Chang and Que, Zhiqiang and Loncar, Vladimir and Luk, Wayne and Spiropulu, Maria},
+      title = {da4ml: Distributed Arithmetic for Real-time Neural Networks on FPGAs},
+      year = {2025},
+      publisher = {Association for Computing Machinery},
+      address = {New York, NY, USA},
+      issn = {1936-7406},
+      url = {https://doi.org/10.1145/3777387},
+      doi = {10.1145/3777387},
+      journal = {ACM Trans. Reconfigurable Technol. Syst.},
+      month = nov,
+   }
