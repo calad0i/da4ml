@@ -36,9 +36,9 @@ Getting Started
 - See the [Getting Started](https://calad0i.github.io/da4ml/getting_started.html) guide for a quick introduction to using da4ml.
 - See [JEDI-linear](https://github.com/calad0i/JEDI-linear) project which is based on da4ml
 
-# Publications
+# Citation
 
-Please refer to our TRETS'25 paper for more details. If you use da4ml in your research, please use the following bibtex entry to cite us:
+If you use da4ml in a publication, please cite our [TRETS'25 paper](https://doi.org/10.1145/3777387) with the following bibtex entry:
 
 ```bibtex
 @article{sun2025da4ml,

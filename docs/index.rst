@@ -38,6 +38,26 @@ Key Features
 - **hls4ml integration**: da4ml can be used as a plugin in hls4ml to optimize the CMVM operations in the network by setting `strategy='distributed_arithmetic'` for the strategy of the Dense, EinsumDense, or Conv1/2D layers.
 
 
+Citation
+==================
+
+If you use da4ml in a publication, please cite our `TRETS'25 paper <https://doi.org/10.1145/3777387>`__ with the following bibtex entry:
+
+.. code-block:: bibtex
+
+   @article{sun2025da4ml,
+      author = {Sun, Chang and Que, Zhiqiang and Loncar, Vladimir and Luk, Wayne and Spiropulu, Maria},
+      title = {da4ml: Distributed Arithmetic for Real-time Neural Networks on FPGAs},
+      year = {2025},
+      publisher = {Association for Computing Machinery},
+      address = {New York, NY, USA},
+      issn = {1936-7406},
+      url = {https://doi.org/10.1145/3777387},
+      doi = {10.1145/3777387},
+      journal = {ACM Trans. Reconfigurable Technol. Syst.},
+      month = nov,
+   }
+
 Index
 =================
 
@@ -67,23 +87,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
-Publications
-==================
-
-Please refer to our TRETS'25 paper for more details. If you use da4ml in your research, please use the following bibtex entry to cite us:
-
-.. code-block:: bibtex
-
-   @article{sun2025da4ml,
-      author = {Sun, Chang and Que, Zhiqiang and Loncar, Vladimir and Luk, Wayne and Spiropulu, Maria},
-      title = {da4ml: Distributed Arithmetic for Real-time Neural Networks on FPGAs},
-      year = {2025},
-      publisher = {Association for Computing Machinery},
-      address = {New York, NY, USA},
-      issn = {1936-7406},
-      url = {https://doi.org/10.1145/3777387},
-      doi = {10.1145/3777387},
-      journal = {ACM Trans. Reconfigurable Technol. Syst.},
-      month = nov,
-   }
