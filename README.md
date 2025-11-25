@@ -5,29 +5,13 @@
 [![PyPI version](https://badge.fury.io/py/da4ml.svg)](https://badge.fury.io/py/da4ml)
 [![ArXiv](https://img.shields.io/badge/arXiv-2507.04535-b31b1b.svg)](https://arxiv.org/abs/2507.04535)
 
-da4ml is a library for implementing distributed arithmetic (DA) based algorithms for ultra-low latency machine learning (ML) applications on FPGAs. It as two major components:
+da4ml is a static computation graph to RTL/HLS design compiler targeting ultra-low latency applications on FPGAs. It as two major components:
  - A fast and performant constant-matrix-vector multiplications (CMVM) optimizer to implement them as
    efficient adder trees. Common sub-expressions elimination (CSE) with graph-based pre-optimization are
    performed to reduce the firmware footprint and improve the performance.
  - Low-level symbolic tracing frameworks for generating combinational/fully pipelined logics in HDL or HLS
    code. da4ml can generate the firmware for almost all fully pipelined networks standalone.
    Alternatively, da4ml also be used as a plugin in hls4ml to optimize the CMVM operations in the network.
-
-
-# Publications
-
-Please refer to our TRETS'25 paper for more details. If you use da4ml in your research, please use the following bibtex entry to cite us:
-
-```{=latex}
-@article{sun2025da4ml,
-  title={da4ml: Distributed Arithmetic for Real-time Neural Networks on FPGAs},
-  author={Sun, Chang and Que, Zhiqiang and Loncar, Vladimir and Luk, Wayne and Spiropulu, Maria},
-  journal={ACM Transactions on Reconfigurable Technology and Systems},
-  year={2025},
-  publisher={ACM New York, NY}
-}
-```
-
 
 Key Features
 ------------
@@ -52,4 +36,21 @@ Getting Started
 - See the [Getting Started](https://calad0i.github.io/da4ml/getting_started.html) guide for a quick introduction to using da4ml.
 - See [JEDI-linear](https://github.com/calad0i/JEDI-linear) project which is based on da4ml
 
+# Publications
 
+Please refer to our TRETS'25 paper for more details. If you use da4ml in your research, please use the following bibtex entry to cite us:
+
+```bibtex
+@article{sun2025da4ml,
+    author = {Sun, Chang and Que, Zhiqiang and Loncar, Vladimir and Luk, Wayne and Spiropulu, Maria},
+    title = {da4ml: Distributed Arithmetic for Real-time Neural Networks on FPGAs},
+    year = {2025},
+    publisher = {Association for Computing Machinery},
+    address = {New York, NY, USA},
+    issn = {1936-7406},
+    url = {https://doi.org/10.1145/3777387},
+    doi = {10.1145/3777387},
+    journal = {ACM Trans. Reconfigurable Technol. Syst.},
+    month = nov,
+}
+```
