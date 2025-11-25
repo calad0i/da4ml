@@ -70,6 +70,7 @@ def _apply_nn(
     inputs: FixedVariableArray | Sequence[FixedVariableArray],
     verbose: bool = False,
     dump: bool = False,
+    n_nested: int = 0,
 ) -> tuple[FixedVariableArray, ...] | dict[str, FixedVariableArray]:
     """
     Apply a keras model to a fixed variable array or a sequence of fixed variable arrays.
@@ -94,6 +95,9 @@ def _apply_nn(
 
     _inputs = _flatten_arr(inputs)
 
+    if verbose and n_nested:
+        print(' -> enter:')
+
     for ops in parse_model(model):
         for op in ops:
             assert all(t in tensor_map for t in op.requires)
@@ -101,15 +105,33 @@ def _apply_nn(
             kwargs: dict[str, Any] = replace_tensors(tensor_map, op.kwargs)
             if op.operation.__class__ is keras.layers.InputLayer:
                 continue
-            mirror_op = _registry[op.operation.__class__](op.operation)
+
             if verbose:
-                print(f'Processing operation {op.operation.name} ({op.operation.__class__.__name__})', end='')
-            outputs = mirror_op(*args, **kwargs)
-            for keras_tensor, da_tensor in zip(op.produces, outputs):
-                tensor_map[keras_tensor] = da_tensor
+                indent = '    ' * n_nested
+                print(f'{indent}{op.operation.name} ({op.operation.__class__.__name__})', end='')
+
+            if isinstance(op.operation, keras.Model):
+                sub_model = op.operation._functional if isinstance(op.operation, keras.Sequential) else op.operation
+                outputs: tuple[FixedVariableArray, ...] = _apply_nn(
+                    sub_model,
+                    args,
+                    verbose=verbose,
+                    dump=False,
+                    n_nested=n_nested + 1,
+                )  # type: ignore
+            else:
+                mirror_op = _registry[op.operation.__class__](op.operation)
+                outputs = mirror_op(*args, **kwargs)
             if verbose:
                 comb = comb_trace(_inputs, _flatten_arr(outputs))
                 print(f' cumcost: {comb.cost}, latency: {comb.latency[1]}')
+
+            for keras_tensor, da_tensor in zip(op.produces, outputs):
+                tensor_map[keras_tensor] = da_tensor
+
+    if verbose and n_nested:
+        indent = '    ' * (n_nested - 1)
+        print(f'{indent}<- exit', end='')
 
     if not dump:
         return tuple(tensor_map[keras_tensor] for keras_tensor in model.outputs)
