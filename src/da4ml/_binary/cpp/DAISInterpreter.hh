@@ -4,6 +4,7 @@
 #include <stdalign.h>
 #include <string>
 #include <vector>
+#include <span>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -68,8 +69,6 @@ namespace dais {
         std::vector<Op> ops;
         std::vector<std::vector<int32_t>> lookup_tables;
 
-        const int dais_version = 0;
-
         void validate() const;
 
         // 0, 1
@@ -112,17 +111,20 @@ namespace dais {
             const DType &dtype_out
         ) const;
 
-        std::vector<int64_t> exec_ops(const std::vector<double> &inputs);
+        std::vector<int64_t> exec_ops(const std::span<const double> &inputs);
 
         // 8
         int64_t logic_lookup(int64_t v1, const Op &op, const DType dtype_in) const;
 
       public:
+        static const int dais_version = 0;
+
         void load_from_file(const std::string &filename);
 
         void load_from_binary(const std::vector<int32_t> &binary_data);
 
-        std::vector<double> inference(const std::vector<double> &inputs);
+        std::vector<double> inference(const std::span<const double> &inputs);
+        void inference(const std::span<const double> &inputs, std::span<double> &outputs);
 
         void print_program_info() const;
     };

@@ -224,7 +224,8 @@ namespace dais {
         return static_cast<int64_t>(table[index]);
     }
 
-    std::vector<int64_t> DAISInterpreter::exec_ops(const std::vector<double> &inputs) {
+    std::vector<int64_t>
+    DAISInterpreter::exec_ops(const std::span<const double> &inputs) {
         if (inputs.size() != n_in)
             throw std::runtime_error(
                 "Input size mismatch: expected " + std::to_string(n_in) + ", got " +
@@ -316,16 +317,24 @@ namespace dais {
         return output_buffer;
     }
 
-    std::vector<double> DAISInterpreter::inference(const std::vector<double> &inputs) {
+    void DAISInterpreter::inference(
+        const std::span<const double> &inputs,
+        std::span<double> &outputs
+    ) {
         std::vector<int64_t> int_outputs = exec_ops(inputs);
-        std::vector<double> outputs(n_out);
         for (size_t i = 0; i < n_out; ++i) {
             int64_t tmp = out_negs[i] ? -int_outputs[i] : int_outputs[i];
             outputs[i] =
                 static_cast<double>(tmp) *
                 std::pow(2.0, out_shifts[i] - ops[out_idxs[i]].dtype.fractionals);
         }
+    }
 
+    std::vector<double>
+    DAISInterpreter::inference(const std::span<const double> &inputs) {
+        std::vector<double> outputs(n_out);
+        std::span<double> out_span(outputs.data(), n_out);
+        inference(inputs, out_span);
         return outputs;
     }
 
@@ -383,60 +392,3 @@ namespace dais {
         }
     }
 } // namespace dais
-
-extern "C"
-{
-    bool openmp_enabled() { return _openmp; }
-
-    void run_interp(
-        const int32_t *data,
-        const size_t size,
-        double *inputs,
-        double *outputs,
-        size_t n_samples
-    ) {
-        int32_t n_in = data[2];
-        int32_t n_out = data[3];
-        std::vector<int32_t> binary_data(data, data + size);
-        dais::DAISInterpreter interp;
-        interp.load_from_binary(binary_data);
-        // interp.print_program_info();
-
-        for (size_t i = 0; i < n_samples; ++i) {
-            std::vector<double> inp_vec(inputs + i * n_in, inputs + (i + 1) * n_in);
-            auto ret = interp.inference(inp_vec);
-            memcpy(&outputs[i * n_out], ret.data(), n_out * sizeof(double));
-        }
-    }
-
-#ifdef _OPENMP
-    void run_interp_openmp(
-        const int32_t *data,
-        const size_t size,
-        double *inputs,
-        double *outputs,
-        size_t n_samples,
-        size_t n_threads
-    ) {
-        int32_t n_in = data[2];
-        int32_t n_out = data[3];
-
-        size_t n_max_threads = std::max<size_t>(n_threads, omp_get_max_threads());
-        size_t n_samples_per_thread = std::max<size_t>(n_samples / n_max_threads, 32);
-        size_t n_thread = n_samples / n_samples_per_thread;
-        n_thread += (n_samples % n_samples_per_thread) ? 1 : 0;
-
-#pragma omp parallel for num_threads(n_thread) schedule(static)
-        for (size_t i = 0; i < n_thread; ++i) {
-            size_t start = i * n_samples_per_thread;
-            size_t end = std::min<size_t>(start + n_samples_per_thread, n_samples);
-            size_t n_samples_this_thread = end - start;
-            size_t offset_in = start * n_in;
-            size_t offset_out = start * n_out;
-            run_interp(
-                data, size, &inputs[offset_in], &outputs[offset_out], n_samples_this_thread
-            );
-        }
-    }
-#endif
-}

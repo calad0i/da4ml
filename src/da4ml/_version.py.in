@@ -1,0 +1,32 @@
+__all__ = [
+    '__version__',
+    '__version_tuple__',
+    'version',
+    'version_tuple',
+    '__commit_id__',
+    'commit_id',
+]
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    VERSION_TUPLE = tuple[int | str, ...]
+    COMMIT_ID = str | None
+else:
+    VERSION_TUPLE = object
+    COMMIT_ID = object
+
+version: str
+__version__: str
+__version_tuple__: VERSION_TUPLE
+version_tuple: VERSION_TUPLE
+commit_id: COMMIT_ID
+__commit_id__: COMMIT_ID
+
+__full_version = "@VCS_TAG@"
+__version__ = version = __full_version.split('-')[0]
+__version_tuple__ = version_tuple = tuple(
+    int(part) if part.isdigit() else part
+    for part in __version__.split('.')
+)
+
+__commit_id__ = commit_id = __full_version.rsplit('-', 1)[-1] if '-' in __full_version else None

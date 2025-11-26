@@ -1,7 +1,7 @@
 [build-system]
-build-backend = "setuptools.build_meta"
+build-backend = "mesonpy"
 
-requires = [ "setuptools>=67.8", "setuptools-scm>=8" ]
+requires = [ "meson-python>=0.13.1", "nanobind>=2.9.2", "numpy>=2" ]
 
 [project]
 name = "da4ml"
@@ -10,9 +10,9 @@ readme = "README.md"
 keywords = [
   "CMVM",
   "distributed arithmetic",
-  "hls4ml",
-  "MCM",
-  "subexpression elimination",
+  "high-level synthesis",
+  "machine learning",
+  "RTL/HLS compilation",
 ]
 
 license = { text = "GNU Lesser General Public License v3 (LGPLv3)" }
@@ -40,17 +40,6 @@ optional-dependencies.docs = [
 ]
 urls.repository = "https://github.com/calad0i/da4ml"
 scripts.da4ml = "da4ml._cli:main"
-
-[tool.setuptools]
-packages = [ "da4ml" ]
-include-package-data = true
-package-dir = { "" = "src" }
-
-[tool.setuptools.exclude-package-data]
-"da4ml._binary" = [ "*.so", "*.dll", "*.dylib" ]
-
-[tool.setuptools_scm]
-write_to = "src/da4ml/_version.py"
 
 [tool.ruff]
 target-version = "py310"
