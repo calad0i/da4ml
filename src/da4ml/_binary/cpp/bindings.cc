@@ -4,8 +4,13 @@
 #include <nanobind/stl/vector.h>
 #include "DAISInterpreter.hh"
 #include <cstring>
-#include <omp.h>
 #include <vector>
+
+#ifdef _OPENMP
+#include <omp.h>
+#else
+inline int omp_get_max_threads() { return 1; }
+#endif
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -70,7 +75,10 @@ void run_interp(
 
     // =============== exec ===============
 
+#ifdef _OPENMP
 #pragma omp parallel for num_threads(n_thread) schedule(static)
+#endif
+
     for (size_t i = 0; i < n_thread; ++i) {
         size_t start = i * n_samples_per_thread;
         size_t end = std::min<size_t>(start + n_samples_per_thread, n_samples);
