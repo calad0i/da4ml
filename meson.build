@@ -28,7 +28,7 @@ dais_bin = py.extension_module(
   dependencies: [nanobind_dep, omp_dep],
   install: true,
   subdir: 'da4ml/_binary',
-  cpp_args: ['-std=c++20', '-Wno-sign-compare'],
+  cpp_args: ['-std=c++20', '-Wno-sign-compare', '-Wno-unused-variable'],
 )
 
 install_subdir('src/da4ml',
