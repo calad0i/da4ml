@@ -62,6 +62,7 @@ jobs:
     name: Publish wheels to PyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
+    if: github.event_name == 'release'
     environment:
       name: pypi
       url: https://pypi.org/p/da4ml
