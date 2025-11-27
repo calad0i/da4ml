@@ -72,7 +72,7 @@ class ReplayDenseTable(ReplayOperationBase):
     def call(self, inputs: FixedVariableArray) -> FixedVariableArray:
         op: QDenseT = self.op  # type: ignore
 
-        out = np.broadcast_to(inputs[..., None], (op.n_in, op.n_out))  # type: ignore
+        out = np.broadcast_to(inputs[..., None], inputs.shape + (op.n_out,))  # type: ignore
         out = mirror_quantizer(op.iq, out)
 
         l, h, s = out.lhs
@@ -84,27 +84,29 @@ class ReplayDenseTable(ReplayOperationBase):
         ws, bs, acts = gather_weights_and_activation(model)
 
         out_shape: tuple[int, ...] = tuple(int(x) for x in model.output_shape[1:])  # type: ignore
-        r: list[np.ndarray] = [None] * prod(out_shape)  # type: ignore
+        tables: list[np.ndarray] = [None] * prod(out_shape)  # type: ignore
         n, loc = np.unique(N, return_inverse=True)
 
         for i in range(n.size):
-            mask = loc == i
+            mask: np.ndarray = loc == i
             _l, _h = l[mask], h[mask]
             inp = np.linspace(_l, _h, n[i])
 
             _out = inp[..., None]
 
             idxs = np.where(mask.ravel())[0]
+            mask = mask.reshape(-1, *mask.shape[-2:])
+
             for w, b, act in zip(ws, bs, acts):
-                w = w[mask]
-                b = b[mask]
+                w = np.concatenate([w[_mask] for _mask in mask], axis=0)
+                b = np.concatenate([b[_mask] for _mask in mask], axis=0)
                 _out = act(np.einsum('...ni,nij->...nj', _out, w, optimize='optimal') + b)
             _out = _out[..., 0]
 
             for j, idx in enumerate(idxs):
-                r[idx] = _out[..., j]
+                tables[idx] = _out[..., j]
 
-        assert all(v is not None for v in r)
+        assert all(v is not None for v in tables)
 
         toq = op.toq
         toq_internal: FixedPointQuantizerBase = toq.quantizer
@@ -119,15 +121,15 @@ class ReplayDenseTable(ReplayOperationBase):
 
         round_mode, overflow_mode = toq_internal.round_mode, toq_internal.overflow_mode
         round_mode = round_mode[2:] if round_mode.startswith('S_') else round_mode
-        for arr, _k, _i, _f in zip(r, k, i, f):
+        for arr, _k, _i, _f in zip(tables, k, i, f):
             arr[:] = _quantize(arr, _k, _i, _f, overflow_mode, round_mode)
 
-        rr: list[FixedVariable] = [None] * len(r)  # type: ignore
+        ret_vars: list[FixedVariable] = [None] * len(tables)  # type: ignore
         _vars = out.ravel()._vars
-        for i in range(len(r)):
-            rr[i] = _vars[i].lookup(r[i])
-        out = FixedVariableArray(np.array(rr).reshape(out_shape), solver_options=out.solver_options)
-        out = np.sum(out, axis=0)  # type: ignore
+        for i in range(len(tables)):
+            ret_vars[i] = _vars[i].lookup(tables[i])
+        out = FixedVariableArray(np.array(ret_vars).reshape(out_shape), solver_options=out.solver_options)
+        out = np.sum(out, axis=-2)  # type: ignore
         return out
 
 
