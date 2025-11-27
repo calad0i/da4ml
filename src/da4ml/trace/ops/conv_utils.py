@@ -24,13 +24,13 @@ def r_im2col(kernel_size: Sequence[int], arr: np.ndarray, buffer: np.ndarray, ax
             r_im2col(kernel_size[1:], patch, buffer[i], axis + 1)
 
 
-def _im2col(kernel_size: Sequence[int], arr: np.ndarray):
-    if len(kernel_size) < 3:
+def _im2col(kernel_shape: Sequence[int], arr: np.ndarray):
+    if len(kernel_shape) < 3:
         return arr
-    shape = [inp_d - ker_d + 1 for inp_d, ker_d in zip(arr.shape, kernel_size[:-2])]
-    shape.append(np.prod(kernel_size[:-1]))  # type: ignore
+    shape = [inp_d - ker_d + 1 for inp_d, ker_d in zip(arr.shape, kernel_shape[:-2])]
+    shape.append(np.prod(kernel_shape[:-1]))  # type: ignore
     buf = np.empty(shape, dtype=arr.dtype)
-    r_im2col(kernel_size, arr, buf, 0)
+    r_im2col(kernel_shape, arr, buf, 0)
     return buf
 
 
@@ -43,7 +43,49 @@ def stride_arr(stride: int | tuple[int, ...], arr: np.ndarray):
     return arr[_idx]
 
 
+def im2col(arr: np.ndarray, kernel_size: Sequence[int], stride: int | tuple[int, ...]):
+    """Applies im2col with striding to the input array.
+
+    kernel_size: Sequence[int]
+        The size of the kernel/filter: *px_shape, ch_in, ch_out
+    stride: int | tuple[int, ...]
+        The stride to apply after im2col: *px_shape
+
+    """
+    arr = _im2col(kernel_size, arr)
+    arr = stride_arr(stride, arr)
+    return arr
+
+
 TA = TypeVar('TA', 'FixedVariableArray', NDArray[np.integer | np.floating])
+
+
+def get_padding_size(pixel_shape: tuple[int, ...], padding: str | tuple[tuple[int, int], ...]):
+    if not isinstance(padding, str):
+        return padding
+
+    ndim = len(pixel_shape) + 1
+    padding = padding.upper()
+    if padding == 'VALID':
+        return ((0, 0),) * (ndim - 1)
+    elif padding == 'SAME':
+        _padding = []
+        for i in range(ndim - 1):
+            pad0 = pixel_shape[i] // 2
+            pad1 = pixel_shape[i] - pad0 - 1
+            _padding.append((pad1, pad0))
+        return tuple(_padding)
+    else:
+        raise ValueError(f'Invalid padding {padding}')
+
+
+def pad(pixel_shape: tuple[int, ...], padding: str | tuple[tuple[int, int], ...], data: np.ndarray, constant_values=0, **kwargs):
+    ndim = data.ndim
+    padding = get_padding_size(pixel_shape, padding)
+    assert len(padding) == ndim - 1, f'Invalid padding {padding} for array with {ndim} dimensions'
+    assert all(len(p) == 2 for p in padding), f'Invalid padding {padding} for array with {ndim} dimensions'
+    data = np.pad(data, padding + ((0, 0),), mode='constant', constant_values=constant_values, **kwargs)
+    return data
 
 
 def _conv(
@@ -76,25 +118,9 @@ def _conv(
         strides = (strides,) * (ndim - 1)
     assert len(strides) == ndim - 1, f'Invalid stride {strides} for array with {ndim} dimensions'
 
-    if isinstance(padding, str):
-        padding = padding.upper()
-        if padding == 'VALID':
-            padding = ((0, 0),) * (ndim - 1)
-        elif padding == 'SAME':
-            _padding = []
-            for i in range(ndim - 1):
-                pad0 = kernel.shape[i] // 2
-                pad1 = kernel.shape[i] - pad0 - 1
-                _padding.append((pad1, pad0))
-            padding = tuple(_padding)
-        else:
-            raise ValueError(f'Invalid padding {padding}')
-    assert len(padding) == ndim - 1, f'Invalid padding {padding} for array with {ndim} dimensions'
-    assert all(len(p) == 2 for p in padding), f'Invalid padding {padding} for array with {ndim} dimensions'
-
-    data = np.pad(data, padding + ((0, 0),), mode='constant', constant_values=0.0)
-    data = _im2col(kernel.shape, data)
-    data = stride_arr(strides, data)
+    pixel_shape = kernel.shape[: ndim - 1]
+    data = pad(pixel_shape, padding, data)
+    data = im2col(data, kernel.shape, strides)
     if is_symbolic:
         _data = FixedVariableArray(data, solver_options) @ kernel.reshape(-1, ch_out)
         data = _data._vars
@@ -104,7 +130,7 @@ def _conv(
         data = data + bias
     if isinstance(x, FixedVariableArray):
         return FixedVariableArray(data, solver_options)
-    return data
+    return data  # type: ignore
 
 
 def conv(
