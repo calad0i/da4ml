@@ -43,7 +43,10 @@ def stride_arr(stride: int | tuple[int, ...], arr: np.ndarray):
     return arr[_idx]
 
 
-def im2col(arr: np.ndarray, kernel_size: Sequence[int], stride: int | tuple[int, ...]):
+TA = TypeVar('TA', 'FixedVariableArray', NDArray[np.integer | np.floating])
+
+
+def im2col(arr: TA, kernel_size: Sequence[int], stride: int | tuple[int, ...]) -> TA:
     """Applies im2col with striding to the input array.
 
     kernel_size: Sequence[int]
@@ -52,12 +55,19 @@ def im2col(arr: np.ndarray, kernel_size: Sequence[int], stride: int | tuple[int,
         The stride to apply after im2col: *px_shape
 
     """
-    arr = _im2col(kernel_size, arr)
-    arr = stride_arr(stride, arr)
-    return arr
-
-
-TA = TypeVar('TA', 'FixedVariableArray', NDArray[np.integer | np.floating])
+    if isinstance(arr, FixedVariableArray):
+        solver_options = arr.solver_options
+        is_symbolic = True
+        data = arr._vars
+    else:
+        solver_options = None
+        is_symbolic = False
+        data = arr
+    data = _im2col(kernel_size, data)
+    data = stride_arr(stride, data)
+    if is_symbolic:
+        return FixedVariableArray(data, solver_options)  # type: ignore
+    return data  # type: ignore
 
 
 def get_padding_size(pixel_shape: tuple[int, ...], padding: str | tuple[tuple[int, int], ...]):
@@ -79,12 +89,12 @@ def get_padding_size(pixel_shape: tuple[int, ...], padding: str | tuple[tuple[in
         raise ValueError(f'Invalid padding {padding}')
 
 
-def pad(pixel_shape: tuple[int, ...], padding: str | tuple[tuple[int, int], ...], data: np.ndarray, constant_values=0, **kwargs):
+def pad(pixel_shape: tuple[int, ...], padding: str | tuple[tuple[int, int], ...], data: TA, constant_values=0, **kwargs) -> TA:
     ndim = data.ndim
     padding = get_padding_size(pixel_shape, padding)
     assert len(padding) == ndim - 1, f'Invalid padding {padding} for array with {ndim} dimensions'
     assert all(len(p) == 2 for p in padding), f'Invalid padding {padding} for array with {ndim} dimensions'
-    data = np.pad(data, padding + ((0, 0),), mode='constant', constant_values=constant_values, **kwargs)
+    data = np.pad(data, padding + ((0, 0),), mode='constant', constant_values=constant_values, **kwargs)  # type: ignore
     return data
 
 
