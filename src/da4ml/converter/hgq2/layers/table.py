@@ -3,7 +3,7 @@ from math import prod, sqrt
 
 import keras
 import numpy as np
-from hgq.layers import QDenseT
+from hgq.layers.table import QConvT1D, QConvT2D, QConvTBase, QDenseT
 from hgq.quantizer.internal import FixedPointQuantizerBase
 from keras import ops
 
@@ -11,6 +11,7 @@ from ....trace import FixedVariableArray
 from ....trace.fixed_variable import FixedVariable
 from ....trace.ops import _quantize
 from ._base import ReplayOperationBase, mirror_quantizer, to_np_arr
+from .conv import replay_extract_patches
 
 
 def keras_act_to_numpy(act: Callable) -> Callable:
@@ -155,4 +156,21 @@ class ReplayDenseTable(ReplayOperationBase):
         return out
 
 
-__all__ = ['ReplayDenseTable']
+class ReplayConvTable(ReplayDenseTable):
+    handles = (QConvT2D, QConvT1D, QConvTBase)
+
+    def call(self, inputs: FixedVariableArray):
+        op: QConvTBase = self.op
+
+        if op.rank == 1:
+            inputs = inputs[:, :, None]
+
+        inputs = replay_extract_patches(inputs, **op.im2col_params)
+
+        if op.rank == 1:
+            inputs = inputs[:, :, 0]
+
+        return super().call(inputs)
+
+
+__all__ = ['ReplayDenseTable', 'ReplayConvTable']
