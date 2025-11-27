@@ -479,7 +479,7 @@ class CombLogic(NamedTuple):
         for _op in data[5]:
             op = Op(*_op[:4], QInterval(*_op[4]), *_op[5:])  # type: ignore
             ops.append(op)
-        assert len(data) in (7, 8)
+        assert len(data) in (8, 9), f'{len(data)}'
         lookup_tables = data[8] if len(data) > 8 else None
         if lookup_tables is not None:
             from ..trace.fixed_variable import LookupTable
