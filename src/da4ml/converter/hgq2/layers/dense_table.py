@@ -50,14 +50,21 @@ def keras_act_to_numpy(act: Callable) -> Callable:
 
 def gather_weights_and_activation(model: keras.Sequential):
     ws: list[np.ndarray] = []
-    bs: list[np.ndarray] = []
+    bs: list[np.ndarray | None] = []
     acts: list[Callable[[np.ndarray], np.ndarray]] = []
     for layer in model.layers:
         layer: keras.layers.EinsumDense
-        w, b = layer.get_weights()
+        w, *b = layer.get_weights()
         act = keras_act_to_numpy(layer.activation)
+        if len(b) != 0:
+            assert len(b) == 1
+            b = b[0]
+        else:
+            b = None
         if w.ndim == 3:
-            w, b = w[..., None], b[..., None]
+            w = w[..., None]
+            if b is not None:
+                b = b[..., None]
         ws.append(w)
         bs.append(b)
         acts.append(act)
@@ -99,7 +106,10 @@ class ReplayDenseTable(ReplayOperationBase):
 
             for w, b, act in zip(ws, bs, acts):
                 w = np.concatenate([w[_mask] for _mask in mask], axis=0)
-                b = np.concatenate([b[_mask] for _mask in mask], axis=0)
+                if b is not None:
+                    b = np.concatenate([b[_mask] for _mask in mask], axis=0)
+                else:
+                    b = 0
                 _out = act(np.einsum('...ni,nij->...nj', _out, w, optimize='optimal') + b)
             _out = _out[..., 0]
 
