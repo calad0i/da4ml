@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from math import prod
+from math import prod, sqrt
 
 import keras
 import numpy as np
@@ -84,7 +84,7 @@ class ReplayDenseTable(ReplayOperationBase):
 
         l, h, s = out.lhs
 
-        N: np.ndarray = np.round((h - l) / s).astype(np.uint32) + 1
+        table_sizes: np.ndarray = np.round((h - l) / s).astype(np.uint32) + 1
 
         model = op.module
 
@@ -92,7 +92,7 @@ class ReplayDenseTable(ReplayOperationBase):
 
         out_shape: tuple[int, ...] = tuple(int(x) for x in model.output_shape[1:])  # type: ignore
         tables: list[np.ndarray] = [None] * prod(out_shape)  # type: ignore
-        n, loc = np.unique(N, return_inverse=True)
+        n, loc = np.unique(table_sizes, return_inverse=True)
 
         for i in range(n.size):
             mask: np.ndarray = loc == i
@@ -115,6 +115,19 @@ class ReplayDenseTable(ReplayOperationBase):
 
             for j, idx in enumerate(idxs):
                 tables[idx] = _out[..., j]
+
+        if op.enable_bn:
+            bn = op.bn_module
+            beta: np.ndarray = ops.convert_to_numpy(bn.beta) if bn.center else 1  # type: ignore
+            gamma: np.ndarray = ops.convert_to_numpy(bn.gamma) if bn.scale else 1  # type: ignore
+            m_mean: np.ndarray = ops.convert_to_numpy(bn.moving_mean)  # type: ignore
+            m_var: np.ndarray = ops.convert_to_numpy(bn.moving_variance)  # type: ignore
+            epsilon = bn.epsilon
+            scaler = gamma / np.sqrt(m_var + epsilon)
+            offset = beta - m_mean * scaler
+
+            for i in range(len(tables)):
+                tables[i][:] = (tables[i] * scaler[i % op.n_out] + offset[i % op.n_out]) / sqrt(op.n_in)
 
         assert all(v is not None for v in tables)
 
