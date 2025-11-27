@@ -37,7 +37,7 @@ class HLSModel:
     ):
         self._solution = solution
         self._prj_name = prj_name
-        self._path = Path(path)
+        self._path = Path(path).resolve()
         self._flavor = flavor.lower()
         assert self._flavor in ('vitis', 'hlslib', 'oneapi'), f'Unsupported HLS flavor: {self._flavor}'
         self._print_latency = print_latency

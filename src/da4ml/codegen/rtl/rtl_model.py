@@ -54,7 +54,7 @@ class RTLModel:
     ):
         self._flavor = flavor.lower()
         self._solution = solution
-        self._path = Path(path)
+        self._path = Path(path).resolve()
         self._prj_name = prj_name
         self._latency_cutoff = latency_cutoff
         self._print_latency = print_latency
