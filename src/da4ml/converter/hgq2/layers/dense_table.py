@@ -7,11 +7,10 @@ from hgq.layers import QDenseT
 from hgq.quantizer.internal import FixedPointQuantizerBase
 from keras import ops
 
-from ....converter.hgq2.layers._base import mirror_quantizer
 from ....trace import FixedVariableArray
 from ....trace.fixed_variable import FixedVariable
 from ....trace.ops import _quantize
-from ._base import ReplayOperationBase, to_np_arr
+from ._base import ReplayOperationBase, mirror_quantizer, to_np_arr
 
 
 def keras_act_to_numpy(act: Callable) -> Callable:

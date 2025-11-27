@@ -37,6 +37,26 @@ class ReplayQConv(ReplayOperationBase):
         return outputs
 
 
+def replay_extract_patches(
+    images: FixedVariableArray,
+    size: tuple[int, int],
+    strides: tuple[int, int],
+    dilation_rate: tuple[int, int],
+    padding: str,
+    data_format: str,
+) -> FixedVariableArray:
+    if data_format == 'channels_first':
+        images = np.moveaxis(images, 0, -1)  # type: ignore
+
+    images = pad(size, padding, images)
+    images = im2col(images, size, strides)
+
+    if data_format == 'channels_first':
+        images = np.moveaxis(images, -1, 0)  # type: ignore
+
+    return images
+
+
 class ReplayExtractPatches(ReplayOperationBase):
     handles = (ExtractPatches,)
 
@@ -44,27 +64,19 @@ class ReplayExtractPatches(ReplayOperationBase):
         op: ExtractPatches = self.op
         pixel_shape = op.size
         strides = op.strides
-        dilation_rate = op.dilation_rate
+        dilation_rate: int | tuple[int, int] = op.dilation_rate
         padding = op.padding
         data_format = op.data_format
 
         if strides is None:
             strides = 1
-        if not isinstance(strides, tuple):
-            strides = (strides,) * len(pixel_shape)
+        if isinstance(strides, int):
+            strides = (strides, strides)
+        if isinstance(dilation_rate, int):
+            dilation_rate = (dilation_rate, dilation_rate)
+        assert dilation_rate == (1, 1), f'Dilation rate other than 1 is not supported, got {dilation_rate}'
 
-        assert dilation_rate == 1, 'Non-one dilation rate is not yet supported'
-
-        if data_format == 'channels_first':
-            images = np.moveaxis(images, 0, -1)  # type: ignore
-
-        images = pad(pixel_shape, padding, images)
-        images = im2col(images, pixel_shape, strides)
-
-        if data_format == 'channels_first':
-            images = np.moveaxis(images, -1, 0)  # type: ignore
-
-        return images
+        return replay_extract_patches(images, pixel_shape, strides, dilation_rate, padding, data_format)
 
 
 __all__ = ['ReplayQConv', 'ReplayExtractPatches']
