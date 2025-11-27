@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Literal, overload
+from typing import Literal, overload
 
 from ..cmvm.api import solver_options_t
 from ..trace import FixedVariableArray, HWConfig
@@ -32,7 +32,7 @@ def trace_model(  # type: ignore
 def trace_model(  # type: ignore
     model: Callable,
     hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
-    solver_options: dict[str, Any] | None = None,
+    solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | None = None,
     dump=False,

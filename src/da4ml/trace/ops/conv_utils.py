@@ -12,25 +12,25 @@ if typing.TYPE_CHECKING:
     from ..fixed_variable_array import FixedVariableArray
 
 
-def r_im2col(kernel_size: Sequence[int], arr: np.ndarray, buffer: np.ndarray, axis: int):
-    w = kernel_size[0]
-    if len(kernel_size) == 3:  # 1D
+def r_im2col(pixel_size: Sequence[int], arr: np.ndarray, buffer: np.ndarray, axis: int):
+    w = pixel_size[axis]
+    if len(pixel_size) == axis + 1:  # last dimension, ret
         for i in range(arr.shape[axis] - w + 1):
             patch = np.take(arr, range(i, i + w), axis=axis)
             buffer[i] = patch.flatten()
-    else:  # 2D+
+    else:  # recurse
         for i in range(arr.shape[axis] - w + 1):
             patch = arr[i : i + w]
-            r_im2col(kernel_size[1:], patch, buffer[i], axis + 1)
+            r_im2col(pixel_size, patch, buffer[i], axis + 1)
 
 
-def _im2col(kernel_shape: Sequence[int], arr: np.ndarray):
-    if len(kernel_shape) < 3:
+def _im2col(pixel_shape: Sequence[int], arr: np.ndarray):
+    if len(pixel_shape) == 0:
         return arr
-    shape = [inp_d - ker_d + 1 for inp_d, ker_d in zip(arr.shape, kernel_shape[:-2])]
-    shape.append(np.prod(kernel_shape[:-1]))  # type: ignore
+    shape = [inp_d - ker_d + 1 for inp_d, ker_d in zip(arr.shape, pixel_shape)]
+    shape.append(prod(pixel_shape) * arr.shape[-1])
     buf = np.empty(shape, dtype=arr.dtype)
-    r_im2col(kernel_shape, arr, buf, 0)
+    r_im2col(pixel_shape, arr, buf, 0)
     return buf
 
 
@@ -46,7 +46,7 @@ def stride_arr(stride: int | tuple[int, ...], arr: np.ndarray):
 TA = TypeVar('TA', 'FixedVariableArray', NDArray[np.integer | np.floating])
 
 
-def im2col(arr: TA, kernel_size: Sequence[int], stride: int | tuple[int, ...]) -> TA:
+def im2col(arr: TA, pixel_size: Sequence[int], stride: int | tuple[int, ...]) -> TA:
     """Applies im2col with striding to the input array.
 
     kernel_size: Sequence[int]
@@ -55,6 +55,8 @@ def im2col(arr: TA, kernel_size: Sequence[int], stride: int | tuple[int, ...]) -
         The stride to apply after im2col: *px_shape
 
     """
+    from ..fixed_variable_array import FixedVariableArray
+
     if isinstance(arr, FixedVariableArray):
         solver_options = arr.solver_options
         is_symbolic = True
@@ -63,7 +65,7 @@ def im2col(arr: TA, kernel_size: Sequence[int], stride: int | tuple[int, ...]) -
         solver_options = None
         is_symbolic = False
         data = arr
-    data = _im2col(kernel_size, data)
+    data = _im2col(pixel_size, data)
     data = stride_arr(stride, data)
     if is_symbolic:
         return FixedVariableArray(data, solver_options)  # type: ignore
@@ -130,7 +132,7 @@ def _conv(
 
     pixel_shape = kernel.shape[: ndim - 1]
     data = pad(pixel_shape, padding, data)
-    data = im2col(data, kernel.shape, strides)
+    data = im2col(data, pixel_shape, strides)
     if is_symbolic:
         _data = FixedVariableArray(data, solver_options) @ kernel.reshape(-1, ch_out)
         data = _data._vars
@@ -245,8 +247,7 @@ def pool(
 
     data = np.pad(data, padding + ((0, 0),), mode='constant', constant_values=-np.inf)
     ch_in = data.shape[-1]
-    fake_kernel_shape = tuple(pool_size) + (ch_in, ch_in)
-    data = _im2col(fake_kernel_shape, data)
+    data = _im2col(tuple(pool_size), data)
     data = data.reshape(*data.shape[:-1], prod(pool_size), ch_in)
     data = stride_arr(tuple(strides), data)
     if pool_type == 'avg':
