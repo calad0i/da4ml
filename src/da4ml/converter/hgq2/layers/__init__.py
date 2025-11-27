@@ -1,6 +1,7 @@
 from ._base import _registry
 from .activation import *
 from .attn import *
+from .batchnorm import *
 from .conv import *
 from .dense import *
 from .dense_table import *
