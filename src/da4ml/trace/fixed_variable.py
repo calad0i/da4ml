@@ -169,7 +169,8 @@ class LookupTable:
 
     def get_uuid(self, qint: QInterval) -> UUID:
         pad_left, _ = self._get_pads(qint)
-        _int = int(self.spec.hash[:32], 16) ^ pad_left
+        sign = 1 if qint.min < 0 else 0
+        _int = int(self.spec.hash[:32], 16) ^ pad_left ^ (sign << 32)
         return UUID(int=_int, version=4)
 
 
