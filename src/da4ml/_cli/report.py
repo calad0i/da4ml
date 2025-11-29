@@ -155,7 +155,7 @@ def pretty_print(arr: list[list]):
                 else:
                     _v = str(v)
                     if len(_v) > w:
-                        fmt = f'{{:.{w - n_int - 1}f}}'
+                        fmt = f'{{:.{max(w - n_int - 1, 0)}f}}'
                         _v = fmt.format(v).ljust(w)
                     else:
                         _v = _v.ljust(w)
