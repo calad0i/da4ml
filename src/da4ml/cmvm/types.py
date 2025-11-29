@@ -453,6 +453,11 @@ class CombLogic(NamedTuple):
         return buf
 
     @property
+    def out_kifs(self):
+        """KIFs of all output elements of the solution."""
+        return np.array([_minimal_kif(qi) for qi in self.out_qint]).T
+
+    @property
     def inp_latency(self):
         """Latencies of all input elements of the solution."""
         return [op.latency for op in self.ops if op.opcode == -1]
@@ -466,6 +471,11 @@ class CombLogic(NamedTuple):
                 continue
             qints[op.id0] = op.qint
         return qints
+
+    @property
+    def inp_kifs(self):
+        """KIFs of all input elements of the solution."""
+        return np.array([_minimal_kif(qi) for qi in self.inp_qint]).T
 
     def save(self, path: str | Path):
         """Save the solution to a file."""
