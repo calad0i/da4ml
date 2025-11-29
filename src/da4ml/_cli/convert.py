@@ -19,6 +19,7 @@ def to_da4ml(
     hw_config: tuple[int, int, int] = (1, -1, -1),
     hard_dc: int = 2,
     openmp: bool = True,
+    n_thread: int = 4,
 ):
     from da4ml.cmvm.types import CombLogic
     from da4ml.codegen import RTLModel
@@ -69,7 +70,7 @@ def to_da4ml(
             y_keras = np.concatenate([y.reshape(n_test_sample, -1) for y in y_keras], axis=1)
         else:
             y_keras = y_keras.reshape(n_test_sample, -1)
-        y_comb = comb.predict(data_in, n_threads=4)
+        y_comb = comb.predict(data_in, n_thread=n_thread)
 
         total = y_comb.size
         mask = y_comb != y_keras
@@ -104,7 +105,7 @@ def to_da4ml(
         if not rtl_validation:
             return
         data_in = np.random.rand(n_test_sample, comb.shape[0]).astype(np.float32) * 64 - 32
-        y_comb = comb.predict(data_in, n_threads=4)
+        y_comb = comb.predict(data_in, n_threads=n_thread)
         total = y_comb.size
 
     if not rtl_validation:
@@ -114,7 +115,7 @@ def to_da4ml(
         print('Verilating...')
     for _ in range(3):
         try:
-            rtl_model._compile(nproc=4, openmp=openmp)
+            rtl_model._compile(nproc=n_thread, openmp=openmp)
             break
         except RuntimeError:
             pass
@@ -143,6 +144,7 @@ def convert_main(args):
         hw_config=hw_conf,
         hard_dc=args.delay_constraint,
         openmp=not args.no_openmp,
+        n_thread=args.n_thread,
     )
 
 
@@ -157,6 +159,7 @@ def _add_convert_args(parser: argparse.ArgumentParser):
     parser.add_argument('--part-name', '-p', type=str, default='xcvu13p-flga2577-2-e', help='FPGA part name')
     parser.add_argument('--verbose', '-v', default=1, type=int, help='Set verbosity level (0: silent, 1: info, 2: debug)')
     parser.add_argument('--validate-rtl', '-vr', action='store_true', help='Validate RTL by Verilator (and GHDL)')
+    parser.add_argument('--n-thread', '-j', type=int, default=4, help='Number of threads for compilation and DAIS simulation')
     parser.add_argument(
         '--hw-config',
         '-hc',
