@@ -66,7 +66,7 @@ file mkdir "${output_dir}/reports"
 
 # synth
 synth_design -top $top_module -mode out_of_context -global_retiming on \
-    -flatten_hierarchy full -resource_sharing auto -directive PerformanceOptimized
+    -flatten_hierarchy full -resource_sharing auto -directive AreaOptimized_High
 
 write_checkpoint -force "${output_dir}/${project_name}_post_synth.dcp"
 
