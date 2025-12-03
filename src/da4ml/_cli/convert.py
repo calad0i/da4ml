@@ -56,6 +56,7 @@ def to_da4ml(
     )
     rtl_model.write()
     if verbose > 1:
+        print(rtl_model)
         print('Model written')
     if not n_test_sample:
         return
@@ -135,7 +136,7 @@ def convert_main(args):
         args.outdir,
         args.n_test_sample,
         args.clock_period,
-        args.unc,
+        args.clock_uncertainty,
         latency_cutoff=args.latency_cutoff,
         part_name=args.part_name,
         flavor=args.flavor,
@@ -153,9 +154,9 @@ def _add_convert_args(parser: argparse.ArgumentParser):
     parser.add_argument('outdir', type=Path, help='Output directory')
     parser.add_argument('--n-test-sample', '-n', type=int, default=131072, help='Number of test samples for validation')
     parser.add_argument('--clock-period', '-c', type=float, default=5.0, help='Clock period in ns')
-    parser.add_argument('--unc', type=float, default=10.0, help='Clock uncertainty in percent')
+    parser.add_argument('--clock-uncertainty', '-unc', type=float, default=10.0, help='Clock uncertainty in percent')
     parser.add_argument('--flavor', type=str, default='verilog', help='Flavor for DA4ML (verilog/vhdl)')
-    parser.add_argument('--latency-cutoff', '-l', type=int, default=5, help='Latency cutoff for pipelining')
+    parser.add_argument('--latency-cutoff', '-lc', type=float, default=5, help='Latency cutoff for pipelining')
     parser.add_argument('--part-name', '-p', type=str, default='xcvu13p-flga2577-2-e', help='FPGA part name')
     parser.add_argument('--verbose', '-v', default=1, type=int, help='Set verbosity level (0: silent, 1: info, 2: debug)')
     parser.add_argument('--validate-rtl', '-vr', action='store_true', help='Validate RTL by Verilator (and GHDL)')

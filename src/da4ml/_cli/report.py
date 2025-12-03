@@ -67,7 +67,7 @@ def parse_utilization(utilization: str):
 def load_project(path: str | Path):
     path = Path(path)
     build_tcl_path = path / 'build_vivado_prj.tcl'
-    assert build_tcl_path.exists(), f'build_prj.tcl not found in {path}'
+    assert build_tcl_path.exists(), f'build_vivado_prj.tcl not found in {path}'
     top_name = build_tcl_path.read_text().split('"', 2)[1]
 
     with open(path / f'src/{top_name}.xdc') as f:
@@ -82,7 +82,7 @@ def load_project(path: str | Path):
         with open(path / f'src/{top_name}.v') as f:  # type: ignore
             latency = f.read().count('reg') - 1
 
-    d = {'clock_period': target_clock_period, 'latency': latency, **metadata}
+    d = {**metadata, 'clock_period': target_clock_period, 'latency': latency}
 
     if (path / f'output_{top_name}/reports/{top_name}_post_route_util.rpt').exists():
         with open(path / f'output_{top_name}/reports/{top_name}_post_route_util.rpt') as f:
