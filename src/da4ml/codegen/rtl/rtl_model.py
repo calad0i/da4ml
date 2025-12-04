@@ -24,6 +24,43 @@ def get_io_kifs(sol: CombLogic | Pipeline):
     return np.array(inp_kifs, np.int8), np.array(out_kifs, np.int8)
 
 
+def binder_gen(csol: Pipeline | CombLogic, module_name: str, II: int = 1, latency_multiplier: int = 1):
+    k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
+    k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
+    max_inp_bw = max(k_in) + max(i_in) + max(f_in)
+    max_out_bw = max(k_out) + max(i_out) + max(f_out)
+    if isinstance(csol, CombLogic):
+        II = latency = 0
+    else:
+        latency = len(csol.solutions) * latency_multiplier
+
+    n_in, n_out = csol.shape
+    return f"""#include <cstddef>
+#include "binder_util.hh"
+#include "V{module_name}.h"
+
+struct {module_name}_config {{
+    static const size_t N_inp = {n_in};
+    static const size_t N_out = {n_out};
+    static const size_t max_inp_bw = {max_inp_bw};
+    static const size_t max_out_bw = {max_out_bw};
+    static const size_t II = {II};
+    static const size_t latency = {latency};
+    typedef V{module_name} dut_t;
+}};
+
+extern "C" {{
+bool openmp_enabled() {{
+    return _openmp;
+}}
+
+void inference(int32_t *c_inp, int32_t *c_out, size_t n_samples, size_t n_threads) {{
+    batch_inference<{module_name}_config>(c_inp, c_out, n_samples, n_threads);
+}}
+}}
+"""
+
+
 class at_path:
     def __init__(self, path: str | Path):
         self._path = Path(path)
@@ -92,9 +129,9 @@ class RTLModel:
         flavor = self._flavor
         suffix = 'v' if flavor == 'verilog' else 'vhd'
         if flavor == 'vhdl':
-            from .vhdl import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
+            from .vhdl import comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
         else:  # verilog
-            from .verilog import binder_gen, comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
+            from .verilog import comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
 
         from .verilog.comb import table_mem_gen
 
@@ -302,7 +339,7 @@ class RTLModel:
         self.write(metadata=metadata)
         self._compile(verbose=verbose, openmp=openmp, nproc=nproc, o3=o3, clean=clean)
 
-    def predict(self, data: NDArray[np.floating] | Sequence[NDArray[np.floating]]) -> NDArray[np.float32]:
+    def predict(self, data: NDArray | Sequence[NDArray], n_threads: int = 0) -> NDArray[np.float32]:
         """Run the model on the input data.
 
         Parameters
@@ -342,7 +379,7 @@ class RTLModel:
         out_buf = out_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
 
         with at_path(self._path / 'src/memfiles'):
-            self._lib.inference(inp_buf, out_buf, n_sample)
+            self._lib.inference(inp_buf, out_buf, n_sample, n_threads)
 
         # Unscale the output int32 to recover fp values
         k, i, f = np.max(k_out), np.max(i_out), np.max(f_out)

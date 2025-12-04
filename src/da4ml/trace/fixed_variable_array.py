@@ -267,6 +267,7 @@ class FixedVariableArray:
         latency: np.ndarray | float = 0.0,
         solver_options: solver_options_t | None = None,
     ):
+        low, high, step = np.array(low), np.array(high), np.array(step)
         shape = low.shape
         assert shape == high.shape == step.shape
 

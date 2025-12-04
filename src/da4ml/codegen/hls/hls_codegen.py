@@ -185,12 +185,12 @@ bool openmp_enabled() {{
     return _openmp;
 }}
 
-void inference_f64(double *model_inp, double *model_out, size_t size) {{
-    batch_inference<{fn_name}_config, double>(model_inp, model_out, size);
+void inference_f64(double *model_inp, double *model_out, size_t size, size_t n_threads) {{
+    batch_inference<{fn_name}_config, double>(model_inp, model_out, size, n_threads);
 }}
 
-void inference_f32(float *model_inp, float *model_out, size_t size) {{
-    batch_inference<{fn_name}_config, float>(model_inp, model_out, size);
+void inference_f32(float *model_inp, float *model_out, size_t size, size_t n_threads) {{
+    batch_inference<{fn_name}_config, float>(model_inp, model_out, size, n_threads);
 }}
 }}"""
     return code, bridge

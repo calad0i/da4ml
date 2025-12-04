@@ -192,7 +192,7 @@ class HLSModel:
         self.write()
         self._compile(verbose, openmp, o3, clean)
 
-    def predict(self, data: NDArray[T] | Sequence[NDArray[T]]) -> NDArray[T]:
+    def predict(self, data: NDArray[T] | Sequence[NDArray[T]], n_threads: int = 0) -> NDArray[T]:
         """Run the model on the input data.
 
         Parameters
@@ -226,9 +226,9 @@ class HLSModel:
         inp_buf = inp_data.ctypes.data_as(ctypes.POINTER(c_dtype))
         out_buf = out_data.ctypes.data_as(ctypes.POINTER(c_dtype))
         if dtype == np.float32:
-            self._lib.inference_f32(inp_buf, out_buf, n_sample)
+            self._lib.inference_f32(inp_buf, out_buf, n_sample, n_threads)
         else:
-            self._lib.inference_f64(inp_buf, out_buf, n_sample)
+            self._lib.inference_f64(inp_buf, out_buf, n_sample, n_threads)
 
         return out_data.reshape(n_sample, out_size)  # type: ignore
 
