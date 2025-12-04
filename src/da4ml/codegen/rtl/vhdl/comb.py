@@ -11,7 +11,6 @@ def make_neg(
     assigns: list[str],
     idx: int,
     qint: QInterval,
-    bw0: int,
     v0_name: str,
     neg_repo: dict[int, tuple[int, str]],
 ):
@@ -19,7 +18,8 @@ def make_neg(
         return neg_repo[idx]
     _min, _max, step = qint
     was_signed = int(_min < 0)
-    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
+    bw0 = sum(_minimal_kif(qint))
+    bw_neg = sum(_minimal_kif(QInterval(-_max, -_min, step)))
     signals.append(f'signal v{idx}_neg : std_logic_vector({bw_neg - 1} downto {0});')
     assigns.append(
         f'op_neg_{idx} : entity work.negative generic map (BW_IN => {bw0}, BW_OUT => {bw_neg}, IN_SIGNED => {was_signed}) port map (neg_in => {v0_name}, neg_out => v{idx}_neg);'
@@ -71,7 +71,7 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
                 if op.opcode == -2:
-                    bw0, v0_name = make_neg(signals, assigns, op.id0, ops[op.id0].qint, bw0, v0_name, neg_repo)
+                    bw0, v0_name = make_neg(signals, assigns, op.id0, ops[op.id0].qint, v0_name, neg_repo)
                 if ops[op.id0].qint.min < 0:
                     if bw > 1:
                         line = f'v{i} <= {v0_name}({i0} downto {i1}) and ({bw - 1} downto 0 => not {v0_name}({bw0 - 1}));'
@@ -86,7 +86,7 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
                 if op.opcode == -3:
-                    bw0, v0_name = make_neg(signals, assigns, op.id0, ops[op.id0].qint, bw0, v0_name, neg_repo)
+                    bw0, v0_name = make_neg(signals, assigns, op.id0, ops[op.id0].qint, v0_name, neg_repo)
 
                 if i0 >= bw0:
                     if op.opcode == 3:
@@ -167,7 +167,7 @@ def output_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]]):
             continue
         bw = widths[i]
         if sol.out_negs[i]:
-            _, name = make_neg(signals, assigns, idx, sol.out_qint[i], widths[idx], f'v{idx}', neg_repo)
+            bw, name = make_neg(signals, assigns, idx, sol.ops[idx].qint, f'v{idx}', neg_repo)
             assigns.append(f'model_out({i0} downto {i1}) <= {name}({bw - 1} downto {0});')
         else:
             assigns.append(f'model_out({i0} downto {i1}) <= v{idx}({bw - 1} downto {0});')

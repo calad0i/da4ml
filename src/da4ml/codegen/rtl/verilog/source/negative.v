@@ -22,7 +22,9 @@ module negative #(
       end
       assign out = -in_ext;
     end else begin : in_is_bigger
-      assign out = -in[BW_OUT-1:0];
+      wire [BW_IN-1:0] out_ext;
+      assign out_ext = -in;
+      assign out = out_ext[BW_OUT-1:0];
     end
   endgenerate
   /* verilator lint_on WIDTHTRUNC */

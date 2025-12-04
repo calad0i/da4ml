@@ -5,11 +5,14 @@ import numpy as np
 from ....cmvm.types import CombLogic, Op, QInterval, _minimal_kif
 
 
-def make_neg(lines: list[str], idx: int, qint: QInterval, bw0: int, v0_name: str, neg_repo: dict[int, tuple[int, str]]):
+def make_neg(lines: list[str], idx: int, qint: QInterval, v0_name: str, neg_repo: dict[int, tuple[int, str]]):
+    if idx == 21568:
+        pass
     if idx in neg_repo:
         return neg_repo[idx]
     _min, _max, step = qint
-    bw_neg = max(sum(_minimal_kif(QInterval(-_max, -_min, step))), bw0)
+    bw0 = sum(_minimal_kif(qint))
+    bw_neg = sum(_minimal_kif(QInterval(-_max, -_min, step)))
     was_signed = int(_min < 0)
     lines.append(
         f'wire [{bw_neg - 1}:0] v{idx}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{idx} ({v0_name}, v{idx}_neg);'
@@ -84,7 +87,7 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 bw0 = widths[op.id0]
 
                 if op.opcode == -2:
-                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, bw0, v0_name, neg_repo)
+                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, v0_name, neg_repo)
                 if ops[op.id0].qint.min < 0:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}] & {{{bw}{{~{v0_name}[{bw0 - 1}]}}}};'
                 else:
@@ -97,7 +100,7 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 bw0 = widths[op.id0]
 
                 if op.opcode == -3:
-                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, bw0, v0_name, neg_repo)
+                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, v0_name, neg_repo)
 
                 if i0 >= bw0:
                     if op.opcode == 3:
@@ -183,7 +186,7 @@ def output_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]]) -> list[str
             continue
         bw = widths[i]
         if sol.out_negs[i]:
-            _, name = make_neg(lines, idx, sol.ops[idx].qint, bw, f'v{idx}', neg_repo)
+            _, name = make_neg(lines, idx, sol.ops[idx].qint, f'v{idx}', neg_repo)
             lines.append(f'assign model_out[{i0}:{i1}] = {name}[{bw - 1}:0];')
 
         else:
