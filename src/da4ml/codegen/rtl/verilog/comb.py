@@ -1,4 +1,6 @@
+from hashlib import sha256
 from math import ceil, log2
+from uuid import UUID
 
 import numpy as np
 
@@ -35,11 +37,11 @@ def gen_mem_file(sol: CombLogic, op: Op) -> str:
 
 
 def get_table_name(sol: CombLogic, op: Op) -> str:
-    assert sol.lookup_tables is not None
-    assert op.opcode == 8
-    qint_in = sol.ops[op.id0].qint
-    uuid = sol.lookup_tables[op.data].get_uuid(qint_in)
-    return f'lut_{uuid}.mem'
+    memfile = gen_mem_file(sol, op)
+    hash_obj = sha256(memfile.encode('utf-8'))
+    _int = int(hash_obj.hexdigest()[:32], 16)
+    uuid = UUID(int=_int, version=4)
+    return f'table_{str(uuid)}.mem'
 
 
 def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency: bool = False) -> list[str]:

@@ -167,12 +167,6 @@ class LookupTable:
             data = np.roll(data, size // 2)
         return data
 
-    def get_uuid(self, qint: QInterval) -> UUID:
-        pad_left, _ = self._get_pads(qint)
-        sign = 1 if qint.min < 0 else 0
-        _int = int(self.spec.hash[:32], 16) ^ pad_left ^ (sign << 32)
-        return UUID(int=_int, version=4)
-
 
 def _const_f(const: float | Decimal):
     """Get the minimum f such that const * 2^f is an integer."""
