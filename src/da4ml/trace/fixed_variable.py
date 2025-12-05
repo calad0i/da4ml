@@ -518,6 +518,16 @@ class FixedVariable:
             hwconf=self.hwconf,
         )
 
+    def __lshift__(self, other: int):
+        assert isinstance(other, int), 'Shift amount must be an integer'
+        shift_amount = 2.0**other
+        return self * shift_amount
+
+    def __rshift__(self, other: int):
+        assert isinstance(other, int), 'Shift amount must be an integer'
+        shift_amount = 2.0**-other
+        return self * shift_amount
+
     def __radd__(self, other: 'float|Decimal|int|FixedVariable'):
         return self + other
 
@@ -647,7 +657,7 @@ class FixedVariable:
             _low = floor(self.low / step) * step
             _i = max(_i, ceil(log2(-_low)))
 
-        i = min(i, _i)
+        i = min(i, _i + (k == 0 and _k == 1))
 
         if i + k + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
@@ -695,6 +705,17 @@ class FixedVariable:
         if self._factor < 0:
             return (-self).msb_mux(b, a, qint)
 
+        if self.opr == 'const':
+            if self.low >= 0:
+                return b
+            else:
+                return b if log2(abs(self.low)) % 1 == 0 else a
+        elif self.opr == 'quantize':
+            k, i, _ = self.kif
+            pk, pi, _ = self._from[0].kif
+            if k + i == pk + pi:
+                return self._from[0].msb_mux(a, b, qint=qint)
+
         if a._factor < 0:
             qint = (-qint[1], -qint[0], qint[2]) if qint else None
             return -(self.msb_mux(-a, -b, qint=qint))
@@ -714,6 +735,51 @@ class FixedVariable:
             hwconf=self.hwconf,
             cost=dcost,
         )
+
+    def is_negative(self) -> 'FixedVariable|bool':
+        if self.low >= 0:
+            return False
+        if self.high < 0:
+            return True
+        _, i, _ = self.kif
+        sign_bit = self.quantize(0, i + 1, -i) >> i
+        return sign_bit
+
+    def is_positive(self) -> 'FixedVariable|bool':
+        return (-self).is_negative()
+
+    def __abs__(self):
+        if self.low >= 0:
+            return self
+        step = self.step
+        high = max(-self.low, self.high)
+        return self.msb_mux(-self, self, (Decimal(0), high, step))
+
+    def abs(self):
+        """Get the absolute value of this variable."""
+        return abs(self)
+
+    def __gt__(self, other: 'FixedVariable|float|Decimal|int'):
+        """Get a variable that is 1 if this variable is greater than other, else 0."""
+        return (self - other).is_positive()
+
+    def __lt__(self, other: 'FixedVariable|float|Decimal|int'):
+        """Get a variable that is 1 if this variable is less than other, else 0."""
+        return (other - self).is_positive()
+
+    # def __ge__(self, other: 'FixedVariable|float|Decimal|int'):
+    #     """Get a variable that is 1 if this variable is greater than or equal to other, else 0."""
+    #     r = (other - self).is_negative()
+    #     if isinstance(r, bool):
+    #         return not r
+    #     return ~r
+
+    # def __le__(self, other: 'FixedVariable|float|Decimal|int'):
+    #     """Get a variable that is 1 if this variable is less than or equal to other, else 0."""
+    #     r = (self - other).is_negative()
+    #     if isinstance(r, bool):
+    #         return not r
+    #     return ~r
 
     def max_of(self, other):
         """Get the maximum of this variable and another variable or constant."""

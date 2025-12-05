@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from decimal import Decimal
 from inspect import signature
 from typing import TypeVar
 
@@ -184,9 +183,11 @@ class FixedVariableArray:
             case np.add | np.subtract | np.multiply | np.true_divide | np.negative:
                 inputs = [to_raw_arr(x) for x in inputs]
                 return FixedVariableArray(ufunc(*inputs, **kwargs), self.solver_options)
+
             case np.negative:
                 assert len(inputs) == 1
                 return FixedVariableArray(ufunc(to_raw_arr(inputs[0]), **kwargs), self.solver_options)
+
             case np.maximum | np.minimum:
                 op = _max_of if ufunc is np.maximum else _min_of
                 a, b = np.broadcast_arrays(inputs[0], inputs[1])
@@ -196,6 +197,7 @@ class FixedVariableArray:
                 for i in range(a.size):
                     r[i] = op(a[i], b[i])
                 return FixedVariableArray(r.reshape(shape), self.solver_options)
+
             case np.matmul:
                 assert len(inputs) == 2
                 assert isinstance(inputs[0], FixedVariableArray) or isinstance(inputs[1], FixedVariableArray)
@@ -203,6 +205,7 @@ class FixedVariableArray:
                     return inputs[0].matmul(inputs[1])
                 else:
                     return inputs[1].rmatmul(inputs[0])
+
             case np.power:
                 assert len(inputs) == 2
                 base, exp = inputs
@@ -211,18 +214,8 @@ class FixedVariableArray:
             case np.abs | np.absolute:
                 assert len(inputs) == 1
                 assert inputs[0] is self
-                mask: np.ndarray = (self.kif[0] == 0).ravel()
                 arr = self._vars.ravel()
-
-                r = np.empty(arr.size, dtype=object)
-                for i in range(arr.size):
-                    if mask[i]:
-                        r[i] = arr[i]
-                        continue
-                    v = arr[i]
-                    v = v.msb_mux(-v, v)
-                    v.low = Decimal(0)
-                    r[i] = v
+                r = np.array([v.__abs__() for v in arr])
                 return FixedVariableArray(r.reshape(self.shape), self.solver_options)
 
             case np.square:
@@ -275,7 +268,7 @@ class FixedVariableArray:
         latency = np.full_like(low, latency) if isinstance(latency, (int, float)) else latency.ravel()
 
         vars = []
-        for i, (l, h, s, lat) in enumerate(zip(low, high, step, latency)):
+        for l, h, s, lat in zip(low, high, step, latency):
             var = FixedVariable(
                 low=float(l),
                 high=float(h),
