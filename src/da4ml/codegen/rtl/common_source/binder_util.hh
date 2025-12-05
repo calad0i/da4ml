@@ -26,15 +26,14 @@ _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
 
         dut->clk = 0;
         dut->eval();
+        dut->clk = 1;
+        dut->eval();
 
         if (t_inp > CONFIG_T::latency && t_out % CONFIG_T::II == 0) {
             read_output<CONFIG_T::N_out, CONFIG_T::max_out_bw>(
                 dut->model_out, &c_out[t_out / CONFIG_T::II * CONFIG_T::N_out]
             );
         }
-
-        dut->clk = 1;
-        dut->eval();
     }
 
     dut->final();
