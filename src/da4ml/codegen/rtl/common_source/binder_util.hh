@@ -13,10 +13,10 @@ std::enable_if_t<CONFIG_T::II != 0>
 _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
     auto dut = std::make_unique<typename CONFIG_T::dut_t>();
 
-    size_t clk_req = n_samples * CONFIG_T::II + CONFIG_T::latency + 1;
+    size_t clk_req = n_samples * CONFIG_T::II + CONFIG_T::latency;
 
     for (size_t t_inp = 0; t_inp < clk_req; ++t_inp) {
-        size_t t_out = t_inp - CONFIG_T::latency - 1;
+        size_t t_out = t_inp - CONFIG_T::latency;
 
         if (t_inp < n_samples * CONFIG_T::II && t_inp % CONFIG_T::II == 0) {
             write_input<CONFIG_T::N_inp, CONFIG_T::max_inp_bw>(
@@ -29,7 +29,7 @@ _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
         dut->clk = 1;
         dut->eval();
 
-        if (t_inp > CONFIG_T::latency && t_out % CONFIG_T::II == 0) {
+        if (t_inp >= CONFIG_T::latency && t_out % CONFIG_T::II == 0) {
             read_output<CONFIG_T::N_out, CONFIG_T::max_out_bw>(
                 dut->model_out, &c_out[t_out / CONFIG_T::II * CONFIG_T::N_out]
             );
