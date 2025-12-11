@@ -4,6 +4,7 @@ import os
 import re
 from math import ceil, log10
 from pathlib import Path
+from typing import Any
 
 
 def parse_timing_summary(timing_summary: str):
@@ -64,7 +65,7 @@ def parse_utilization(utilization: str):
     return dd
 
 
-def load_project(path: str | Path):
+def _load_project(path: str | Path) -> dict[str, Any]:
     path = Path(path)
     build_tcl_path = path / 'build_vivado_prj.tcl'
     assert build_tcl_path.exists(), f'build_vivado_prj.tcl not found in {path}'
@@ -100,6 +101,14 @@ def load_project(path: str | Path):
         d['latency(ns)'] = d['latency'] * d['actual_period']
 
     return d
+
+
+def load_project(path: str | Path) -> dict[str, Any] | None:
+    try:
+        return _load_project(path)
+    except Exception as e:
+        print(e)
+        return None
 
 
 def extra_info_from_fname(fname: str):
@@ -199,7 +208,8 @@ def stdout_print(arr: list[list], full: bool, columns: list[str] | None):
 
 
 def report_main(args):
-    vals = [load_project(Path(p)) for p in args.paths]
+    _vals = [load_project(Path(p)) for p in args.paths]
+    vals = [v for v in _vals if v is not None]
     for path, val in zip(args.paths, vals):
         d = extra_info_from_fname(Path(path).name)
         for k, v in d.items():

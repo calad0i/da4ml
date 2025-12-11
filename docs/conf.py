@@ -13,7 +13,7 @@ import hgq
 
 sys.path.insert(0, os.path.abspath('../'))
 
-project = 'High Granularity Quantization 2'
+project = 'da4ml'
 copyright = '2025, Chang Sun'
 author = 'Chang Sun'
 release = str(hgq.__version__)
