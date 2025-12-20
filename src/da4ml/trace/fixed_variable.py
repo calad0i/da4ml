@@ -693,7 +693,7 @@ class FixedVariable:
         self,
         a: 'FixedVariable|float|Decimal',
         b: 'FixedVariable|float|Decimal',
-        qint: tuple[Decimal, Decimal, Decimal] | None = None,
+        qint: tuple[Decimal, Decimal, Decimal] | QInterval | None = None,
     ):
         """If the MSB of this variable is 1, return a, else return b.
         When the variable is signed, the MSB is determined by the sign bit (1 for <0, 0 for >=0)
@@ -717,7 +717,7 @@ class FixedVariable:
                 return self._from[0].msb_mux(a, b, qint=qint)
 
         if a._factor < 0:
-            qint = (-qint[1], -qint[0], qint[2]) if qint else None
+            qint = (-qint[1], -qint[0], qint[2]) if qint else None  # type: ignore
             return -(self.msb_mux(-a, -b, qint=qint))
 
         _factor = a._factor
