@@ -221,7 +221,8 @@ class RTLModel:
                 _metadata['reg_bits'] = self._pipe.reg_bits
 
             if metadata is not None:
-                _metadata.update(metadata)
+                metadata.update(_metadata)
+                _metadata = metadata
 
             f.write(json.dumps(_metadata))
 

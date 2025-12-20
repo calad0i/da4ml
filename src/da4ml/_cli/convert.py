@@ -16,10 +16,11 @@ def to_da4ml(
     part_name: str,
     verbose: int = 1,
     rtl_validation: bool = False,
-    hw_config: tuple[int, int, int] = (1, -1, -1),
+    hwconf: tuple[int, int, int] = (1, -1, -1),
     hard_dc: int = 2,
     openmp: bool = True,
     n_threads: int = 4,
+    metadata=None,
 ):
     from da4ml.cmvm.types import CombLogic
     from da4ml.codegen import RTLModel
@@ -33,7 +34,7 @@ def to_da4ml(
         model: keras.Model = keras.models.load_model(model_path, compile=False)  # type: ignore
         if verbose > 1:
             model.summary()
-        inp, out = trace_model(model, HWConfig(*hw_config), {'hard_dc': hard_dc}, verbose > 1)
+        inp, out = trace_model(model, HWConfig(*hwconf), {'hard_dc': hard_dc}, verbose > 1)
         comb = comb_trace(inp, out)
 
     elif model_path.suffix == '.json':
@@ -54,7 +55,7 @@ def to_da4ml(
         clock_period=period,
         part_name=part_name,
     )
-    rtl_model.write()
+    rtl_model.write(metadata)
     if verbose > 1:
         print(rtl_model)
         print('Model written')
@@ -130,6 +131,11 @@ def to_da4ml(
 def convert_main(args):
     args.outdir.mkdir(parents=True, exist_ok=True)
     hw_conf = tuple(args.hw_config)
+    if args.metadata is not None:
+        with open(args.metadata) as f:
+            metadata = json.load(f)
+    else:
+        metadata = None
 
     to_da4ml(
         args.model,
@@ -142,10 +148,11 @@ def convert_main(args):
         flavor=args.flavor,
         verbose=args.verbose,
         rtl_validation=args.validate_rtl,
-        hw_config=hw_conf,
+        hwconf=hw_conf,
         hard_dc=args.delay_constraint,
         openmp=not args.no_openmp,
         n_threads=args.n_threads,
+        metadata=metadata,
     )
 
 
@@ -161,6 +168,7 @@ def _add_convert_args(parser: argparse.ArgumentParser):
     parser.add_argument('--verbose', '-v', default=1, type=int, help='Set verbosity level (0: silent, 1: info, 2: debug)')
     parser.add_argument('--validate-rtl', '-vr', action='store_true', help='Validate RTL by Verilator (and GHDL)')
     parser.add_argument('--n-threads', '-j', type=int, default=4, help='Number of threads for compilation and DAIS simulation')
+    parser.add_argument('--metadata', '-meta', type=str, default=None, help='Path to metadata JSON file to be included')
     parser.add_argument(
         '--hw-config',
         '-hc',
