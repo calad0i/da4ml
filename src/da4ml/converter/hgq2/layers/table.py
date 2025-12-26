@@ -163,12 +163,12 @@ class ReplayConvTable(ReplayDenseTable):
         op: QConvTBase = self.op
 
         if op.rank == 1:
-            inputs = inputs[:, :, None]
+            inputs = inputs[:, None]
 
         inputs = replay_extract_patches(inputs, **op.im2col_params)
 
         if op.rank == 1:
-            inputs = inputs[:, :, 0]
+            inputs = inputs[:, 0]
 
         return super().call(inputs)
 
