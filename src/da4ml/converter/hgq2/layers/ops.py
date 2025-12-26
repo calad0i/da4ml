@@ -1,10 +1,10 @@
 from collections.abc import Sequence
 
-import hgq
 import keras
 import numpy as np
 from hgq.layers import (
     QAdd,
+    QAveragePow2,
     QDot,
     QEinsum,
     QMaximum,
@@ -44,17 +44,6 @@ from ....trace.ops import einsum
 from ._base import ReplayOperationBase
 
 
-class ReplayQDot(ReplayOperationBase):
-    handles = (QDot, keras.layers.Dot)
-
-    def call(self, inputs: tuple[FixedVariableArray, FixedVariableArray]) -> FixedVariableArray:
-        layer: QDot | keras.layers.Dot = self.op
-        assert not layer.normalize, 'normalize is not supported in mirror operation'
-
-        axes = layer.axes
-        return np.dot(inputs[0][None], inputs[1][None], axes=axes)[0]  # type: ignore
-
-
 class ReplayReshape(ReplayOperationBase):
     handles = (keras.layers.Reshape, keras.layers.Flatten, Reshape, Ravel)
 
@@ -70,18 +59,33 @@ class ReplayReshape(ReplayOperationBase):
 
 
 class ReplayMerge(ReplayOperationBase):
-    handles = (keras.layers.Add, keras.layers.Concatenate, QAdd)
+    handles = (keras.layers.Add, keras.layers.Concatenate, QAdd, QMultiply, QSubtract, QMaximum, QMinimum, QAveragePow2)
 
-    def call(self, inputs: tuple[FixedVariableArray, FixedVariableArray]) -> FixedVariableArray:
-        op: keras.Operation = self.op
-        if isinstance(op, (keras.layers.Add, hgq.layers.QAdd)):
-            return inputs[0] + inputs[1]
-        elif isinstance(op, keras.layers.Concatenate):
-            axis = op.axis
-            data = np.concatenate([v._vars for v in inputs], axis=axis)
-            return FixedVariableArray(data, inputs[0].solver_options)
-        else:
-            raise TypeError(f'Unsupported layer type: {type(op)}')
+    def call(self, inputs: tuple[FixedVariableArray, ...]) -> FixedVariableArray:
+        op = self.op
+        name = op.__class__.__name__
+        if name.startswith('Q'):
+            name = name[1:]
+        _inputs: FixedVariableArray = np.stack(np.broadcast_arrays(*inputs), axis=0)  # type: ignore
+        match name:
+            case 'Add':
+                return np.sum(_inputs, axis=0)  # type: ignore
+            case 'AveragePow2':
+                return np.sum(_inputs, axis=0) * op._scale  # type: ignore
+            case 'Subtract':
+                assert len(_inputs) == 2, 'Subtract operation requires exactly two inputs'
+                return _inputs[0] - _inputs[1]
+            case 'Multiply':
+                return np.prod(_inputs, axis=0)  # type: ignore
+            case 'Maximum':
+                return np.amax(_inputs, axis=0)  # type: ignore
+            case 'Minimum':
+                return np.amin(_inputs, axis=0)  # type: ignore
+            case 'Concatenate':
+                return np.concatenate(_inputs, axis=op.axis)  # type: ignore
+
+            case _:
+                raise TypeError(f'Unsupported layer type: {type(op)}')
 
 
 class ReplayRepeatVector(ReplayOperationBase):
@@ -127,12 +131,10 @@ class ReplayQReduction(ReplayOperationBase):
 
 
 class ReplayArithmetic(ReplayOperationBase):
-    handles = (Add, Subtract, Multiply, QMultiply, TrueDivide, Divide, QSubtract, QMaximum, QMinimum, Maximum, Minimum)
+    handles = (Add, Subtract, Multiply, TrueDivide, Divide, Maximum, Minimum)
 
     def call(self, x1: FixedVariableArray, x2: FixedVariableArray):
         name = self.op.__class__.__name__
-        if name.startswith('Q'):
-            name = name[1:]
         match name:
             case 'Add':
                 return x1 + x2
@@ -199,23 +201,29 @@ class ReplayNoOp(ReplayOperationBase):
         return x
 
 
-class ReplayQEinsum(ReplayOperationBase):
-    handles = (QEinsum,)
-
-    def call(self, inputs: tuple[FixedVariableArray, ...]) -> FixedVariableArray:
-        layer: QEinsum = self.op
-        eq = layer.equation
-        return einsum(eq, *inputs)
-
-
 class ReplayEinsum(ReplayOperationBase):
-    handles = (Einsum,)
+    handles = (QEinsum, Einsum, QDot, keras.layers.Dot)
 
-    def call(self, *operands: FixedVariableArray) -> FixedVariableArray:
-        layer: Einsum = self.op
-        eq = layer.subscripts
-        operands = [operand[None] for operand in operands]  # type: ignore
-        return einsum(eq, *operands)[0]
+    def call(self, inputs: tuple[FixedVariableArray, FixedVariableArray]) -> FixedVariableArray:
+        op = self.op
+        if isinstance(op, QEinsum):
+            eq = op.equation
+        elif isinstance(op, Einsum):
+            eq = op.subscripts
+        else:  # QDot/Dot
+            dim0, dim1 = inputs[0].ndim + 1, inputs[1].ndim + 1
+            letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[0 : dim0 + dim1]
+            sub0, sub1 = letters[:dim0], letters[dim0 : dim0 + dim1]
+            axes = list(op.axes) if not isinstance(op.axes, int) else [op.axes, op.axes]
+            idx0, idx1 = axes[0] if axes[0] >= 0 else axes[0] % dim0, axes[1] if axes[1] >= 0 else axes[1] % dim1
+            sub1 = sub1[:idx1] + sub0[idx0] + sub1[idx1 + 1 :]
+            sub_out = list(sub0 + sub1)
+            sub_out.remove(sub0[idx0])
+            sub_out.remove(sub0[idx0])
+            sub_out = ''.join(sub_out)
+            eq = f'{sub0},{sub1}->{sub_out}'
+        assert len(inputs) == 2, 'Only (Q)Einsum operations with exactly two inputs are supported'
+        return einsum(eq, inputs[0][None], inputs[1][None])[0]
 
 
 class ReplayMatmul(ReplayOperationBase):
@@ -230,24 +238,3 @@ class ReplayAbs(ReplayOperationBase):
 
     def call(self, x: FixedVariableArray) -> FixedVariableArray:
         return np.abs(x)  # type: ignore
-
-
-__all__ = [
-    'ReplayQDot',
-    'ReplayReshape',
-    'ReplayMerge',
-    'ReplayRepeatVector',
-    'ReplayGetItem',
-    'ReplayReduction',
-    'ReplayQReduction',
-    'ReplayArithmetic',
-    'ReplayConcatenate',
-    'ReplayRepeat',
-    'ReplayTranspose',
-    'ReplayMoveaxis',
-    'ReplayNoOp',
-    'ReplayQEinsum',
-    'ReplayEinsum',
-    'ReplayMatmul',
-    'ReplayAbs',
-]

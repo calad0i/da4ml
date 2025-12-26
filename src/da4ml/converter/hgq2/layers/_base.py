@@ -9,7 +9,7 @@ from hgq.layers.core.base import MultipleQuantizers, Quantizer
 from hgq.quantizer.internal import FixedPointQuantizerBase
 from keras.ops import convert_to_numpy
 
-from ....trace import FixedVariableArray
+from ....trace import FixedVariable, FixedVariableArray
 from ....trace.ops import quantize, relu
 
 
@@ -92,6 +92,8 @@ class ReplayOperationBase(metaclass=HandlerRegMeta):
             outputs = self.call(inputs, **kwargs)
         else:
             outputs = self.call(*args, **kwargs)
+        if isinstance(outputs, FixedVariable):
+            outputs = FixedVariableArray(np.array([outputs]))
 
         if not self.__activation_handled__:
             activation = getattr(layer, 'activation', keras.activations.linear)
