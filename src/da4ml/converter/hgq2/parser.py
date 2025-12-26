@@ -145,12 +145,15 @@ def trace_model(  # type: ignore
     solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | None = None,
+    inputs_kif: tuple[int, int, int] | None = None,
     dump=False,
 ):
     if inputs is None:
         inputs = tuple(
             FixedVariableArrayInput(inp.shape[1:], hwconf=hwconf, solver_options=solver_options) for inp in model.inputs
         )
+        if inputs_kif is not None:
+            inputs = tuple(inp.quantize(*inputs_kif) for inp in inputs)
     outputs = _apply_nn(model, inputs, verbose=verbose, dump=dump)
     if not dump:
         return _flatten_arr(inputs), _flatten_arr(outputs)

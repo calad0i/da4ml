@@ -14,6 +14,7 @@ def trace_model(  # type: ignore
     solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
+    inputs_kif: tuple[int, int, int] | None = None,
     dump: Literal[False] = False,
 ) -> tuple[FixedVariableArray, FixedVariableArray]: ...
 
@@ -25,6 +26,7 @@ def trace_model(  # type: ignore
     solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
+    inputs_kif: tuple[int, int, int] | None = None,
     dump: Literal[True] = False,  # type: ignore
 ) -> dict[str, FixedVariableArray]: ...
 
@@ -35,6 +37,7 @@ def trace_model(  # type: ignore
     solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | None = None,
+    inputs_kif: tuple[int, int, int] | None = None,
     dump=False,
 ):
     hwconf = HWConfig(*hwconf) if isinstance(hwconf, tuple) else hwconf
@@ -53,6 +56,7 @@ def trace_model(  # type: ignore
             solver_options=solver_options,
             verbose=verbose,
             inputs=inputs,
+            inputs_kif=inputs_kif,
             dump=dump,
         )
     else:
