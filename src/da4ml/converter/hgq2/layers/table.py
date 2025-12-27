@@ -11,7 +11,7 @@ from ....trace import FixedVariableArray
 from ....trace.fixed_variable import FixedVariable
 from ....trace.ops import _quantize
 from ._base import ReplayOperationBase, mirror_quantizer, to_np_arr
-from .conv import replay_extract_patches
+from .conv import symbolic_extract_patches
 
 
 def keras_act_to_numpy(act: Callable) -> Callable:
@@ -90,7 +90,7 @@ class ReplayDenseTable(ReplayOperationBase):
 
         ws, bs, acts = gather_weights_and_activation(model)
 
-        out_shape: tuple[int, ...] = tuple(int(x) for x in model.output_shape[1:])  # type: ignore
+        out_shape: tuple[int, ...] = inputs.shape + (op.n_out,)
         tables: list[np.ndarray] = [None] * prod(out_shape)  # type: ignore
         n, loc = np.unique(table_sizes, return_inverse=True)
 
@@ -129,7 +129,7 @@ class ReplayDenseTable(ReplayOperationBase):
             for i in range(len(tables)):
                 tables[i][:] = (tables[i] * scaler[i % op.n_out] + offset[i % op.n_out]) / sqrt(op.n_in)
 
-        assert all(v is not None for v in tables)
+        assert all(v is not None for v in tables), tables
 
         toq = op.toq
         toq_internal: FixedPointQuantizerBase = toq.quantizer
@@ -165,7 +165,7 @@ class ReplayConvTable(ReplayDenseTable):
         if op.rank == 1:
             inputs = inputs[:, None]
 
-        inputs = replay_extract_patches(inputs, **op.im2col_params)
+        inputs = symbolic_extract_patches(inputs, **op.im2col_params)
 
         if op.rank == 1:
             inputs = inputs[:, 0]
