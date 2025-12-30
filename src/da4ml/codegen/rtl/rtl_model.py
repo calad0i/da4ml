@@ -139,6 +139,17 @@ class RTLModel:
         (self._path / 'sim').mkdir(exist_ok=True)
         (self._path / 'model').mkdir(exist_ok=True)
         (self._path / 'src/memfiles').mkdir(exist_ok=True)
+
+        # Build scripts
+        for path in (self.__src_root).glob('common_source/build_*_prj.tcl'):
+            with open(path) as f:
+                tcl = f.read()
+            tcl = tcl.replace('$::env(DEVICE)', self._part_name)
+            tcl = tcl.replace('$::env(PROJECT_NAME)', self._prj_name)
+            tcl = tcl.replace('$::env(SOURCE_TYPE)', flavor)
+            with open(self._path / path.name, 'w') as f:
+                f.write(tcl)
+
         if self._pipe is not None:  # Pipeline
             # Main logic
             codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
@@ -151,16 +162,6 @@ class RTLModel:
             for k, v in codes.items():
                 with open(self._path / f'src/{k}.{suffix}', 'w') as f:
                     f.write(v)
-
-            # Build scripts
-            for path in (self.__src_root).glob('common_source/build_*_prj.tcl'):
-                with open(path) as f:
-                    tcl = f.read()
-                tcl = tcl.replace('$::env(DEVICE)', self._part_name)
-                tcl = tcl.replace('$::env(PROJECT_NAME)', self._prj_name)
-                tcl = tcl.replace('$::env(SOURCE_TYPE)', flavor)
-                with open(self._path / path.name, 'w') as f:
-                    f.write(tcl)
 
             # Timing constraint
             for fmt in ('xdc', 'sdc'):
@@ -226,7 +227,7 @@ class RTLModel:
 
             f.write(json.dumps(_metadata))
 
-    def _compile(self, verbose=False, openmp=True, nproc=None, o3: bool = False, clean=True):
+    def _compile(self, verbose=False, openmp=True, nproc=None, o3: bool = False, clean=True, _env: dict[str, str] | None = None):
         """Same as compile, but will not write to the library
 
         Parameters
@@ -256,6 +257,8 @@ class RTLModel:
         env['STAMP'] = self._uuid
         env['EXTRA_CXXFLAGS'] = '-fopenmp' if openmp else ''
         env['VERILATOR_FLAGS'] = '-Wall' if self._flavor == 'verilog' else ''
+        if _env is not None:
+            env.update(_env)
         if nproc is not None:
             env['N_JOBS'] = str(nproc)
         if o3:
