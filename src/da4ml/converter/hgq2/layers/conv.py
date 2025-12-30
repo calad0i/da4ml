@@ -43,8 +43,6 @@ def symbolic_extract_patches(
     padding: str,
     data_format: str,
 ):
-    print('before:', images.shape)
-
     rank = images.ndim - 1
     size = (size,) * rank if isinstance(size, int) else size
     strides = (strides,) * rank if isinstance(strides, int) else strides
