@@ -17,25 +17,21 @@ if { $source_type != "vhdl" && $source_type != "verilog" } {
 if { $source_type == "vhdl" } {
     set_property TARGET_LANGUAGE VHDL [current_project]
 
-    foreach file [glob -nocomplain "src/static/*.vhd"] {
-        read_vhdl -vhdl2008 $file
-    }
+    set statis_files [glob -nocomplain "src/static/*.vhd"]
+    set top_file "src/${project_name}.vhd"
+    set stage_files [glob -nocomplain "src/${project_name}_stage*.vhd"]
 
-    read_vhdl -vhdl2008 "src/${project_name}.vhd"
-    foreach file [glob -nocomplain "src/${project_name}_stage*.vhd"] {
-        read_vhdl -vhdl2008 $file
-    }
+    read_vhdl -vhdl2008 $top_file $statis_files $stage_files
+
 } else {
     set_property TARGET_LANGUAGE Verilog [current_project]
 
-    foreach file [glob -nocomplain "src/static/*.v"] {
-        read_verilog $file
-    }
+    set statis_files [glob -nocomplain "src/static/*.v"]
+    set top_file "src/${project_name}.v"
+    set stage_files [glob -nocomplain "src/${project_name}_stage*.v"]
 
-    read_verilog "src/${project_name}.v"
-    foreach file [glob -nocomplain "src/${project_name}_stage*.v"] {
-        read_verilog $file
-    }
+    read_verilog $top_file $statis_files $stage_files
+
 }
 
 
@@ -49,8 +45,9 @@ if { $source_type == "vhdl" } {
     set mems [glob -nocomplain "*.mem"]
 }
 
+add_files -fileset [current_fileset] $mems
+
 foreach f $mems {
-    add_files -fileset [current_fileset] $f
     set_property used_in_synthesis true [get_files $f]
 }
 
