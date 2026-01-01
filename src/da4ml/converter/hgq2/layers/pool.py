@@ -7,8 +7,8 @@ from keras.src.layers.pooling.base_global_pooling import BaseGlobalPooling
 from keras.src.layers.pooling.base_pooling import BasePooling
 
 from ....trace import FixedVariableArray
-from ....trace.ops import pool
 from ._base import ReplayOperationBase
+from .conv import symbolic_extract_patches
 
 
 class ReplayPool(ReplayOperationBase):
@@ -62,18 +62,45 @@ class ReplayPool(ReplayOperationBase):
                 pool_size = prod(inputs.shape[:-1])
                 out = np.sum(inputs, axis=axis, keepdims=keepdims) / pool_size  # type: ignore
         else:
-            assert isinstance(self.op, BasePooling), f'Unsupported pooling layer: {type(self.op)}'
+            assert isinstance(self.op, BasePooling), f'Unknown pooling layer: {type(self.op)}'
             pool_size = self.op.pool_size
             strides = self.op.strides
             padding = self.op.padding
             pool_dim = len(pool_size)
-            out = pool(
+            ch = inputs.shape[-1]
+            x = symbolic_extract_patches(
                 inputs,
-                pool_size=pool_size,
-                strides=strides,
+                pool_size,
+                strides,
+                dilation_rate=1,
                 padding=padding,
-                pool_type=op,
+                data_format='channels_last',
             )
+            x = x.reshape(x.shape[:-1] + (-1, ch))
+
+            if padding == 'same':
+                mask = symbolic_extract_patches(
+                    np.ones(inputs.shape, dtype=np.int32),
+                    pool_size,
+                    strides,
+                    dilation_rate=1,
+                    padding=padding,
+                    data_format='channels_last',
+                ).reshape(x.shape)
+            elif padding == 'valid':
+                mask = np.ones(x.shape, dtype=np.int32)
+            else:
+                raise ValueError(f'Unknown padding type: {padding}')
+
+            if op == 'max':
+                _vars = np.where(mask, x._vars, -(65535**2))
+                x = FixedVariableArray(_vars, x.solver_options)
+                out = np.max(x, axis=-2)  # type: ignore
+            elif op == 'avg':
+                out = np.sum(x, axis=-2) / np.sum(mask, axis=-2)  # type: ignore
+            else:
+                raise ValueError(f'Unknown pooling operation: {op}')
+
         if data_format == 'channels_first':
             out = np.moveaxis(out, -1, 1)  # type: ignore
 
