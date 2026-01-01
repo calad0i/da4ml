@@ -256,12 +256,14 @@ class FixedVariable:
 
         self._from = tuple(v if v.opr != 'const' else v._with(latency=self.latency) for v in self._from)
 
-    def _with(self, **kwargs):
+    def _with(self, renew_id=True, **kwargs):
         if not kwargs:
             return self
         _var = copy(self)
         for k, v in kwargs.items():
             setattr(_var, k, v)
+        if renew_id:
+            _var.id = UUID(int=rd.getrandbits(128), version=4)
         return _var
 
     def get_cost_and_latency(self) -> tuple[float, float]:
