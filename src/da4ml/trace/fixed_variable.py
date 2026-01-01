@@ -1,6 +1,7 @@
 import random
 import typing
 from collections.abc import Callable, Generator
+from copy import copy
 from dataclasses import dataclass
 from decimal import Decimal
 from hashlib import sha256
@@ -253,11 +254,15 @@ class FixedVariable:
         self.latency = _latency
         self.cost = _cost
 
-        # Update latency for constant variables to match the current variable for piplining
+        self._from = tuple(v if v.opr != 'const' else v._with(latency=self.latency) for v in self._from)
 
-        for v in self._from:
-            if v.opr == 'const':
-                v.latency = self.latency
+    def _with(self, **kwargs):
+        if not kwargs:
+            return self
+        _var = copy(self)
+        for k, v in kwargs.items():
+            setattr(_var, k, v)
+        return _var
 
     def get_cost_and_latency(self) -> tuple[float, float]:
         if self.opr == 'const':
@@ -349,8 +354,8 @@ class FixedVariable:
         return k, i, f
 
     @classmethod
-    def from_const(cls, const: float | Decimal, hwconf: HWConfig, latency: float | None = None, _factor: float | Decimal = 1):
-        return cls(const, const, -1, hwconf=hwconf, opr='const', _factor=_factor, latency=latency)
+    def from_const(cls, const: float | Decimal, hwconf: HWConfig, _factor: float | Decimal = 1):
+        return cls(const, const, -1, hwconf=hwconf, opr='const', _factor=_factor)
 
     def __repr__(self) -> str:
         if self._factor == 1:
@@ -646,7 +651,7 @@ class FixedVariable:
             _high = Decimal(2) ** i
             high, low = _high - step, -_high * k
             val = (floor(val / step) * step - low) % (2 * _high) + low
-            return FixedVariable.from_const(val, hwconf=self.hwconf, latency=None, _factor=1)
+            return FixedVariable.from_const(val, hwconf=self.hwconf, _factor=1)
 
         f = min(f, _f)
         k = min(k, _k) if i >= _i else k
@@ -693,15 +698,15 @@ class FixedVariable:
         self,
         a: 'FixedVariable|float|Decimal',
         b: 'FixedVariable|float|Decimal',
-        qint: tuple[Decimal, Decimal, Decimal] | QInterval | None = None,
+        qint: tuple[Decimal, Decimal, Decimal] | None = None,
     ):
         """If the MSB of this variable is 1, return a, else return b.
         When the variable is signed, the MSB is determined by the sign bit (1 for <0, 0 for >=0)
         """
         if not isinstance(a, FixedVariable):
-            a = FixedVariable.from_const(a, hwconf=self.hwconf, latency=self.latency, _factor=1)
+            a = FixedVariable.from_const(a, hwconf=self.hwconf, _factor=1)
         if not isinstance(b, FixedVariable):
-            b = FixedVariable.from_const(b, hwconf=self.hwconf, latency=self.latency, _factor=1)
+            b = FixedVariable.from_const(b, hwconf=self.hwconf, _factor=1)
         if self._factor < 0:
             return (-self).msb_mux(b, a, qint)
 
@@ -717,7 +722,7 @@ class FixedVariable:
                 return self._from[0].msb_mux(a, b, qint=qint)
 
         if a._factor < 0:
-            qint = (-qint[1], -qint[0], qint[2]) if qint else None  # type: ignore
+            qint = (-qint[1], -qint[0], qint[2]) if qint else None
             return -(self.msb_mux(-a, -b, qint=qint))
 
         _factor = a._factor
@@ -788,7 +793,7 @@ class FixedVariable:
         if other == float('inf'):
             raise ValueError('Cannot apply max_of with inf')
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf, latency=self.latency, _factor=abs(self._factor))
+            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
 
         if self.low >= other.high:
             return self
@@ -808,7 +813,7 @@ class FixedVariable:
         if other == -float('inf'):
             raise ValueError('Cannot apply min_of with -inf')
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf, latency=self.latency, _factor=(self._factor))
+            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=(self._factor))
 
         if self.high <= other.low:
             return self

@@ -115,7 +115,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 f0, f1 = in0._factor, in1._factor
                 shift = int(log2(abs(f1 / f0)))
                 data = idk + (shift << 32)
-                assert idk < i and id0 < i and id1 < i
+                assert idk < i and id0 < i and id1 < i, f'{idk} {id0} {id1} {i} {v.id}'
                 assert key._factor > 0, f'Cannot mux on v{key.id} with negative factor {key._factor}'
                 op = Op(id0, id1, opcode, data, qint, v.latency, v.cost)
             case 'vmul':
