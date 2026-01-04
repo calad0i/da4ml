@@ -244,7 +244,7 @@ class CombLogic(NamedTuple):
     ----------
     shape: tuple[int, int]
         #input, #output
-    inp_shift: list[int]
+    inp_shifts: list[int]
         The shifts that should be applied to the input data.
     out_idxs: list[int]
         The indices of the output data in the buffer.
@@ -269,7 +269,7 @@ class CombLogic(NamedTuple):
     """
 
     shape: tuple[int, int]
-    inp_shift: list[int]
+    inp_shifts: list[int]
     out_idxs: list[int]
     out_shifts: list[int]
     out_negs: list[bool]
@@ -313,7 +313,7 @@ class CombLogic(NamedTuple):
             k, i, f = map(np.array, zip(*map(minimal_kif, inp_qint)))
             inp = [_quantize(*x, round_mode='TRN') for x in zip(inp, k, i, f)]
 
-        inp = inp * (2.0 ** np.array(self.inp_shift))
+        inp = inp * (2.0 ** np.array(self.inp_shifts))
         for i, op in enumerate(self.ops):
             match op.opcode:
                 case -1:  # copy form external buffer
@@ -497,7 +497,7 @@ class CombLogic(NamedTuple):
             lookup_tables = tuple(LookupTable.from_dict(tab) for tab in lookup_tables)
         return cls(
             shape=tuple(data[0]),
-            inp_shift=data[1],
+            inp_shifts=data[1],
             out_idxs=data[2],
             out_shifts=data[3],
             out_negs=data[4],
@@ -543,7 +543,7 @@ class CombLogic(NamedTuple):
         header = np.concatenate(
             [
                 [0, version, n_in, n_out, len(self.ops), n_tables],
-                self.inp_shift,
+                self.inp_shifts,
                 self.out_idxs,
                 self.out_shifts,
                 self.out_negs,
@@ -693,8 +693,8 @@ class Pipeline(NamedTuple):
         return self.solutions[0].shape[0], self.solutions[-1].shape[1]
 
     @property
-    def inp_shift(self):
-        return self.solutions[0].inp_shift
+    def inp_shifts(self):
+        return self.solutions[0].inp_shifts
 
     @property
     def out_shift(self):

@@ -13,7 +13,7 @@ One program represented in DAIS consists of the following components:
     - Reserved for downstream firmware versioning. The DAIS interpreter **must** ignore this field.
 - `shape`: tuple<int, int>
     - The number of inputs and outputs of the program.
-- `inp_shift`: vector<int>
+- `inp_shifts`: vector<int>
     - The shifts required to interpret the input data. (i.e., number of integers in the fixed-point representation)
 - `out_idxs`: vector<int>
     - The indices of the output data shall be read from the buffer
@@ -74,7 +74,7 @@ The binary representation of the program is as follows, in order:
 - `shape`: int32[2]
 - `len(ops)`: int32
 - `len(tables)`: int32
-- `inp_shift`: int32[shape[0]]
+- `inp_shifts`: int32[shape[0]]
 - `out_idxs`: int32[shape[1]]
 - `out_shifts`: int32[shape[1]]
 - `out_negs`: int32[shape[1]]

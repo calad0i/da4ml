@@ -148,7 +148,7 @@ def to_pipeline(comb: CombLogic, latency_cutoff: float, retiming=True, verbose=T
             lookup_tables = None
         _sol = CombLogic(
             shape=(n_in, n_out),
-            inp_shift=[0] * n_in,
+            inp_shifts=[0] * n_in,
             out_idxs=_out_idx,
             out_shifts=out_shifts,
             out_negs=out_negs,

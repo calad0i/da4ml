@@ -159,14 +159,14 @@ def comb_trace(inputs, outputs):
 
     ops, out_index, lookup_tables = _comb_trace(inputs, outputs)
     shape = len(inputs), len(outputs)
-    inp_shift = [0] * shape[0]
+    inp_shifts = [0] * shape[0]
     out_sf = [v._factor for v in outputs]
     out_shift = [int(log2(abs(sf))) for sf in out_sf]
     out_neg = [sf < 0 for sf in out_sf]
 
     sol = CombLogic(
         shape,
-        inp_shift,
+        inp_shifts,
         out_index,
         out_shift,
         out_neg,

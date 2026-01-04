@@ -196,7 +196,7 @@ def to_solution(
 
     return CombLogic(
         shape=state.kernel.shape,  # type: ignore
-        inp_shift=list(in_shift),
+        inp_shifts=list(in_shift),
         out_idxs=out_idx,
         out_shifts=list(out_shift),
         out_negs=out_neg,

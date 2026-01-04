@@ -62,7 +62,7 @@ namespace dais {
       private:
         int32_t n_in, n_out, n_ops, n_tables;
         int32_t max_ops_width = 0, max_inp_width = 0, max_out_width = 0;
-        std::vector<int32_t> inp_shift;
+        std::vector<int32_t> inp_shifts;
         std::vector<int32_t> out_idxs;
         std::vector<int32_t> out_shifts;
         std::vector<int32_t> out_negs;

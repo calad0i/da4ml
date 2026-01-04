@@ -49,12 +49,12 @@ namespace dais {
         }
 
         ops.resize(n_ops);
-        inp_shift.resize(n_in);
+        inp_shifts.resize(n_in);
         out_idxs.resize(n_out);
         out_shifts.resize(n_out);
         out_negs.resize(n_out);
 
-        std::memcpy(inp_shift.data(), &binary_data[fixed_offset], n_in * d_size);
+        std::memcpy(inp_shifts.data(), &binary_data[fixed_offset], n_in * d_size);
         std::memcpy(out_idxs.data(), &binary_data[fixed_offset + n_in], n_out * d_size);
         std::memcpy(
             out_shifts.data(), &binary_data[fixed_offset + n_in + n_out], n_out * d_size
@@ -241,7 +241,7 @@ namespace dais {
             case -1: {
                 int64_t input_value = static_cast<int64_t>(std::floor(
                     inputs[op.id0] *
-                    std::pow(2.0, inp_shift[op.id0] + ops[i].dtype.fractionals)
+                    std::pow(2.0, inp_shifts[op.id0] + ops[i].dtype.fractionals)
                 ));
                 buffer[i] = quantize(input_value, op.dtype, op.dtype);
                 break;
