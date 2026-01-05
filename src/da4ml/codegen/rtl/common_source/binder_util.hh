@@ -13,7 +13,7 @@ std::enable_if_t<CONFIG_T::II != 0>
 _inference(int32_t *c_inp, int32_t *c_out, size_t n_samples) {
     auto dut = std::make_unique<typename CONFIG_T::dut_t>();
 
-    size_t clk_req = n_samples * CONFIG_T::II + CONFIG_T::latency;
+    size_t clk_req = n_samples * CONFIG_T::II + (CONFIG_T::latency - CONFIG_T::II) + 1;
 
     for (size_t t_inp = 0; t_inp < clk_req; ++t_inp) {
         size_t t_out = t_inp - CONFIG_T::latency;

@@ -101,6 +101,7 @@ class RTLModel:
         self._clock_uncertainty = clock_uncertainty
         self._io_delay_minmax = io_delay_minmax
         self._register_layers = register_layers
+        self._place_holder = False
 
         assert self._flavor in ('vhdl', 'verilog'), f'Unsupported flavor {flavor}, only vhdl and verilog are supported.'
 
@@ -151,17 +152,20 @@ class RTLModel:
                 f.write(tcl)
 
         if self._pipe is not None:  # Pipeline
-            # Main logic
-            codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
+            if not self._place_holder:
+                # Main logic
+                codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
 
-            # Table memory files
-            memfiles: dict[str, str] = {}
-            for comb in self._pipe.solutions:
-                memfiles.update(table_mem_gen(comb))
+                # Table memory files
+                memfiles: dict[str, str] = {}
+                for comb in self._pipe.solutions:
+                    memfiles.update(table_mem_gen(comb))
 
-            for k, v in codes.items():
-                with open(self._path / f'src/{k}.{suffix}', 'w') as f:
-                    f.write(v)
+                for k, v in codes.items():
+                    with open(self._path / f'src/{k}.{suffix}', 'w') as f:
+                        f.write(v)
+            else:
+                memfiles = {}
 
             # Timing constraint
             for fmt in ('xdc', 'sdc'):
@@ -185,13 +189,16 @@ class RTLModel:
         else:  # Comb
             assert isinstance(self._solution, CombLogic)
 
-            # Table memory files
-            memfiles = table_mem_gen(self._solution)
+            if not self._place_holder:
+                # Table memory files
+                memfiles = table_mem_gen(self._solution)
 
-            # Main logic
-            code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps')
-            with open(self._path / f'src/{self._prj_name}.{suffix}', 'w') as f:
-                f.write(code)
+                # Main logic
+                code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps')
+                with open(self._path / f'src/{self._prj_name}.{suffix}', 'w') as f:
+                    f.write(code)
+            else:
+                memfiles = {}
 
             # Verilog IO wrapper (non-uniform bw to uniform one, no clk)
             io_wrapper = generate_io_wrapper(self._solution, self._prj_name, False)
