@@ -693,7 +693,7 @@ class FixedVariable:
     def from_kif(cls, k: int | bool, i: int, f: int, **kwargs):
         step = Decimal(2) ** -f
         _high = Decimal(2) ** i
-        low, high = k * _high, _high - step
+        low, high = -k * _high, _high - step
         return cls(low, high, step, **kwargs)
 
     def msb_mux(
