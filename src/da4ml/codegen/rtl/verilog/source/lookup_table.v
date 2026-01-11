@@ -10,7 +10,7 @@ module lookup_table #(
     output [BW_OUT-1:0] out
 );
 
-  (*rom_style = "distributed" *)
+  (* rom_style = (BW_IN <= 999) ? "distributed" : "block" *)
   reg [BW_OUT-1:0] lut_rom [0:(1<<BW_IN)-1];
   reg [BW_OUT-1:0] readout;
 
