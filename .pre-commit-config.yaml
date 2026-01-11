@@ -2,7 +2,7 @@ exclude: '\.svg$|ap_types/|_version.py'
 
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.2
+  rev: v0.14.11
   hooks:
     - id: ruff-check
       types_or: [ python, pyi ]
@@ -11,7 +11,7 @@ repos:
       types_or: [ python, pyi ]
 
 - repo: https://github.com/tox-dev/pyproject-fmt
-  rev: v2.11.0
+  rev: v2.11.1
   hooks:
     - id: pyproject-fmt
 
@@ -31,13 +31,13 @@ repos:
   - id: trailing-whitespace
 
 - repo: https://github.com/asottile/pyupgrade
-  rev: v3.21.0
+  rev: v3.21.2
   hooks:
   - id: pyupgrade
     args: ["--py310-plus"]
 
 - repo: https://github.com/pre-commit/mirrors-clang-format
-  rev: v21.1.2
+  rev: v21.1.8
   hooks:
   - id: clang-format
     types_or: [c++, c, cuda]
