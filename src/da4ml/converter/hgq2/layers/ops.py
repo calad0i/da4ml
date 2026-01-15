@@ -204,8 +204,15 @@ class ReplayNoOp(ReplayOperationBase):
 class ReplayEinsum(ReplayOperationBase):
     handles = (QEinsum, Einsum, QDot, keras.layers.Dot)
 
-    def call(self, inputs: tuple[FixedVariableArray, FixedVariableArray]) -> FixedVariableArray:
+    def call(self, *_inputs: tuple[FixedVariableArray, FixedVariableArray] | FixedVariableArray) -> FixedVariableArray:
         op = self.op
+        inputs: tuple[FixedVariableArray, FixedVariableArray]
+        if isinstance(_inputs[0], tuple):
+            assert len(_inputs) == 1, 'Einsum with multiple input tuples is not supported'
+            inputs = _inputs[0]
+        else:
+            inputs = _inputs  # type: ignore
+        assert len(inputs) == 2, 'Only (Q)Einsum operations with exactly two inputs are supported'
         if isinstance(op, QEinsum):
             eq = op.equation
         elif isinstance(op, Einsum):
@@ -222,7 +229,6 @@ class ReplayEinsum(ReplayOperationBase):
             sub_out.remove(sub0[idx0])
             sub_out = ''.join(sub_out)
             eq = f'{sub0},{sub1}->{sub_out}'
-        assert len(inputs) == 2, 'Only (Q)Einsum operations with exactly two inputs are supported'
         return einsum(eq, inputs[0][None], inputs[1][None])[0]
 
 
