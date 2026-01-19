@@ -22,10 +22,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build wheels
+      - name: Build wheels (Python 3.10-3.11)
         uses: pypa/cibuildwheel@v3.3.0
         env:
-          CIBW_BUILD: "cp31[0-4]-*"
+          CIBW_BUILD: "cp31[01]-*"
+          CIBW_ARCHS_LINUX: "x86_64"
+          CIBW_ARCHS_WINDOWS: "AMD64"
+          CIBW_ARCHS_MACOS: "arm64"
+          CIBW_SKIP: "*-musllinux_*"
+          CIBW_TEST_COMMAND: "python -c 'import da4ml; print(da4ml.__version__)'"
+
+          # macOS specific environment for OpenMP
+          CIBW_BEFORE_BUILD_MACOS: "brew install libomp"
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=15.0"
+
+      - name: Build wheels (Python 3.12+ abi3)
+        uses: pypa/cibuildwheel@v3.3.0
+        env:
+          CIBW_BUILD: "cp312-*"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_MACOS: "arm64"

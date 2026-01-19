@@ -19,6 +19,8 @@ vcs_tag(
 nanobind_dep = dependency('nanobind')
 omp_dep = dependency('openmp')
 
+_limited_abi = py.language_version().version_compare('>=3.12') ? '3.12' : ''
+
 dais_bin = py.extension_module(
   'dais_bin',
   sources: [
@@ -29,6 +31,7 @@ dais_bin = py.extension_module(
   install: true,
   subdir: 'da4ml/_binary',
   cpp_args: ['-Wno-sign-compare', '-Wno-unused-variable'],
+  limited_api: _limited_abi,
 )
 
 install_subdir('src/da4ml',
