@@ -31,6 +31,7 @@ jobs:
           CIBW_ARCHS_MACOS: "arm64"
           CIBW_SKIP: "*-musllinux_*"
           CIBW_TEST_COMMAND: "python -c 'import da4ml; print(da4ml.__version__)'"
+          CIBW_CONFIG_SETTINGS: "setup-args=-Dpython.allow_limited_api=false"
 
           # macOS specific environment for OpenMP
           CIBW_BEFORE_BUILD_MACOS: "brew install libomp"

@@ -47,6 +47,9 @@ optional-dependencies.docs = [
 urls.repository = "https://github.com/calad0i/da4ml"
 scripts.da4ml = "da4ml._cli:main"
 
+[tool.meson-python]
+limited-api = true
+
 [tool.ruff]
 target-version = "py310"
 
