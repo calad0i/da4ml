@@ -21,6 +21,7 @@ def to_da4ml(
     openmp: bool = True,
     n_threads: int = 4,
     metadata=None,
+    inputs_kif: tuple[int, int, int] | None = None,
 ):
     from da4ml.cmvm.types import CombLogic
     from da4ml.codegen import RTLModel
@@ -34,7 +35,7 @@ def to_da4ml(
         model: keras.Model = keras.models.load_model(model_path, compile=False)  # type: ignore
         if verbose > 1:
             model.summary()
-        inp, out = trace_model(model, HWConfig(*hwconf), {'hard_dc': hard_dc}, verbose > 1)
+        inp, out = trace_model(model, HWConfig(*hwconf), {'hard_dc': hard_dc}, verbose > 1, inputs_kif=inputs_kif)
         comb = comb_trace(inp, out)
 
     elif model_path.suffix == '.json':
@@ -153,6 +154,7 @@ def convert_main(args):
         openmp=not args.no_openmp,
         n_threads=args.n_threads,
         metadata=metadata,
+        inputs_kif=args.inputs_kif,
     )
 
 
@@ -184,6 +186,14 @@ def _add_convert_args(parser: argparse.ArgumentParser):
         '--no-omp',
         action='store_true',
         help='Disable OpenMP in RTL simulation; no effect if --validate-rtl is not set',
+    )
+    parser.add_argument(
+        '--inputs-kif',
+        '-ikif',
+        type=int,
+        nargs=3,
+        default=None,
+        help='Input precision in KIF format (keep_neg, int bits, frac bits), if known.',
     )
 
 
