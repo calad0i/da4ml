@@ -64,7 +64,7 @@ def prim_mst_dc(cost_mat: np.ndarray, dc: int = -1):
     return mapping
 
 
-@jit
+@jit(cache=True)
 def kernel_decompose(kernel: np.ndarray, dc: int = -2):
     """Decompose a 2D kernel matrix into two matrices with the delay-constrained approx MST.
 

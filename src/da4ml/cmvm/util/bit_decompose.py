@@ -53,7 +53,7 @@ def _center(arr: NDArray):
     return arr, shift0.astype(np.int8), shift1.astype(np.int8)
 
 
-@jit
+@jit(cache=True)
 def csd_decompose(arr: NDArray, center=True):
     """
     Convert an 2D array to CSD representation.
