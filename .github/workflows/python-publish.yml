@@ -25,7 +25,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.0
         env:
-          CIBW_BUILD: "cp31[0-3]-*" # numba for py314 stable is not yet available; wait for it
+          CIBW_BUILD: "cp31[0-4]-*"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_MACOS: "arm64"
