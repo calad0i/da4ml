@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 
-def parse_timing_summary(timing_summary: str):
+def parse_timing_summary_vivado(timing_summary: str):
     loc0 = timing_summary.find('Design Timing Summary')
     lines = timing_summary[loc0:].split('\n')[3:10]
     lines = [line for line in lines if line.strip() != '']
@@ -33,23 +33,22 @@ track = [
     'RAMB36/FIFO*',
 ]
 
-mms = []
-for name in track:
-    m = re.compile(
-        rf'\|\s*{name}\s*\|\s*(?P<Used>\d+)\s*\|\s*(?P<Fixed>\d+)\s*\|\s*(?P<Prohibited>\d+)\s*\|\s*(?P<Available>\d+)\s*\|'
-    )
-    mms.append(m)
 
-
-def parse_utilization(utilization: str):
+def parse_utilization_vivado(utilization: str):
     """
     Parse the utilization report and return a DataFrame with the results.
     """
 
+    matchers = []
+    for name in track:
+        m = re.compile(
+            rf'\|\s*{name}\s*\|\s*(?P<Used>\d+)\s*\|\s*(?P<Fixed>\d+)\s*\|\s*(?P<Prohibited>\d+)\s*\|\s*(?P<Available>\d+)\s*\|'
+        )
+        matchers.append(m)
+
     dd = {}
-    for name, m in zip(track, mms):
+    for name, m in zip(track, matchers):
         found = m.findall(utilization)
-        # assert found, f"{name} not found in utilization report"
         used, fixed, prohibited, available = map(int, found[0])
         dd[name] = used
         dd[f'{name}_fixed'] = fixed
@@ -65,6 +64,20 @@ def parse_utilization(utilization: str):
     return dd
 
 
+def parse_power_vivado(power_report: str):
+    matchers = []
+    track = ['Total On-Chip Power (W)', 'Dynamic (W)', 'Device Static (W)']
+    for name in track:
+        m = re.compile(rf'\|\s*{re.escape(name)}\s*\|\s*(?P<Value>[^\|]+?)\s*\|')
+        matchers.append(m)
+    dd = {}
+    for name, m in zip(track, matchers):
+        found = m.findall(power_report)
+        value = found[0].strip()
+        dd[name] = value
+    return dd
+
+
 def _load_project(path: str | Path) -> dict[str, Any]:
     path = Path(path)
     build_tcl_path = path / 'build_vivado_prj.tcl'
@@ -76,29 +89,33 @@ def _load_project(path: str | Path) -> dict[str, Any]:
     with open(path / 'metadata.json') as f:
         metadata = json.load(f)
 
-    if metadata['flavor'] == 'vhdl':
-        with open(path / f'src/{top_name}.vhd') as f:  # type: ignore
-            latency = f.read().count('register') // 2
-    else:
-        with open(path / f'src/{top_name}.v') as f:  # type: ignore
-            latency = f.read().count('reg') - 1
+    suffix = 'vhd' if metadata['flavor'] == 'vhdl' else 'v'
+    with open(path / f'src/{top_name}.{suffix}') as f:
+        latency = f.read().count('<=') - 1
 
     d = {**metadata, 'clock_period': target_clock_period, 'latency': latency}
 
     if (path / f'output_{top_name}/reports/{top_name}_post_route_util.rpt').exists():
         with open(path / f'output_{top_name}/reports/{top_name}_post_route_util.rpt') as f:
             util_rpt = f.read()
-            util = parse_utilization(util_rpt)
+        util = parse_utilization_vivado(util_rpt)
+        d.update(util)
 
+    if (path / f'output_{top_name}/reports/{top_name}_post_route_timing.rpt').exists():
         with open(path / f'output_{top_name}/reports/{top_name}_post_route_timing.rpt') as f:
             timing_rpt = f.read()
-            timing = parse_timing_summary(timing_rpt)
+        timing = parse_timing_summary_vivado(timing_rpt)
         d.update(timing)
-        d.update(util)
 
         d['actual_period'] = d['clock_period'] - d['WNS(ns)']
         d['Fmax(MHz)'] = 1000.0 / d['actual_period']
         d['latency(ns)'] = d['latency'] * d['actual_period']
+
+    if (path / f'output_{top_name}/reports/{top_name}_post_route_power.rpt').exists():
+        with open(path / f'output_{top_name}/reports/{top_name}_post_route_power.rpt') as f:
+            power_rpt = f.read()
+        power = parse_power_vivado(power_rpt)
+        d.update(power)
 
     return d
 
