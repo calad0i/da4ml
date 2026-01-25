@@ -1,6 +1,7 @@
 import keras
 import numpy as np
 from hgq.layers import (
+    QAffinedUnaryFunctionLUT,
     QSoftmax,
     QUnaryFunctionLUT,
 )
@@ -44,13 +45,15 @@ class ReplayReLU(ReplayOperationBase):
 
 class ReplayQFunctionLUT(ReplayOperationBase):
     __activation_handled__ = True
-    handles = (QUnaryFunctionLUT,)
+    handles = (QUnaryFunctionLUT, QAffinedUnaryFunctionLUT)
 
     def call(self, x: FixedVariableArray) -> FixedVariableArray:
         op: QUnaryFunctionLUT = self.op
 
         def activation(x) -> np.ndarray:
             kx = keras.ops.convert_to_tensor(x[None])
+            if isinstance(op, QAffinedUnaryFunctionLUT):
+                kx = kx * op.scale + op.bias
             kx = op.activation(kx)
             return keras.ops.convert_to_numpy(kx[0])  # type: ignore
 
