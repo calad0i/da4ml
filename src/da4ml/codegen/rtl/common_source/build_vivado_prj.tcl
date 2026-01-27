@@ -48,7 +48,9 @@ if { $source_type == "vhdl" } {
     set mems [glob -nocomplain "*.mem"]
 }
 
-add_files -fileset [current_fileset] $mems
+if { [llength $mems] > 0 } {
+    add_files -fileset [current_fileset] $mems
+}
 
 foreach f $mems {
     set_property used_in_synthesis true [get_files $f]
