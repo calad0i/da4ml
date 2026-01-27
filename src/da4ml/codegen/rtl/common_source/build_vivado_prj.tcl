@@ -2,7 +2,7 @@ set project_name "$::env(PROJECT_NAME)"
 set device "$::env(DEVICE)"
 set source_type "$::env(SOURCE_TYPE)"
 
-set prj_root [file dirname [info script]]
+set prj_root [file normalize [file dirname [info script]]]
 set top_module "${project_name}"
 set output_dir "${prj_root}/output_${project_name}"
 
