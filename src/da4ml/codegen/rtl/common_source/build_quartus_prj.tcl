@@ -2,8 +2,9 @@ set project_name "$::env(PROJECT_NAME)"
 set device "$::env(DEVICE)"
 set source_type "$::env(SOURCE_TYPE)"
 
+set prj_root [file dirname [info script]]
 set top_module "${project_name}"
-set output_dir "./output_${project_name}"
+set output_dir "${prj_root}/output_${project_name}"
 
 file mkdir $output_dir
 file mkdir "${output_dir}/reports"
@@ -22,41 +23,36 @@ if { "${source_type}" != "vhdl" && "${source_type}" != "verilog" } {
 if { "${source_type}" == "vhdl" } {
     set_global_assignment -name VHDL_INPUT_VERSION VHDL_2008
 
-    foreach file [glob -nocomplain "src/static/*.vhd"] {
+    foreach file [glob -nocomplain "${prj_root}/src/static/*.vhd"] {
         set_global_assignment -name VHDL_FILE "${file}"
     }
 
-    set_global_assignment -name VHDL_FILE "src/${project_name}.vhd"
-    foreach file [glob -nocomplain "src/${project_name}_stage*.vhd"] {
+    set_global_assignment -name VHDL_FILE "${prj_root}/src/${project_name}.vhd"
+    foreach file [glob -nocomplain "${prj_root}/src/${project_name}_stage*.vhd"] {
         set_global_assignment -name VHDL_FILE "${file}"
     }
 } else {
-    foreach file [glob -nocomplain "src/static/*.v"] {
+    foreach file [glob -nocomplain "${prj_root}/src/static/*.v"] {
         set_global_assignment -name VERILOG_FILE "${file}"
     }
 
-    set_global_assignment -name VERILOG_FILE "src/${project_name}.v"
-    foreach file [glob -nocomplain "src/${project_name}_stage*.v"] {
+    set_global_assignment -name VERILOG_FILE "${prj_root}/src/${project_name}.v"
+    foreach file [glob -nocomplain "${prj_root}/src/${project_name}_stage*.v"] {
         set_global_assignment -name VERILOG_FILE "${file}"
     }
 }
 
-set mems [glob -nocomplain "src/memfiles/*.mem"]
-
-# VHDL only uses relative path to working dir apparently...
-if { "${source_type}" == "vhdl" } {
-    foreach f $mems {
-        file copy -force $f [file tail $f]
-    }
-    set mems [glob -nocomplain "*.mem"]
+foreach f [glob -nocomplain "${prj_root}/src/memfiles/*.mem"] {
+    file copy -force $f [file tail $f]
 }
+set mems [glob -nocomplain "*.mem"]
 
 foreach f $mems {
     set_global_assignment -name MIF_FILE "${f}"
 }
 
 # Add SDC constraint file if it exists
-if { [file exists "src/${project_name}.sdc"] } {
+if { [file exists "${prj_root}/src/${project_name}.sdc"] } {
     set_global_assignment -name SDC_FILE "${project_name}.sdc"
 }
 
@@ -100,5 +96,9 @@ set_global_assignment -name ADV_NETLIST_OPT_SYNTH_WYSIWYG_REMAP ON
 
 # Run!!!
 execute_flow -compile
+
+foreach f $mems {
+    file delete $f
+}
 
 project_close
