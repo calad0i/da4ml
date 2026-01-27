@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+from collections.abc import Callable
 from math import ceil, log10
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,14 @@ def parse_power_vivado(power_report: str):
     return dd
 
 
+def parse_if_exists(path: Path, parser_func: Callable[[str], dict[str, Any]]) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    with open(path) as f:
+        content = f.read()
+    return parser_func(content)
+
+
 def _load_project(path: str | Path) -> dict[str, Any]:
     path = Path(path)
     build_tcl_path = path / 'build_vivado_prj.tcl'
@@ -95,26 +104,18 @@ def _load_project(path: str | Path) -> dict[str, Any]:
 
     d = {**metadata, 'clock_period': target_clock_period, 'latency': latency}
 
-    if (path / f'output_{top_name}/reports/{top_name}_post_route_util.rpt').exists():
-        with open(path / f'output_{top_name}/reports/{top_name}_post_route_util.rpt') as f:
-            util_rpt = f.read()
-        util = parse_utilization_vivado(util_rpt)
+    # Vivado reports
+    util = parse_if_exists(path / f'output_{top_name}/reports/{top_name}_post_route_util.rpt', parse_utilization_vivado)
+    timing = parse_if_exists(path / f'output_{top_name}/reports/{top_name}_post_route_timing.rpt', parse_timing_summary_vivado)
+    power = parse_if_exists(path / f'output_{top_name}/reports/{top_name}_post_route_power.rpt', parse_power_vivado)
+    if util is not None:
         d.update(util)
-
-    if (path / f'output_{top_name}/reports/{top_name}_post_route_timing.rpt').exists():
-        with open(path / f'output_{top_name}/reports/{top_name}_post_route_timing.rpt') as f:
-            timing_rpt = f.read()
-        timing = parse_timing_summary_vivado(timing_rpt)
+    if timing is not None:
         d.update(timing)
-
         d['actual_period'] = d['clock_period'] - d['WNS(ns)']
         d['Fmax(MHz)'] = 1000.0 / d['actual_period']
         d['latency(ns)'] = d['latency'] * d['actual_period']
-
-    if (path / f'output_{top_name}/reports/{top_name}_post_route_power.rpt').exists():
-        with open(path / f'output_{top_name}/reports/{top_name}_post_route_power.rpt') as f:
-            power_rpt = f.read()
-        power = parse_power_vivado(power_rpt)
+    if power is not None:
         d.update(power)
 
     return d
