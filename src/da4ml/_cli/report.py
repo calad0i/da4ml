@@ -21,25 +21,22 @@ def parse_timing_summary_vivado(timing_summary: str):
     return d
 
 
-track = [
-    'DSPs',
-    'LUT as Logic',
-    'LUT as Memory',
-    'CLB Registers',
-    'CARRY8',
-    'Register as Latch',
-    'Register as Flip Flop',
-    'RAMB18',
-    'URAM',
-    'RAMB36/FIFO*',
-]
-
-
 def parse_utilization_vivado(utilization: str):
     """
     Parse the utilization report and return a DataFrame with the results.
     """
-
+    track = [
+        'DSPs',
+        'LUT as Logic',
+        'LUT as Memory',
+        'CLB Registers',
+        'CARRY8',
+        'Register as Latch',
+        'Register as Flip Flop',
+        'RAMB18',
+        'URAM',
+        'RAMB36/FIFO*',
+    ]
     matchers = []
     for name in track:
         m = re.compile(
@@ -79,6 +76,92 @@ def parse_power_vivado(power_report: str):
     return dd
 
 
+def parse_timing_quartus(sta_report: str) -> dict[str, Any]:
+    """
+    Parse Altera/Quartus timing report (model.sta.rpt) for timing information.
+    """
+    dd: dict[str, Any] = {}
+
+    fmax_m = re.compile(r';\s*(?P<Fmax>[\d.]+)\s*MHz\s*;\s*(?P<RestrictedFmax>[\d.]+)\s*MHz\s*;\s*(?P<ClockName>[^;]+?)\s*;')
+    match = fmax_m.search(sta_report)
+    if match:
+        dd['Fmax(MHz)'] = float(match.group('Fmax'))
+        dd['Restricted Fmax(MHz)'] = float(match.group('RestrictedFmax'))
+
+    setup_blk_m = re.search(r'; Setup Summary\s*;.*?\n\+[-+]+\+\n(.*?)\n\+[-+]+\+', sta_report, re.DOTALL)
+    if setup_blk_m:
+        setup_txt = setup_blk_m.group(1)
+        setup_data = re.search(
+            r';\s*(?P<Clock>[^;]+?)\s*;\s*(?P<Slack>-?[\d.]+)\s*;\s*(?P<TNS>-?[\d.]+)\s*;\s*(?P<FailingEndpoints>\d+)\s*;',
+            setup_txt,
+        )
+        if setup_data:
+            dd['Setup Slack'] = float(setup_data.group('Slack'))
+            dd['Setup TNS'] = float(setup_data.group('TNS'))
+            dd['Setup Failing Endpoints'] = int(setup_data.group('FailingEndpoints'))
+
+    hold_section = re.search(r'; Hold Summary\s*;.*?\n\+[-+]+\+\n(.*?)\n\+[-+]+\+', sta_report, re.DOTALL)
+    if hold_section:
+        hold_data = re.search(
+            r';\s*(?P<Clock>[^;]+?)\s*;\s*(?P<Slack>-?[\d.]+)\s*;\s*(?P<TNS>-?[\d.]+)\s*;\s*(?P<FailingEndpoints>\d+)\s*;',
+            hold_section.group(1),
+        )
+        if hold_data:
+            dd['Hold Slack'] = float(hold_data.group('Slack'))
+            dd['Hold TNS'] = float(hold_data.group('TNS'))
+            dd['Hold Failing Endpoints'] = int(hold_data.group('FailingEndpoints'))
+
+    return dd
+
+
+def parse_utilization_quartus(fit_report: str) -> dict[str, Any]:
+    """
+    Parse Altera/Quartus fitter report (model.fit.rpt) for resource utilization.
+    """
+    dd: dict[str, Any] = {}
+
+    summary_patterns = [
+        (r';\s*Logic utilization \(in ALMs\)\s*;\s*(?P<Used>[\d,]+)\s*/\s*(?P<Available>[\d,]+)', 'ALMs'),
+        (r';\s*Total dedicated logic registers\s*;\s*(?P<Used>[\d,]+)', 'Registers'),
+        (r';\s*Total block memory bits\s*;\s*(?P<Used>[\d,]+)\s*/\s*(?P<Available>[\d,]+)', 'Block Memory Bits'),
+        (r';\s*Total RAM Blocks\s*;\s*(?P<Used>[\d,]+)\s*/\s*(?P<Available>[\d,]+)', 'RAM Blocks'),
+        (r';\s*Total DSP Blocks\s*;\s*(?P<Used>[\d,]+)\s*/\s*(?P<Available>[\d,]+)', 'DSP'),
+        (r';\s*Total PLLs\s*;\s*(?P<Used>[\d,]+)\s*/\s*(?P<Available>[\d,]+)', 'PLLs'),
+    ]
+
+    for pattern, name in summary_patterns:
+        match = re.search(pattern, fit_report)
+        if not match:
+            continue
+        used = int(match.group('Used').replace(',', ''))
+        dd[name] = used
+        if 'Available' in match.groupdict():
+            available = int(match.group('Available').replace(',', ''))
+            dd[f'{name}_available'] = available
+
+    detail_patterns = [
+        (r';\s*Combinational ALUT usage for logic\s*;\s*(?P<Value>[\d,]+)', 'Combinational ALUTs'),
+        (r';\s*Dedicated logic registers\s*;\s*(?P<Value>[\d,]+)', 'FF'),
+        (r';\s*M20K blocks\s*;\s*(?P<Value>[\d,]+)\s*/', 'M20K'),
+        (r';\s*Total MLAB memory bits\s*;\s*(?P<Value>[\d,]+)', 'MLAB Bits'),
+        (r';\s*DSP Blocks Needed \[=A\+B\+C-D\]\s*;\s*(?P<Value>[\d,]+)\s*/', 'DSP'),
+    ]
+
+    for pattern, name in detail_patterns:
+        match = re.search(pattern, fit_report)
+        if match:
+            value = int(match.group('Value').replace(',', ''))
+            dd[name] = value
+
+    # Map to common names
+    if 'Combinational ALUTs' in dd:
+        dd['LUT'] = dd['Combinational ALUTs']
+    if 'ALMs' in dd:
+        dd['ALM'] = dd['ALMs']
+
+    return dd
+
+
 def parse_if_exists(path: Path, parser_func: Callable[[str], dict[str, Any]]) -> dict[str, Any] | None:
     if not path.exists():
         return None
@@ -88,13 +171,20 @@ def parse_if_exists(path: Path, parser_func: Callable[[str], dict[str, Any]]) ->
 
 
 def _load_project(path: str | Path) -> dict[str, Any]:
+    """
+    Load project summary from the given path.
+    """
     path = Path(path)
-    build_tcl_path = path / 'build_vivado_prj.tcl'
-    assert build_tcl_path.exists(), f'build_vivado_prj.tcl not found in {path}'
+    build_tcl_path = path / 'build_vivado_prj.tcl' if (path / 'build_vivado_prj.tcl').exists() else path / 'build_quartus_prj.tcl'
+    assert build_tcl_path.exists(), f'build_vivado_prj.tcl or build_quartus_prj.tcl not found in {path}'
     top_name = build_tcl_path.read_text().split('"', 2)[1]
+    rpt_path = path / f'output_{top_name}/reports/'
 
-    with open(path / f'src/{top_name}.xdc') as f:
+    # Read clock period from constraints file
+    xdc_path = path / f'src/{top_name}.xdc'
+    with open(xdc_path) as f:
         target_clock_period = float(f.readline().strip().split()[2])
+
     with open(path / 'metadata.json') as f:
         metadata = json.load(f)
 
@@ -105,9 +195,9 @@ def _load_project(path: str | Path) -> dict[str, Any]:
     d = {**metadata, 'clock_period': target_clock_period, 'latency': latency}
 
     # Vivado reports
-    util = parse_if_exists(path / f'output_{top_name}/reports/{top_name}_post_route_util.rpt', parse_utilization_vivado)
-    timing = parse_if_exists(path / f'output_{top_name}/reports/{top_name}_post_route_timing.rpt', parse_timing_summary_vivado)
-    power = parse_if_exists(path / f'output_{top_name}/reports/{top_name}_post_route_power.rpt', parse_power_vivado)
+    util = parse_if_exists(rpt_path / f'{top_name}_post_route_util.rpt', parse_utilization_vivado)
+    timing = parse_if_exists(rpt_path / f'{top_name}_post_route_timing.rpt', parse_timing_summary_vivado)
+    power = parse_if_exists(rpt_path / f'{top_name}_post_route_power.rpt', parse_power_vivado)
     if util is not None:
         d.update(util)
     if timing is not None:
@@ -117,6 +207,17 @@ def _load_project(path: str | Path) -> dict[str, Any]:
         d['latency(ns)'] = d['latency'] * d['actual_period']
     if power is not None:
         d.update(power)
+
+    # Quartus reports
+    util = parse_if_exists(rpt_path / f'{top_name}.fit.rpt', parse_utilization_quartus)
+    timing = parse_if_exists(rpt_path / f'{top_name}.sta.rpt', parse_timing_quartus)
+    if timing is not None:
+        d.update(timing)
+        if 'Fmax(MHz)' in timing:
+            d['actual_period'] = 1000.0 / timing['Fmax(MHz)']
+            d['latency(ns)'] = d['latency'] * d['actual_period']
+    if util is not None:
+        d.update(util)
 
     return d
 
