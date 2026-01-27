@@ -2,7 +2,9 @@
 build-backend = "mesonpy"
 
 requires = [
-  "meson-python>=0.13.1",
+  "meson-python>=0.16.0",
+  "meson>=1.9.0",
+  "ninja",
   "nanobind>=2.9.2",
   "numpy>=2",
   "typing-extensions; python_version<'3.11'",
