@@ -19,6 +19,7 @@ def _recursive_gather(v: FixedVariable, gathered: dict[UUID, FixedVariable]):
 
 
 def gather_variables(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
+    input_ids = {v.id for v in inputs}
     gathered = {v.id: v for v in inputs}
     for o in outputs:
         _recursive_gather(o, gathered)
@@ -38,7 +39,7 @@ def gather_variables(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVar
     for v in outputs:
         refcount[v.id] += 1
 
-    variables = [v for v in variables if refcount[v.id] > 0]
+    variables = [v for v in variables if refcount[v.id] > 0 or v.id in input_ids]
     index = {variables[i].id: i for i in range(len(variables))}
 
     return variables, index
@@ -140,7 +141,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     return ops, out_index, lookup_tables
 
 
-def comb_trace(inputs, outputs):
+def comb_trace(inputs, outputs, keep_dead_inputs: bool = False) -> CombLogic:
     if isinstance(inputs, FixedVariable):
         inputs = [inputs]
     if isinstance(outputs, FixedVariable):
@@ -179,6 +180,8 @@ def comb_trace(inputs, outputs):
     for i in range(len(ops)):
         if ref_count[i] == 0:
             op = ops[i]
+            if keep_dead_inputs and op.opcode == -1:
+                continue
             sol.ops[i] = Op(-1, -1, 5, 0, QInterval(0, 0, 1), op[5], 0.0)
 
     return sol
