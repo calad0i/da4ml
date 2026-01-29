@@ -57,10 +57,15 @@ def mmm(mat0: np.ndarray, mat1: np.ndarray):
 
 
 def cmvm(cm: np.ndarray, v: 'FixedVariableArray', solver_options: solver_options_t) -> np.ndarray:
-    mask = offload_mask(cm, v)
-    if np.any(mask):
+    offload_fn = solver_options.get('offload_fn', None)
+    mask = offload_fn(cm, v) if offload_fn is not None else None
+    if mask is not None and np.any(mask):
+        mask = np.astype(mask, np.bool_)
+        assert mask.shape == cm.shape, f'Offload mask shape {mask.shape} does not match CM shape {cm.shape}'
         offload_cm = cm * mask.astype(cm.dtype)
         cm = cm * (~mask).astype(cm.dtype)
+        if np.all(cm == 0):
+            return mmm(v._vars, offload_cm)
     else:
         offload_cm = None
     _qintervals = [QInterval(float(_v.low), float(_v.high), float(_v.step)) for _v in v._vars]
@@ -68,10 +73,12 @@ def cmvm(cm: np.ndarray, v: 'FixedVariableArray', solver_options: solver_options
     qintervals = NumbaList(_qintervals)  # type: ignore
     latencies = NumbaList(_latencies)  # type: ignore
     hwconf = v._vars.ravel()[0].hwconf
+    solver_options = solver_options.copy()
     solver_options.setdefault('adder_size', hwconf.adder_size)
     solver_options.setdefault('carry_size', hwconf.carry_size)
     _mat = np.ascontiguousarray(cm.astype(np.float32))
-    sol = solve(_mat, qintervals=qintervals, latencies=latencies, **solver_options)
+    solver_options.pop('offload_fn', None)
+    sol = solve(_mat, qintervals=qintervals, latencies=latencies, **solver_options)  # type: ignore
     _r: np.ndarray = sol(v._vars)
     if offload_cm is not None:
         _r = _r + mmm(v._vars, offload_cm)

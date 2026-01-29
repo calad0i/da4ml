@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from math import ceil, log2
 from typing import TypedDict
 
@@ -5,8 +6,11 @@ import numpy as np
 from numba import jit, prange
 
 from .core import _solve, create_state, to_solution
-from .types import Pipeline, QInterval
+from .types import TYPE_CHECKING, Pipeline, QInterval
 from .util import kernel_decompose
+
+if TYPE_CHECKING:
+    from ..trace import FixedVariableArray
 
 
 @jit(cache=True)
@@ -262,3 +266,8 @@ class solver_options_t(TypedDict, total=False):
     adder_size: int
     carry_size: int
     search_all_decompose_dc: bool
+    offload_fn: None | Callable[[np.ndarray, 'FixedVariableArray'], np.ndarray]
+    """
+    Callable taking in (constant_matrix, fixed_variable_array) and returning
+    a boolean mask of which weights to offload to multiplication operations.
+    """
