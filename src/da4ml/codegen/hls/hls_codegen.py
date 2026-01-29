@@ -1,7 +1,34 @@
 from collections.abc import Callable
 
-from ...cmvm.types import CombLogic, QInterval, _minimal_kif
-from ...trace.fixed_variable import _const_f
+from ...cmvm.types import CombLogic, Op, QInterval, _minimal_kif
+from ...trace.fixed_variable import _const_f, interpret_as
+from ..rtl.verilog.comb import get_table_name as get_table_name_rtl
+
+
+def get_table_name(sol: CombLogic, op: Op) -> str:
+    return get_table_name_rtl(sol, op)[:-4].replace('-', '_')
+
+
+def gen_mem_line(sol: CombLogic, op: Op, typestr_fn: Callable[[bool | int, int, int], str]) -> tuple[str, str]:
+    assert op.opcode == 8
+    assert sol.lookup_tables is not None
+    table = sol.lookup_tables[op.data]
+    data = table.padded_table(sol.ops[op.id0].qint)
+    data = interpret_as(data, *table.spec.out_kif)
+    values = ','.join(map(str, data))
+    type_str = typestr_fn(*table.spec.out_kif)
+    table_name = get_table_name(sol, op)
+    line = f'static const {type_str} {table_name}[] = {{{values}}};'
+    return table_name, line
+
+
+def gen_mem_def(sol: CombLogic, typestr_fn: Callable[[bool | int, int, int], str]):
+    lines: dict[str, str] = {}
+    for op in sol.ops:
+        if op.opcode == 8:
+            table_name, line = gen_mem_line(sol, op, typestr_fn)
+            lines[table_name] = line
+    return list(lines.values())
 
 
 def kif_to_vitis_type(k: bool | int = 1, i: int = 0, f: int = 0):
@@ -34,13 +61,13 @@ def get_typestr_fn(flavor: str):
     return typestr_fn
 
 
-def ssa_gen(sol: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | int, int, int], str]):
-    ops = sol.ops
+def ssa_gen(comb: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | int, int, int], str]):
+    ops = comb.ops
     all_kifs = list(map(_minimal_kif, (op.qint for op in ops)))
     all_types = list(map(lambda x: typestr_fn(*x), all_kifs))
 
     lines = []
-    ref_count = sol.ref_count
+    ref_count = comb.ref_count
     for i, op in enumerate(ops):
         if ref_count[i] == 0:
             # Skip unused ops
@@ -102,6 +129,11 @@ def ssa_gen(sol: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | in
                 # Multiplication
                 ref1 = f'v{op.id1}'
                 val = f'{ref0} * {ref1}'
+            case 8:
+                # Look-up
+                table_name = get_table_name(comb, op)
+                ref0 = f'v{op.id0}'
+                val = f'{table_name}[{ref0}.range()]'
             case _:
                 raise ValueError(f'Unsupported opcode: {op.opcode}')
 
@@ -110,7 +142,12 @@ def ssa_gen(sol: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | in
         if print_latency:
             line += f' // {op.latency}'
         lines.append(line)
-    return lines
+
+    mem_def_lines = gen_mem_def(comb, typestr_fn)
+    if mem_def_lines:
+        mem_def_lines.extend(['', ''])
+
+    return mem_def_lines + lines
 
 
 def output_gen(sol: CombLogic, typestr_fn: Callable[[bool | int, int, int], str]):
