@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from hashlib import sha256
 from math import ceil, floor, log2
-from typing import NamedTuple, overload
+from typing import Any, NamedTuple, overload
 from uuid import UUID
 
 import numpy as np
@@ -80,12 +80,30 @@ def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32]]:
     return TableSpec(hash=h.hexdigest(), inp_width=inp_width, out_qint=out_qint), int_table
 
 
+@overload
 def interpret_as(
-    x: int | NDArray[np.integer],
+    x: NDArray[np.integer],
     k: int,
     i: int,
     f: int,
-) -> float | NDArray[np.floating]:
+) -> NDArray[np.floating]: ...
+
+
+@overload
+def interpret_as(
+    x: int,
+    k: int,
+    i: int,
+    f: int,
+) -> float: ...
+
+
+def interpret_as(
+    x: Any,
+    k: int,
+    i: int,
+    f: int,
+) -> Any:
     b = k + i + f
     bias = 2.0 ** (b - 1) * k
     eps = 2.0**-f
@@ -159,12 +177,11 @@ class LookupTable:
         pad_right = size - len(self.table) - pad_left
         return pad_left, pad_right
 
-    def padded_table(self, qint: QInterval) -> NDArray[np.int32]:
-        pad_left, pad_right = self._get_pads(qint)
+    def padded_table(self, key_qint: QInterval) -> NDArray[np.int32]:
+        pad_left, pad_right = self._get_pads(key_qint)
         data = np.pad(self.table, (pad_left, pad_right), mode='constant', constant_values=0)
-        if qint.min < 0:
+        if key_qint.min < 0:
             size = len(data)
-            # data = np.concatenate((data[size // 2 :], data[: size // 2]))
             data = np.roll(data, size // 2)
         return data
 
@@ -669,7 +686,7 @@ class FixedVariable:
         if i + k + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
-        low = -k * Decimal(2) ** i
+        low = -int(k) * Decimal(2) ** i
 
         high = Decimal(2) ** i - step
         _low, _high = self.low, self.high
