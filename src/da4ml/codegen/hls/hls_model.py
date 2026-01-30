@@ -68,7 +68,7 @@ class HLSModel:
             self._solution,
             self._prj_name,
             self._flavor,
-            ['#pragma HLS INLINE'],
+            self._pragma,
             4,
             0,
             self._print_latency,

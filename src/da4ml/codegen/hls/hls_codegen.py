@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from ...cmvm.types import CombLogic, Op, QInterval, _minimal_kif
 from ...trace.fixed_variable import _const_f, interpret_as
@@ -179,7 +179,7 @@ def hls_logic_and_bridge_gen(
     sol: CombLogic,
     fn_name: str,
     flavor: str,
-    pragmas: list[str] | None = None,
+    pragmas: Sequence[str] | None = None,
     n_indent: int = 4,
     n_base_indent: int = 0,
     print_latency: bool = False,
