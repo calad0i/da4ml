@@ -480,7 +480,7 @@ class CombLogic(NamedTuple):
     def save(self, path: str | Path):
         """Save the solution to a file."""
         with open(path, 'w') as f:
-            json.dump(self, f, cls=JSONEncoder)
+            json.dump(self, f, cls=JSONEncoder, separators=(',', ':'))
 
     @classmethod
     def deserialize(cls, data: list):
@@ -714,7 +714,7 @@ class Pipeline(NamedTuple):
     def save(self, path: str | Path):
         """Save the solution to a file."""
         with open(path, 'w') as f:
-            json.dump(self, f, cls=JSONEncoder)
+            json.dump(self, f, cls=JSONEncoder, separators=(',', ':'))
 
     @classmethod
     def deserialize(cls, data: dict):
