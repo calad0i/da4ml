@@ -225,7 +225,7 @@ def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, ti
 
     {body_indent.join(output_lines)}
 
-    endmodule
+endmodule
 """
     if timescale is not None:
         code = f'{timescale}\n\n{code}'

@@ -183,9 +183,13 @@ def hls_logic_and_bridge_gen(
     n_indent: int = 4,
     n_base_indent: int = 0,
     print_latency: bool = False,
+    namespace: str = '',
 ):
     typestr_fn = get_typestr_fn(flavor)
     inp_t, out_t = get_io_types(sol, flavor)
+
+    if namespace and not namespace.endswith('::'):
+        namespace += '::'
 
     n_in, n_out = sol.shape
     template_def = 'template <typename inp_t, typename out_t>'
@@ -213,7 +217,7 @@ struct {fn_name}_config {{
     static const size_t N_out = {n_out};
     typedef {inp_t} inp_t;
     typedef {out_t} out_t;
-    constexpr static auto f = {fn_name}<inp_t, out_t>;
+    constexpr static auto f = {namespace}{fn_name}<inp_t, out_t>;
 }};
 
 extern "C" {{

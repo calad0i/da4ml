@@ -13,7 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from da4ml.cmvm.types import CombLogic
-from da4ml.codegen.hls.hls_codegen import get_io_types, hls_logic_and_bridge_gen
+from da4ml.codegen.hls.hls_codegen import hls_logic_and_bridge_gen
 
 from ... import codegen
 from ...cmvm.types import _minimal_kif
@@ -34,6 +34,7 @@ class HLSModel:
         clock_period: int = 5,
         clock_uncertainty: float = 0.1,
         io_delay_minmax: tuple[float, float] = (0.2, 0.4),
+        namespace: str = 'comb_logic',
     ):
         self._solution = solution
         self._prj_name = prj_name
@@ -48,6 +49,7 @@ class HLSModel:
         self.__src_root = Path(codegen.__file__).parent
         self._lib = None
         self._uuid = None
+        self._namespace = namespace
 
         if pragma is None:
             if self._flavor == 'vitis':
@@ -72,34 +74,17 @@ class HLSModel:
             4,
             0,
             self._print_latency,
+            namespace=self._namespace,
         )
 
         headers = ['#pragma once', '#include "bitshift.hh"']
 
-        inp_type, out_type = get_io_types(self._solution, self._flavor)
-        n_in, n_out = len(self._solution.inp_qint), len(self._solution.out_qint)
-        template_signature = (
-            f'template <typename inp_t, typename out_t>\nvoid {self._prj_name}(inp_t inp[{n_in}], out_t out[{n_out}]);'
-        )
-        fn_signature = f'void {self._prj_name}_fn({inp_type} inp[{n_in}], {out_type} out[{n_out}])'
+        namespace_open = f'namespace {self._namespace} {{\n\n' if self._namespace else ''
+        namespace_close = f'\n}} // namespace {self._namespace}\n' if self._namespace else ''
 
         with open(self._path / f'{self._prj_name}.hh', 'w') as f:
-            f.write('\n'.join(headers) + '\n\n')
-            f.write(f'{template_signature}\n\n{fn_signature};\n')
-
-        pragma_str = '\n'.join(self._pragma)
-        cpp_def = f"""
-#include "{self._prj_name}.hh"
-
-{template_def}
-
-{fn_signature} {{
-{pragma_str}
-    {self._prj_name}<{inp_type}, {out_type}>(inp, out);
-}}
-"""
-        with open(self._path / f'{self._prj_name}.cc', 'w') as f:
-            f.write(cpp_def)
+            content = '\n'.join(headers) + f'\n\n{namespace_open}{template_def}\n{namespace_close}'
+            f.write(content)
 
         with open(self._path / f'{self._prj_name}_bridge.cc', 'w') as f:
             f.write(bridge)
