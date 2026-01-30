@@ -377,12 +377,6 @@ namespace dais {
                 );
         }
 
-        if (max_inp_width > 32 || max_out_width > 32) {
-            std::cerr << "Warning: max_inp_width=" << max_inp_width
-                      << " or max_out_width=" << max_out_width
-                      << " exceeds 32 bits, which may cause issues with the Verilator "
-                         "binder.\n";
-        }
         if (max_ops_width > 64) {
             std::cerr << "Warning: max_ops_width=" << max_ops_width
                       << " exceeds 64 bits. This may comppromise bit-exactness of the "
