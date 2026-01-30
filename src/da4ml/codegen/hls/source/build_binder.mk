@@ -1,5 +1,5 @@
 default: slow
-INCLUDES = -I ap_types -I .
+INCLUDES = -I ../src/static/ap_types -I ../src/static/ -I ../src
 CXXFLAGS = -fPIC
 CFLAGS = -std=c++17 -fPIC
 LIBNAME = lib$(PRJ_NAME)_$(STAMP).so

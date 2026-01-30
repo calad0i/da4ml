@@ -35,6 +35,7 @@ class HLSModel:
         clock_uncertainty: float = 0.1,
         io_delay_minmax: tuple[float, float] = (0.2, 0.4),
         namespace: str = 'comb_logic',
+        inline_header: bool = True,
     ):
         self._solution = solution
         self._prj_name = prj_name
@@ -50,6 +51,7 @@ class HLSModel:
         self._lib = None
         self._uuid = None
         self._namespace = namespace
+        self._inline_static_header = inline_header
 
         if pragma is None:
             if self._flavor == 'vitis':
@@ -64,8 +66,10 @@ class HLSModel:
             self._pragma = tuple(pragma)
 
     def write(self):
-        if not self._path.exists():
-            self._path.mkdir(parents=True, exist_ok=True)
+        (self._path / 'sim').mkdir(parents=True, exist_ok=True)
+        (self._path / 'model').mkdir(parents=True, exist_ok=True)
+        (self._path / 'src/static').mkdir(parents=True, exist_ok=True)
+
         template_def, bridge = hls_logic_and_bridge_gen(
             self._solution,
             self._prj_name,
@@ -77,27 +81,40 @@ class HLSModel:
             namespace=self._namespace,
         )
 
-        headers = ['#pragma once', '#include "bitshift.hh"']
+        headers = ['#pragma once']
+        if not self._inline_static_header:
+            headers.append('#include "bitshift.hh"')
 
-        namespace_open = f'namespace {self._namespace} {{\n\n' if self._namespace else ''
-        namespace_close = f'\n}} // namespace {self._namespace}\n' if self._namespace else ''
+        namespace_open = f'namespace {self._namespace} {{\n' if self._namespace else ''
+        namespace_close = f'}} // namespace {self._namespace}\n' if self._namespace else ''
 
-        with open(self._path / f'{self._prj_name}.hh', 'w') as f:
-            content = '\n'.join(headers) + f'\n\n{namespace_open}{template_def}\n{namespace_close}'
+        with open(self._path / f'src/{self._prj_name}.hh', 'w') as f:
+            content = '\n'.join(headers)
+            if self._inline_static_header:
+                with open(self.__src_root / f'hls/source/{self._flavor}_bitshift.hh') as ff:
+                    bitshift_content = ff.read()
+                bitshift_lines = bitshift_content.splitlines()
+                bitshift_include = bitshift_lines[1]
+                bitshift_content = '\n'.join(bitshift_lines[2:]).strip() + '\n'
+                content += f'\n{bitshift_include}'
+            else:
+                bitshift_content = ''
+            content += f'\n{namespace_open}\n{bitshift_content}\n{template_def}\n{namespace_close}'
             f.write(content)
 
-        with open(self._path / f'{self._prj_name}_bridge.cc', 'w') as f:
+        with open(self._path / f'sim/{self._prj_name}_bridge.cc', 'w') as f:
             f.write(bridge)
 
-        shutil.copy(self.__src_root / 'hls/source/binder_util.hh', self._path)
-        shutil.copy(self.__src_root / f'hls/source/{self._flavor}_bitshift.hh', self._path / 'bitshift.hh')
-        shutil.copy(self.__src_root / 'hls/source/build_binder.mk', self._path)
+        shutil.copy(self.__src_root / 'hls/source/binder_util.hh', self._path / 'sim')
+        shutil.copy(self.__src_root / 'hls/source/build_binder.mk', self._path / 'sim')
+        if not self._inline_static_header:
+            shutil.copy(self.__src_root / f'hls/source/{self._flavor}_bitshift.hh', self._path / 'src/static/bitshift.hh')
         if self._flavor == 'vitis':
-            shutil.copytree(self.__src_root / 'hls/source/ap_types', self._path / 'ap_types', dirs_exist_ok=True)
+            shutil.copytree(self.__src_root / 'hls/source/ap_types', self._path / 'src/static/ap_types', dirs_exist_ok=True)
         else:
             pass
 
-        self._solution.save(self._path / 'project.json')
+        self._solution.save(self._path / 'model/comb.json')
 
     def _compile(self, verbose=False, openmp=True, o3: bool = False, clean=True):
         """Same as compile, but will not write to the library
@@ -135,7 +152,7 @@ class HLSModel:
                     p.unlink()
 
         try:
-            r = subprocess.run(args, env=env, check=True, cwd=self._path, capture_output=not verbose)
+            r = subprocess.run(args, env=env, check=True, cwd=self._path / 'sim', capture_output=not verbose)
         except subprocess.CalledProcessError as e:
             print(e.stderr.decode(), file=sys.stderr)
             print(e.stdout.decode(), file=sys.stdout)
@@ -150,7 +167,7 @@ class HLSModel:
     def _load_lib(self, uuid: str | None = None):
         uuid = uuid if uuid is not None else self._uuid
         self._uuid = uuid
-        lib_path = self._path / f'lib{self._prj_name}_{uuid}.so'
+        lib_path = self._path / f'sim/lib{self._prj_name}_{uuid}.so'
         if not lib_path.exists():
             raise RuntimeError(f'Library {lib_path} does not exist')
         self._lib = ctypes.CDLL(str(lib_path))
