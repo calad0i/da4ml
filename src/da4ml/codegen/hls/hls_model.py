@@ -1,4 +1,5 @@
 import ctypes
+import json
 import os
 import re
 import shutil
@@ -13,10 +14,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from da4ml.cmvm.types import CombLogic
-from da4ml.codegen.hls.hls_codegen import hls_logic_and_bridge_gen
+from da4ml.codegen.hls.hls_codegen import get_io_types, hls_logic_and_bridge_gen
 
-from ... import codegen
 from ...cmvm.types import _minimal_kif
+from .. import hls
 
 T = TypeVar('T', bound=np.floating)
 
@@ -31,7 +32,7 @@ class HLSModel:
         print_latency: bool = True,
         part_name: str = 'xcvu13p-flga2577-2-e',
         pragma: Sequence[str] | None = None,
-        clock_period: int = 5,
+        clock_period: float = 5,
         clock_uncertainty: float = 0.1,
         io_delay_minmax: tuple[float, float] = (0.2, 0.4),
         namespace: str = 'comb_logic',
@@ -47,7 +48,7 @@ class HLSModel:
         self._clock_period = clock_period
         self._clock_uncertainty = clock_uncertainty
         self._io_delay_minmax = io_delay_minmax
-        self.__src_root = Path(codegen.__file__).parent
+        self.__src_root = Path(hls.__file__).parent
         self._lib = None
         self._uuid = None
         self._namespace = namespace
@@ -56,8 +57,8 @@ class HLSModel:
         if pragma is None:
             if self._flavor == 'vitis':
                 self._pragma = (
-                    '#pragma HLS ARRAY_PARTITION variable=inp complete',
-                    '#pragma HLS ARRAY_PARTITION variable=out complete',
+                    '#pragma HLS ARRAY_PARTITION variable=model_inp complete',
+                    '#pragma HLS ARRAY_PARTITION variable=model_out complete',
                     '#pragma HLS PIPELINE II=1',
                 )
             else:
@@ -65,11 +66,13 @@ class HLSModel:
         else:
             self._pragma = tuple(pragma)
 
-    def write(self):
+    def write(self, metadata: dict[str, str | float] | None = None):
         (self._path / 'sim').mkdir(parents=True, exist_ok=True)
         (self._path / 'model').mkdir(parents=True, exist_ok=True)
         (self._path / 'src/static').mkdir(parents=True, exist_ok=True)
+        (self._path / 'utils').mkdir(parents=True, exist_ok=True)
 
+        # Main logic and bridge
         template_def, bridge = hls_logic_and_bridge_gen(
             self._solution,
             self._prj_name,
@@ -86,12 +89,12 @@ class HLSModel:
             headers.append('#include "bitshift.hh"')
 
         namespace_open = f'namespace {self._namespace} {{\n' if self._namespace else ''
-        namespace_close = f'}} // namespace {self._namespace}\n' if self._namespace else ''
+        namespace_close = f'\n}} // namespace {self._namespace}\n' if self._namespace else ''
 
         with open(self._path / f'src/{self._prj_name}.hh', 'w') as f:
             content = '\n'.join(headers)
             if self._inline_static_header:
-                with open(self.__src_root / f'hls/source/{self._flavor}_bitshift.hh') as ff:
+                with open(self.__src_root / f'source/{self._flavor}_bitshift.hh') as ff:
                     bitshift_content = ff.read()
                 bitshift_lines = bitshift_content.splitlines()
                 bitshift_include = bitshift_lines[1]
@@ -99,22 +102,82 @@ class HLSModel:
                 content += f'\n{bitshift_include}'
             else:
                 bitshift_content = ''
-            content += f'\n{namespace_open}\n{bitshift_content}\n{template_def}\n{namespace_close}'
+            content += f'\n{namespace_open}\n{bitshift_content}\n{template_def};{namespace_close}'
             f.write(content)
 
         with open(self._path / f'sim/{self._prj_name}_bridge.cc', 'w') as f:
             f.write(bridge)
 
-        shutil.copy(self.__src_root / 'hls/source/binder_util.hh', self._path / 'sim')
-        shutil.copy(self.__src_root / 'hls/source/build_binder.mk', self._path / 'sim')
+        # Emulation script and static files
+        shutil.copy(self.__src_root / 'source/binder_util.hh', self._path / 'sim')
+        shutil.copy(self.__src_root / 'source/build_binder.mk', self._path / 'sim')
+
+        # Inline the only static header
         if not self._inline_static_header:
-            shutil.copy(self.__src_root / f'hls/source/{self._flavor}_bitshift.hh', self._path / 'src/static/bitshift.hh')
+            shutil.copy(self.__src_root / f'source/{self._flavor}_bitshift.hh', self._path / 'src/static/bitshift.hh')
         if self._flavor == 'vitis':
-            shutil.copytree(self.__src_root / 'hls/source/ap_types', self._path / 'src/static/ap_types', dirs_exist_ok=True)
+            shutil.copytree(self.__src_root / 'source/ap_types', self._path / 'src/static/ap_types', dirs_exist_ok=True)
         else:
             pass
 
+        # Dump the comb logic
         self._solution.save(self._path / 'model/comb.json')
+
+        # Out-of-context top fn and its header
+        inp_type, out_type = get_io_types(self._solution, self._flavor)
+        n_in, n_out = len(self._solution.inp_qint), len(self._solution.out_qint)
+        fn_signature = f'void {self._prj_name}_fn({inp_type} model_inp[{n_in}], {out_type} model_out[{n_out}])'
+
+        pragma_str = '\n'.join(self._pragma)
+
+        ooc_header_def = f"""#pragma once
+#include "{self._prj_name}.hh"
+{namespace_open}
+{fn_signature};
+{namespace_close}
+"""
+        with open(self._path / f'utils/{self._prj_name}_ooc.hh', 'w') as f:
+            f.write(ooc_header_def)
+
+        ooc_cpp_def = f"""
+#include "{self._prj_name}_ooc.hh"
+
+{namespace_open}
+{fn_signature} {{
+{pragma_str}
+    {self._prj_name}<{inp_type}, {out_type}>(model_inp, model_out);
+}}
+{namespace_close}
+"""
+        with open(self._path / f'utils/{self._prj_name}_ooc.cc', 'w') as f:
+            f.write(ooc_cpp_def)
+
+        # Metadata
+        _metadata = {
+            'cost': self._solution.cost,
+            'flavor': self._flavor,
+            'part_name': self._part_name,
+            'clock_period': self._clock_period,
+            'clock_uncertainty': self._clock_uncertainty,
+            'io_delay_min': self._io_delay_minmax[0],
+            'io_delay_max': self._io_delay_minmax[1],
+        }
+        if metadata is not None:
+            _metadata.update(metadata)
+
+        with open(self._path / 'metadata.json', 'w') as f:
+            json.dump(_metadata, f)
+
+        # OOC Build scripts
+        for path in (self.__src_root).glob('source/build_*_prj.tcl'):
+            with open(path) as f:
+                tcl = f.read()
+            tcl = tcl.replace('$::env(PROJECT_NAME)', self._prj_name)
+            tcl = tcl.replace('$::env(DEVICE)', self._part_name)
+            tcl = tcl.replace('$::env(CLOCK_PERIOD)', str(self._clock_period))
+            tcl = tcl.replace('$::env(CLOCK_UNCERTAINTY)', str(self._clock_uncertainty))
+            with open(self._path / path.name, 'w') as f:
+                f.write(tcl)
 
     def _compile(self, verbose=False, openmp=True, o3: bool = False, clean=True):
         """Same as compile, but will not write to the library
@@ -147,7 +210,7 @@ class HLSModel:
 
         if clean:
             m = re.compile(r'^lib.*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.so$')
-            for p in self._path.iterdir():
+            for p in (self._path / 'sim').iterdir():
                 if not p.is_dir() and m.match(p.name):
                     p.unlink()
 
@@ -172,7 +235,7 @@ class HLSModel:
             raise RuntimeError(f'Library {lib_path} does not exist')
         self._lib = ctypes.CDLL(str(lib_path))
 
-    def compile(self, verbose=False, openmp=True, o3: bool = False, clean=True):
+    def compile(self, verbose=False, openmp=True, o3: bool = False, clean=True, metadata: dict[str, str | float] | None = None):
         """Compile the model to a shared object file
 
         Parameters
@@ -185,13 +248,15 @@ class HLSModel:
             Turn on -O3 flag, by default False
         clean : bool, optional
             Remove obsolete shared object files, by default True
+        metadata : dict[str, str | float] | None, optional
+            Extra metadata to write to the model folder, by default None
 
         Raises
         ------
         RuntimeError
             If compilation fails
         """
-        self.write()
+        self.write(metadata)
         self._compile(verbose, openmp, o3, clean)
 
     def predict(self, data: NDArray[T] | Sequence[NDArray[T]], n_threads: int = 0) -> NDArray[T]:

@@ -5,7 +5,9 @@ import re
 from collections.abc import Callable
 from math import ceil, log10
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
+
+T = TypeVar('T')
 
 
 def parse_timing_summary_vivado(timing_summary: str):
@@ -162,7 +164,7 @@ def parse_utilization_quartus(fit_report: str) -> dict[str, Any]:
     return dd
 
 
-def parse_if_exists(path: Path, parser_func: Callable[[str], dict[str, Any]]) -> dict[str, Any] | None:
+def parse_if_exists(path: Path, parser_func: Callable[[str], T]) -> T | None:
     if not path.exists():
         return None
     with open(path) as f:
@@ -170,29 +172,47 @@ def parse_if_exists(path: Path, parser_func: Callable[[str], dict[str, Any]]) ->
     return parser_func(content)
 
 
+def parse_vitis_latency(csynth_rpt_path: str) -> int:
+    with open(csynth_rpt_path) as f:
+        content = f.read()
+    latencies = re.findall(r'<(?:Best|Average|Worst)-caseLatency>(\d+)</(?:Best|Average|Worst)-caseLatency>', content)
+    assert len(latencies) > 0 and len(latencies) % 3 == 0, 'Failed to parse latencies from Vitis report: ' + str(latencies)
+    latencies = list(map(int, latencies))
+    assert len(set(latencies)) == 1, 'Inconsistent latencies found in Vitis report: ' + str(latencies)
+    return latencies[0]
+
+
 def _load_project(path: str | Path) -> dict[str, Any]:
     """
     Load project summary from the given path.
     """
     path = Path(path)
-    build_tcl_path = path / 'build_vivado_prj.tcl' if (path / 'build_vivado_prj.tcl').exists() else path / 'build_quartus_prj.tcl'
-    assert build_tcl_path.exists(), f'build_vivado_prj.tcl or build_quartus_prj.tcl not found in {path}'
+    if (path / 'build_vivado_prj.tcl').exists():
+        build_tcl_path = path / 'build_vivado_prj.tcl'
+    elif (path / 'build_quartus_prj.tcl').exists():
+        build_tcl_path = path / 'build_quartus_prj.tcl'
+    elif (path / 'build_vitis_prj.tcl').exists():
+        build_tcl_path = path / 'build_vitis_prj.tcl'
+    else:
+        raise ValueError(f'build_vivado_prj.tcl or build_quartus_prj.tcl not found in {path}')
     top_name = build_tcl_path.read_text().split('"', 2)[1]
     rpt_path = path / f'output_{top_name}/reports/'
-
-    # Read clock period from constraints file
-    xdc_path = path / f'src/{top_name}.xdc'
-    with open(xdc_path) as f:
-        target_clock_period = float(f.readline().strip().split()[2])
 
     with open(path / 'metadata.json') as f:
         metadata = json.load(f)
 
-    suffix = 'vhd' if metadata['flavor'] == 'vhdl' else 'v'
-    with open(path / f'src/{top_name}.{suffix}') as f:
-        latency = f.read().count('<=') - 1
+    d = metadata
 
-    d = {**metadata, 'clock_period': target_clock_period, 'latency': latency}
+    if metadata['flavor'] in ('verilog', 'vhdl'):
+        suffix = 'vhd' if metadata['flavor'] == 'vhdl' else 'v'
+        with open(path / f'src/{top_name}.{suffix}') as f:
+            latency = f.read().count('<=') - 1
+        d['latency'] = latency
+    else:
+        assert metadata['flavor'] == 'vitis'
+        latency = parse_if_exists(path / f'output_{top_name}/test_ooc/syn/report/csynth.xml', parse_vitis_latency)
+        if latency is not None:
+            d['latency'] = latency
 
     # Vivado reports
     util = parse_if_exists(rpt_path / f'{top_name}_post_route_util.rpt', parse_utilization_vivado)
@@ -223,6 +243,7 @@ def _load_project(path: str | Path) -> dict[str, Any]:
 
 
 def load_project(path: str | Path) -> dict[str, Any] | None:
+    return _load_project(path)
     try:
         return _load_project(path)
     except Exception as e:
