@@ -172,10 +172,8 @@ def parse_if_exists(path: Path, parser_func: Callable[[str], T]) -> T | None:
     return parser_func(content)
 
 
-def parse_vitis_latency(csynth_rpt_path: str) -> int:
-    with open(csynth_rpt_path) as f:
-        content = f.read()
-    latencies = re.findall(r'<(?:Best|Average|Worst)-caseLatency>(\d+)</(?:Best|Average|Worst)-caseLatency>', content)
+def parse_vitis_latency(csynth_xml_content: str) -> int:
+    latencies = re.findall(r'<(?:Best|Average|Worst)-caseLatency>(\d+)</(?:Best|Average|Worst)-caseLatency>', csynth_xml_content)
     assert len(latencies) > 0 and len(latencies) % 3 == 0, 'Failed to parse latencies from Vitis report: ' + str(latencies)
     latencies = list(map(int, latencies))
     assert len(set(latencies)) == 1, 'Inconsistent latencies found in Vitis report: ' + str(latencies)
