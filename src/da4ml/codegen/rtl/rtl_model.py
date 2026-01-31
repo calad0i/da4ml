@@ -158,8 +158,8 @@ class RTLModel:
 
                 # Table memory files
                 memfiles: dict[str, str] = {}
-                for comb in self._pipe.solutions:
-                    memfiles.update(table_mem_gen(comb))
+                for _comb in self._pipe.solutions:
+                    memfiles.update(table_mem_gen(_comb))
 
                 for k, v in codes.items():
                     with open(self._path / f'src/{k}.{suffix}', 'w') as f:
@@ -221,18 +221,33 @@ class RTLModel:
         shutil.copy(self.__src_root / 'common_source/build_binder.mk', self._path / 'sim')
         shutil.copy(self.__src_root / 'common_source/ioutil.hh', self._path / 'sim')
         shutil.copy(self.__src_root / 'common_source/binder_util.hh', self._path / 'sim')
-        self._solution.save(self._path / 'model/comb.json')
+        if isinstance(self._solution, CombLogic):
+            self._solution.save(self._path / 'model/comb.json')
+
+        _metadata = {
+            'cost': self._solution.cost,
+            'flavor': self._flavor,
+            'part_name': self._part_name,
+            'clock_period': self._clock_period,
+            'clock_uncertainty': self._clock_uncertainty,
+            'io_delay_min': self._io_delay_minmax[0],
+            'io_delay_max': self._io_delay_minmax[1],
+        }
+        _comb = self._solution if isinstance(self._solution, CombLogic) else self._solution.solutions[0]
+        _metadata['adder_size'] = _comb.adder_size
+        _metadata['carry_size'] = _comb.carry_size
+        if self._pipe is not None:
+            _metadata['latency'] = len(self._pipe[0])
+            _metadata['reg_bits'] = self._pipe.reg_bits
+            _metadata['clock_period'] = self._clock_period
+            _metadata['latency_cutoff'] = self._latency_cutoff
+
+        if metadata is not None:
+            metadata.update(_metadata)
+            _metadata = metadata
+
         with open(self._path / 'metadata.json', 'w') as f:
-            _metadata = {'cost': self._solution.cost, 'flavor': self._flavor}
-            if self._pipe is not None:
-                _metadata['latency'] = len(self._pipe[0])
-                _metadata['reg_bits'] = self._pipe.reg_bits
-
-            if metadata is not None:
-                metadata.update(_metadata)
-                _metadata = metadata
-
-            f.write(json.dumps(_metadata))
+            json.dump(_metadata, f)
 
     def _compile(self, verbose=False, openmp=True, nproc=None, o3: bool = False, clean=True, _env: dict[str, str] | None = None):
         """Same as compile, but will not write to the library
