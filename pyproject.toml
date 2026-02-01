@@ -70,7 +70,7 @@ lint.fixable = [ "ALL" ]
 lint.unfixable = [  ]
 
 [tool.pytest.ini_options]
-env = [ "DAIS_NUM_THREADS=1" ]
+env = [ "DA_DEFAULT_THREADS=1" ]
 
 addopts = [
   "--import-mode=importlib",

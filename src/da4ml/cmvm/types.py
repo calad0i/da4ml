@@ -587,7 +587,7 @@ class CombLogic(NamedTuple):
     def predict(
         self,
         data: NDArray | Sequence[NDArray],
-        n_threads: int = -1,
+        n_threads: int = 0,
     ) -> NDArray[np.float64]:
         """Predict the output of the solution for a batch of input data with cpp backed DAIS interpreter.
         Cannot be used if the binary interpreter is not installed.
@@ -599,7 +599,8 @@ class CombLogic(NamedTuple):
             determined by the size of the data.
         n_threads: int
             Number of threads to use for prediction.
-            Negative or zero values will use maximum available threads. Default is -1.
+            Negative or zero values will use maximum available threads, or the value of the
+            DA_DEFAULT_THREADS environment variable if set. Default is 0.
             If OpenMP is not supported, this parameter is ignored.
 
         Returns
@@ -611,11 +612,8 @@ class CombLogic(NamedTuple):
         if isinstance(data, Sequence):
             data = np.concatenate([a.reshape(a.shape[0], -1) for a in data], axis=-1)
 
-        if n_threads == 0:
-            n_threads = -1
-
-        if n_threads == -1:
-            n_threads = int(os.environ.get('DAIS_NUM_THREADS', -1))
+        if n_threads <= 0:
+            n_threads = int(os.environ.get('DA_DEFAULT_THREADS', 0))
 
         bin_logic = self.to_binary()
         return dais_interp_run(bin_logic, data, n_threads)

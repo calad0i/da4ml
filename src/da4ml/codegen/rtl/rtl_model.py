@@ -378,6 +378,9 @@ class RTLModel:
         -------
         NDArray[np.float64]
             Output of the model in shape (n_samples, output_size).
+        n_threads : int, optional
+            Number of threads to use for inference. If 0, will use all available threads, or the value of
+            the DA_DEFAULT_THREADS environment variable if set. If < 0, OpenMP will be disabled. Default is 0.
         """
 
         if isinstance(data, Sequence):
@@ -403,6 +406,9 @@ class RTLModel:
 
         inp_buf = inp_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
         out_buf = out_data.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
+
+        if n_threads == 0:
+            n_threads = int(os.environ.get('DA_DEFAULT_THREADS', 0))
 
         with at_path(self._path / 'src/memfiles'):
             self._lib.inference(inp_buf, out_buf, n_sample, n_threads)

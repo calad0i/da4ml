@@ -272,6 +272,10 @@ class HLSModel:
         -------
         NDArray[np.floating]
             Output of the model in shape (n_samples, output_size).
+
+        n_threads : int, optional
+            Number of threads to use for inference. If 0, will use all available threads, or the value of
+            the DA_DEFAULT_THREADS environment variable if set. If < 0, OpenMP will be disabled. Default is 0.
         """
         assert self._lib is not None, 'Library not loaded, call .compile() first.'
         inp_size, out_size = self._solution.shape
@@ -292,6 +296,10 @@ class HLSModel:
 
         inp_buf = inp_data.ctypes.data_as(ctypes.POINTER(c_dtype))
         out_buf = out_data.ctypes.data_as(ctypes.POINTER(c_dtype))
+
+        if n_threads == 0:
+            n_threads = int(os.environ.get('DA_DEFAULT_THREADS', 0))
+
         if dtype == np.float32:
             self._lib.inference_f32(inp_buf, out_buf, n_sample, n_threads)
         else:

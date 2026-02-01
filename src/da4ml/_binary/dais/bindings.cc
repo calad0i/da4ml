@@ -68,6 +68,10 @@ void run_interp(
 
     size_t n_samples = input.size() / n_in;
 
+    if (n_threads <= 0) {
+        n_threads = omp_get_max_threads();
+    }
+
     size_t n_max_threads = std::min<size_t>(n_threads, omp_get_max_threads());
     size_t n_samples_per_thread = std::max<size_t>(n_samples / n_max_threads, 32);
     size_t n_thread = n_samples / n_samples_per_thread;
