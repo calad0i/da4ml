@@ -12,7 +12,7 @@ from da4ml.trace.ops import quantize, relu
 class OperationTest:
     def test_op(self, op_func, test_data: np.ndarray, comb: CombLogic, inp: FixedVariableArray, n_samples: int):
         traced_out = comb.predict(test_data, n_threads=1)
-        expected_out = op_func(quantize(test_data, *inp.kif)).reshape(n_samples, -1)
+        expected_out = quantize(op_func(quantize(test_data, *inp.kif)).reshape(n_samples, -1), 1, 12, 12)
         np.testing.assert_equal(traced_out, expected_out)
 
         symbolic_out = []
@@ -25,7 +25,7 @@ class OperationTest:
 
     @pytest.fixture()
     def comb(self, op_func, inp: FixedVariableArray):
-        out = op_func(inp)
+        out = quantize(op_func(inp), 1, 12, 12)
         comb = comb_trace(inp, out)
         return comb
 
