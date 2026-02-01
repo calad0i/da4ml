@@ -141,6 +141,56 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     return ops, out_index, lookup_tables
 
 
+def _index_remap(op: Op, idx_map: dict[int, int]) -> Op:
+    if op.opcode == -1:
+        return op
+    id0 = op.id0
+    id1 = op.id1
+    id0 = idx_map[id0] if id0 >= 0 else id0
+    id1 = idx_map[id1] if id1 >= 0 else id1
+    if abs(op.opcode) == 6:  # msb_mux
+        id_c = op.data & 0xFFFFFFFF
+        shift = (op.data >> 32) & 0xFFFFFFFF
+        id_c = idx_map[id_c]
+        data = id_c + (shift << 32)
+    else:
+        data = op.data
+    return Op(id0, id1, op.opcode, data, op.qint, op.latency, op.cost)
+
+
+def compactify_comb(comb: CombLogic, keep_dead_inputs: bool = False) -> CombLogic:
+    no_ref = comb.ref_count == 0
+    if keep_dead_inputs:
+        no_ref &= np.array([op.opcode != -1 for op in comb.ops], dtype=np.bool_)
+    if not np.any(no_ref):
+        return comb
+
+    idx_map: dict[int, int] = {}
+    new_ops: list[Op] = []
+
+    cnt = 0
+    for i, op in enumerate(comb.ops):
+        if no_ref[i]:
+            continue
+        new_ops.append(_index_remap(op, idx_map))
+        idx_map[i] = cnt
+        cnt += 1
+    out_idxs = [idx_map[i] for i in comb.out_idxs]
+
+    comb = CombLogic(
+        comb.shape,
+        comb.inp_shifts,
+        out_idxs,
+        comb.out_shifts,
+        comb.out_negs,
+        new_ops,
+        comb.carry_size,
+        comb.adder_size,
+        comb.lookup_tables,
+    )
+    return compactify_comb(comb, keep_dead_inputs)
+
+
 def comb_trace(inputs, outputs, keep_dead_inputs: bool = False) -> CombLogic:
     if isinstance(inputs, FixedVariable):
         inputs = [inputs]
@@ -165,7 +215,7 @@ def comb_trace(inputs, outputs, keep_dead_inputs: bool = False) -> CombLogic:
     out_shift = [int(log2(abs(sf))) for sf in out_sf]
     out_neg = [sf < 0 for sf in out_sf]
 
-    sol = CombLogic(
+    comb = CombLogic(
         shape,
         inp_shifts,
         out_index,
@@ -177,13 +227,4 @@ def comb_trace(inputs, outputs, keep_dead_inputs: bool = False) -> CombLogic:
         lookup_tables,
     )
 
-    ref_count = sol.ref_count
-
-    for i in range(len(ops)):
-        if ref_count[i] == 0:
-            op = ops[i]
-            if keep_dead_inputs and op.opcode == -1:
-                continue
-            sol.ops[i] = Op(-1, -1, 5, 0, QInterval(0, 0, 1), op[5], 0.0)
-
-    return sol
+    return compactify_comb(comb, keep_dead_inputs)
