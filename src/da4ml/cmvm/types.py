@@ -210,8 +210,8 @@ def _quantize(v: 'T', k: int | bool, i: int, f: int, round_mode: str = 'TRN') ->
 
 @_quantize.register(float)
 @_quantize.register(int)
-@_quantize.register(np.float32)
-@_quantize.register(np.float64)
+@_quantize.register(np.floating)
+@_quantize.register(np.integer)
 def _(v, k: int | bool, i: int, f: int, round_mode: str = 'TRN'):
     if round_mode.upper() == 'RND':
         v += 2.0 ** (-f - 1)
@@ -309,11 +309,9 @@ class CombLogic(NamedTuple):
         buf = np.empty(len(self.ops), dtype=object)
         inp = np.asarray(inp)
 
-        inp_qint = [op.qint for op in self.ops if op.opcode == -1]
         if quantize:  # TRN and WRAP
-            k, i, f = map(np.array, zip(*map(minimal_kif, inp_qint)))
+            k, i, f = self.inp_kifs
             inp = [_quantize(*x, round_mode='TRN') for x in zip(inp, k, i, f)]
-
         inp = inp * (2.0 ** np.array(self.inp_shifts))
         for i, op in enumerate(self.ops):
             match op.opcode:
