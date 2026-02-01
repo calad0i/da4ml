@@ -342,7 +342,7 @@ class CombLogic(NamedTuple):
                         v1 = -v1
 
                     if isinstance(k, FixedVariable):
-                        buf[i] = k.msb_mux(v0, v1 * 2**shift, op.qint)
+                        buf[i] = k.msb_mux(v0, v1 * 2**shift, op.qint)  # type: ignore
                     else:
                         qint_k = self.ops[id_c].qint
                         if qint_k.min < 0:
