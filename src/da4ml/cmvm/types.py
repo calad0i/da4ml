@@ -1,4 +1,5 @@
 import json
+import os
 from collections.abc import Sequence
 from decimal import Decimal
 from functools import reduce, singledispatch
@@ -612,6 +613,9 @@ class CombLogic(NamedTuple):
 
         if n_threads == 0:
             n_threads = -1
+
+        if n_threads == -1:
+            n_threads = int(os.environ.get('DAIS_NUM_THREADS', -1))
 
         bin_logic = self.to_binary()
         return dais_interp_run(bin_logic, data, n_threads)

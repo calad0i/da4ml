@@ -731,7 +731,7 @@ class FixedVariable:
 
         if self.opr == 'const':
             if self.low >= 0:
-                return b
+                return b if self.high == 0 else a
             else:
                 return b if log2(abs(self.low)) % 1 == 0 else a
         elif self.opr == 'quantize':
@@ -762,9 +762,9 @@ class FixedVariable:
 
     def is_negative(self) -> 'FixedVariable|bool':
         if self.low >= 0:
-            return False
+            return self.from_const(0, hwconf=self.hwconf)
         if self.high < 0:
-            return True
+            return self.from_const(1, hwconf=self.hwconf)
         _, i, _ = self.kif
         sign_bit = self.quantize(0, i + 1, -i) >> i
         return sign_bit
