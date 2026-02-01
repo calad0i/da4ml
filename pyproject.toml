@@ -68,3 +68,16 @@ lint.ignore = [ "E501", "E731", "E741", "F403", "F405" ]
 lint.explicit-preview-rules = true
 lint.fixable = [ "ALL" ]
 lint.unfixable = [  ]
+
+[tool.pytest.ini_options]
+env = [ "DAIS_NUM_THREADS=1" ]
+
+addopts = [
+  "--import-mode=importlib",
+  "--cov=src/da4ml",
+  "--cov-report=xml",
+  "--cov-report=html",
+]
+
+[tool.coverage.run]
+omit = [ "*/_version.py" ]

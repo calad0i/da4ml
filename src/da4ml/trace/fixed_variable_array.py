@@ -130,7 +130,8 @@ class FixedVariableArray:
             match func:
                 case np.mean:
                     _x = reduce(lambda x, y: x + y, *args, **kwargs)
-                    return _x * (_x.size / self._vars.size)
+                    _size = _x.size if isinstance(_x, FixedVariableArray) else 1
+                    return _x * (_size / self._vars.size)
                 case np.sum:
                     return reduce(lambda x, y: x + y, *args, **kwargs)
                 case np.max | np.amax:
@@ -171,7 +172,7 @@ class FixedVariableArray:
                 a = np.array(a)
             if not isinstance(b, FixedVariableArray):
                 b = np.array(b)
-            if a.shape[-1] == b.shape[0]:
+            if a.shape and b.shape and a.shape[-1] == b.shape[0]:
                 return a @ b
 
             assert a.size == 1 or b.size == 1, f'Error in dot product: {a.shape} @ {b.shape}'
