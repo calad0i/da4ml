@@ -149,6 +149,8 @@ def comb_trace(inputs, outputs, keep_dead_inputs: bool = False) -> CombLogic:
 
     inputs, outputs = list(np.ravel(inputs)), list(np.ravel(outputs))  # type: ignore
 
+    assert all(inp._factor > 0 for inp in inputs), 'Input variables must have positive scaling factor'
+
     if any(not isinstance(v, FixedVariable) for v in outputs):
         hwconf = inputs[0].hwconf
         outputs = list(outputs)

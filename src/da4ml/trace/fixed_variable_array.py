@@ -177,6 +177,22 @@ class FixedVariableArray:
             assert a.size == 1 or b.size == 1, f'Error in dot product: {a.shape} @ {b.shape}'
             return a * b
 
+        if func is np.where:
+            assert len(args) == 3, 'Where function requires exactly three arguments'
+            cond, x, y = args
+            if isinstance(cond, FixedVariableArray):
+                assert np.all(np.sum(cond.kif, axis=0) <= 1), (
+                    f'Condition array in `where` must be boolean FixedVariableArray, got kif={cond.kif}'
+                )
+            else:
+                return FixedVariableArray(np.where(cond, to_raw_arr(x), to_raw_arr(y)), self.solver_options)
+            cond, x, y = np.broadcast_arrays(cond, x, y)  # type: ignore
+            shape = cond.shape
+
+            cond, x, y = cond.ravel(), x.ravel(), y.ravel()
+            r = [c.msb_mux(xv, yv) for c, xv, yv in zip(cond, x, y)]
+            return FixedVariableArray(np.array(r).reshape(shape), self.solver_options)
+
         args, kwargs = to_raw_arr(args), to_raw_arr(kwargs)
         return FixedVariableArray(
             func(*args, **kwargs),
@@ -418,6 +434,22 @@ class FixedVariableArray:
             return FixedVariableArray(self._vars**_power, self.solver_options)
         else:
             return self.apply(lambda x: x**power)
+
+    def __gt__(self, other):
+        a = self._vars
+        b = other._vars if isinstance(other, FixedVariableArray) else other
+        a, b = np.broadcast_arrays(a, b)
+        shape = a.shape
+        r = np.array([av > bv for av, bv in zip(a.ravel(), b.ravel())])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
+
+    def __lt__(self, other):
+        a = self._vars
+        b = other._vars if isinstance(other, FixedVariableArray) else other
+        a, b = np.broadcast_arrays(a, b)
+        shape = a.shape
+        r = np.array([av < bv for av, bv in zip(a.ravel(), b.ravel())])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
 
     def relu(
         self,
