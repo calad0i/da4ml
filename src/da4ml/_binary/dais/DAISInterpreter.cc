@@ -163,14 +163,13 @@ namespace dais {
         const int32_t _shift = dtype_to.fractionals - dtype_from.fractionals;
         int64_t data =
             (static_cast<int64_t>(data_high) << 32) | static_cast<uint32_t>(data_low);
-        // std::cout << "v=" << value << " c=" << data << " shift=" << _shift << std::endl;
         return (value << _shift) + data;
     }
 
     bool DAISInterpreter::get_msb(int64_t value, const DType &dtype) const {
         if (dtype.is_signed)
             return value < 0;
-        return value >= (1LL << (dtype.width() - 2));
+        return value > std::max((1LL << (dtype.width() - 2)), 0LL);
     }
 
     int64_t DAISInterpreter::msb_mux(
