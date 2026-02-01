@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from da4ml.trace import FixedVariableArrayInput, comb_trace
 from da4ml.trace.ops import quantize, relu
 
 from .test_ops import OperationTest
@@ -53,3 +54,20 @@ class TestOperations(OperationTest):
         np.save('/tmp/wtf2.npy', test_data)
         np.save('/tmp/wtf3.npy', inp.kif)
         return lambda x: functions[request.param](x, w8x8)
+
+
+@pytest.mark.parametrize('thres', [0.0, 0.5, 1.0])
+def test_offload(thres):
+    w = (np.random.randn(8, 8).astype(np.float32) * 10).round() / 10
+
+    def offload_fn(weights, vector):
+        return np.random.rand(*np.shape(weights)) > thres
+
+    inp = FixedVariableArrayInput((2, 8), solver_options={'offload_fn': offload_fn}).quantize(1, 4, 3)
+    out = inp @ w
+    comb = comb_trace(inp, out)
+
+    data_in = np.random.rand(10000, 2, 8).astype(np.float32) * 64 - 32
+    traced_out = comb.predict(data_in, n_threads=1)
+    expected_out = (quantize(data_in, *inp.kif) @ w).reshape(10000, -1)
+    np.testing.assert_equal(traced_out, expected_out)

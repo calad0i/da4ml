@@ -85,14 +85,6 @@ def cmvm(cm: np.ndarray, v: 'FixedVariableArray', solver_options: solver_options
     return _r
 
 
-def offload_mask(cm: NDArray, v: 'FixedVariableArray') -> NDArray[np.bool_]:
-    assert v.ndim == 1
-    assert cm.ndim == 2
-    assert cm.shape[0] == v.shape[0]
-    bits = np.sum(v.kif, axis=0)[:, None]
-    return (bits == 0) & (cm != 0)
-
-
 _unary_functions = (
     np.sin,
     np.cos,

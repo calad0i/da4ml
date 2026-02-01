@@ -65,7 +65,10 @@ class OperationTestSynth(OperationTest):
     @pytest.mark.parametrize('latency_cutoff', (-1, 1))
     def test_rtl_gen(self, comb: CombLogic, flavor: str, latency_cutoff, temp_directory: str, test_data: np.ndarray):
         rtl_model = RTLModel(comb, 'test', temp_directory, flavor=flavor, latency_cutoff=latency_cutoff)
+        before = rtl_model.__repr__()
         rtl_model.compile(nproc=1)
+        after = rtl_model.__repr__()
+        assert before != after
 
         rtl_pred = rtl_model.predict(test_data, n_threads=1)
         comb_pred = comb.predict(test_data, n_threads=1)
@@ -80,7 +83,10 @@ class OperationTestSynth(OperationTest):
         #     os.system(f'rm -rf {temp_directory}')
         #     pytest.skip('hlslib and oneapi functional simulation not implemented yet')
 
+        before = hls_model.__repr__()
         hls_model.compile()
+        after = hls_model.__repr__()
+        assert before != after
 
         hls_pred = hls_model.predict(test_data, n_threads=1)
         comb_pred = comb.predict(test_data, n_threads=1)
@@ -132,7 +138,7 @@ class TestLookup(OperationTestSynth):
 class TestReLU(OperationTestSynth):
     @pytest.fixture()
     def op_func(self):
-        return lambda x: relu(x)
+        return lambda x: relu(x * 2 * (np.arange(8) % 2) - 1 + np.arange(-8, 8, 2))
 
 
 class TestBranching(OperationTestSynth):
