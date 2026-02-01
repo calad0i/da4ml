@@ -598,7 +598,8 @@ class FixedVariable:
         if step > self.step and round_mode == 'RND':
             return (self + step / 2).relu(i, f, 'TRN')
         low = max(Decimal(0), self.low)
-        high = max(Decimal(0), self.high)
+        high = self.high
+
         if i is not None:
             _high = Decimal(2) ** i - step
             if _high < high:
@@ -606,6 +607,7 @@ class FixedVariable:
                 low = Decimal(0)
                 high = _high
         _factor = self._factor
+        high = max(Decimal(0), high)
 
         if self.low == low and self.high == high and self.step == step:
             return self

@@ -28,7 +28,10 @@ functions = {
     'minimum': lambda x, w: np.minimum(x[..., None, :], w),
     'amax': lambda x, w: np.amax(x, axis=-1, keepdims=True),
     'amin': lambda x, w: np.amin(x, axis=-1, keepdims=True),
-    'relu-transpose': lambda x, w: relu(x),
+    'relu0': lambda x, w: relu(x),
+    'relu1': lambda x, w: relu(x, i=np.array(1)),
+    'relu2': lambda x, w: relu(x, f=np.array(1), round_mode='RND'),
+    'multi_cadd': lambda x, w: x + 2 + 3.75,
     'mux0': lambda x, w: np.where(x[..., None] > w, x[..., None], w),
     'lut': lambda x, w: quantize(np.cos(np.sin(x)), 1, 2, 3)
     if isinstance(x, np.ndarray)
