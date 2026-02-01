@@ -26,5 +26,3 @@ def pytest_sessionfinish(session, exitstatus):
     for path in root.glob('*'):
         if path.is_dir() and not any(path.iterdir()):
             path.rmdir()
-    if not any(root.iterdir()):
-        root.rmdir()

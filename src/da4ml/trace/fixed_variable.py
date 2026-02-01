@@ -185,6 +185,11 @@ class LookupTable:
             data = np.roll(data, size // 2)
         return data
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, LookupTable):
+            return False
+        return self.spec == other.spec and np.array_equal(self.table, other.table)
+
 
 def _const_f(const: float | Decimal):
     """Get the minimum f such that const * 2^f is an integer."""

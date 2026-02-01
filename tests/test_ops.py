@@ -5,7 +5,7 @@ import pytest
 
 from da4ml.cmvm.types import CombLogic
 from da4ml.codegen import HLSModel, RTLModel
-from da4ml.trace import FixedVariableArray, comb_trace
+from da4ml.trace import FixedVariableArray, FixedVariableArrayInput, comb_trace
 from da4ml.trace.ops import quantize, relu
 
 
@@ -14,6 +14,14 @@ class OperationTest:
         traced_out = comb.predict(test_data, n_threads=1)
         expected_out = op_func(quantize(test_data, *inp.kif)).reshape(n_samples, -1)
         np.testing.assert_equal(traced_out, expected_out)
+
+        symbolic_out = []
+        for x in test_data[:100]:
+            x = list(map(float, x))
+            r = comb(x, quantize=True)
+            symbolic_out.append(r)
+        symbolic_out = np.array(symbolic_out, dtype=np.float64)
+        np.testing.assert_equal(symbolic_out, traced_out[:100])
 
     @pytest.fixture()
     def comb(self, op_func, inp: FixedVariableArray):
@@ -38,6 +46,18 @@ class OperationTest:
         shape = inp.shape
         data = np.random.randn(n_samples, *shape) * 32
         return data
+
+    def test_retrace(self, comb: CombLogic, inp: FixedVariableArray, test_data: np.ndarray):
+        inp2 = FixedVariableArrayInput(inp.shape).quantize(*inp.kif)
+        out2 = comb(inp2)  # type: ignore
+        comb2 = comb_trace(inp2, out2)
+        r1, r2 = comb.predict(test_data), comb2.predict(test_data)
+        np.testing.assert_equal(r1, r2)
+
+    def test_serialization(self, comb: CombLogic, temp_directory: str):
+        comb.save(f'{temp_directory}/comb.json')
+        comb2 = CombLogic.load(f'{temp_directory}/comb.json')
+        assert comb == comb2
 
 
 class OperationTestSynth(OperationTest):
