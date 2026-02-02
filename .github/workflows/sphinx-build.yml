@@ -37,11 +37,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip3 install ".[docs]"
-          pip3 install jax
       - name: Build
         run: |
           cd docs
-          KERAS_BACKEND=jax make html
+          make html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
