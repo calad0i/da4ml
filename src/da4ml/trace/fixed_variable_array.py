@@ -600,8 +600,6 @@ class RetardedFixedVariableArray(FixedVariableArray):
             _i = np.broadcast_to(i, self.shape).ravel()  # type: ignore
             _f = np.broadcast_to(f, self.shape).ravel()  # type: ignore
 
-            op = lambda x: _quantize(self._operator(x), k, i, f, overflow_mode, round_mode)  # type: ignore
-
         local_tables: dict[tuple[QInterval, tuple[int, int, int]] | QInterval, LookupTable] = {}
         variables = []
         for v, _kk, _ii, _ff in zip(self._vars.ravel(), _k, _i, _f):
