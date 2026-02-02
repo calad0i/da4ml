@@ -1,0 +1,9 @@
+[wrap-file]
+directory = xtensor-0.27.1
+source_url = https://github.com/xtensor-stack/xtensor/archive/0.27.1.tar.gz
+source_filename = xtensor-0.27.1.tar.gz
+source_hash = 117c192ae3b7c37c0156dedaa88038e0599a6b264666c3c6c2553154b500fe23
+patch_directory = xtensor
+
+[provide]
+xtensor = xtensor_dep

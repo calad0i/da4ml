@@ -1,0 +1,8 @@
+option('use_xsimd', type : 'boolean', value : false, description : 'simd acceleration for xtensor')
+option('use_tbb', type : 'boolean', value : false, description : 'enable parallelization using intel TBB')
+option('use_openmp', type : 'boolean', value : false, description : 'enable parallelization using OpenMP')
+option('enable_assert', type : 'boolean', value : false, description : 'xtensor bound check')
+option('check_dimension', type : 'boolean', value : false, description : 'xtensor dimension check')
+option('force_temporary_memory', type : 'boolean', value : true, description : 'xtensor force the use of temporary memory when assigning instead of an automatic overlap check')
+option('default_column_major', type : 'boolean', value : false, description : 'set default layout to column major')
+option('disable_exceptions', type : 'boolean', value : false, description : 'Disable C++ exceptions')
