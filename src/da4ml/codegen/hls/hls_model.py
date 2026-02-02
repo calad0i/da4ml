@@ -116,7 +116,9 @@ class HLSModel:
         if not self._inline_static_header:
             shutil.copy(self.__src_root / f'source/{self._flavor}_bitshift.hh', self._path / 'src/static/bitshift.hh')
         if self._flavor == 'vitis':
-            shutil.copytree(self.__src_root / 'source/ap_types', self._path / 'src/static/ap_types', dirs_exist_ok=True)
+            shutil.copytree(self.__src_root / 'source/ap_types/include', self._path / 'src/static/ap_types', dirs_exist_ok=True)
+        elif self._flavor == 'hlslib':
+            shutil.copytree(self.__src_root / 'source/ac_types/include', self._path / 'src/static/ac_types', dirs_exist_ok=True)
         else:
             pass
 

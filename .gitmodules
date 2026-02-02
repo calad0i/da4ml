@@ -1,0 +1,6 @@
+[submodule "src/da4ml/codegen/hls/source/ap_types"]
+	path = src/da4ml/codegen/hls/source/ap_types
+	url = https://github.com/Xilinx/HLS_arbitrary_Precision_Types/
+[submodule "src/da4ml/codegen/hls/source/ac_types"]
+	path = src/da4ml/codegen/hls/source/ac_types
+	url = https://github.com/hlslibs/ac_types
