@@ -7,7 +7,7 @@
 
 namespace dais {
 
-    void DAISInterpreter::load_from_binary(const std::vector<int32_t> &binary_data) {
+    void DAISInterpreter::load_from_binary(const std::span<const int32_t> &binary_data) {
         if (binary_data.size() < 6) {
             throw std::runtime_error(
                 "Binary data too small to contain valid DAIS model file"

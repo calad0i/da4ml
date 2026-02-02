@@ -1,10 +1,9 @@
 #include <cmath>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
-#include <nanobind/stl/vector.h>
 #include "DAISInterpreter.hh"
 #include <cstring>
-#include <vector>
+#include <span>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -16,7 +15,7 @@ namespace nb = nanobind;
 using namespace nb::literals;
 
 void _run_interp(
-    const std::vector<int32_t> &binary_data,
+    const std::span<const int32_t> &binary_data,
     const std::span<const double_t> &inputs,
     std::span<double_t> &outputs,
     size_t n_samples
@@ -34,8 +33,8 @@ void _run_interp(
 }
 
 void run_interp(
-    const std::vector<int32_t> &bin_logic,
-    const std::vector<double_t> &input,
+    const std::span<const int32_t> &bin_logic,
+    const std::span<const double_t> &input,
     std::span<double_t> &output,
     int64_t n_threads
 ) {
@@ -55,11 +54,6 @@ void run_interp(
             std::to_string(spec_version)
         );
     }
-
-    const std::vector<int32_t> bin_logic_vec(
-        bin_logic_ptr, bin_logic_ptr + bin_logic.size()
-    );
-    const std::vector<double_t> data_vec(input_ptr, input_ptr + input.size());
 
     int32_t n_in = bin_logic[2];
     int32_t n_out = bin_logic[3];
@@ -94,7 +88,7 @@ void run_interp(
             &input_ptr[offset_in], n_samples_this_thread * n_in
         );
         std::span<double_t> out_span(&output[offset_out], n_samples_this_thread * n_out);
-        _run_interp(bin_logic_vec, inp_span, out_span, n_samples_this_thread);
+        _run_interp(bin_logic, inp_span, out_span, n_samples_this_thread);
     }
 }
 
@@ -114,11 +108,11 @@ nb::ndarray<nb::numpy, double_t> run_interp_numpy(
     size_t n_samples = input.size() / n_in;
     double_t *output_ptr = new double_t[n_samples * n_out];
 
-    const std::vector<int32_t> bin_vec(bin_logic_ptr, bin_logic_ptr + bin_logic.size());
-    const std::vector<double_t> inp_vec(input_ptr, input_ptr + input.size());
+    const std::span<const int32_t> bin_span(bin_logic_ptr, bin_logic.size());
+    const std::span<const double_t> inp_span(input_ptr, input.size());
     std::span<double_t> out_span(output_ptr, n_samples * n_out);
 
-    run_interp(bin_vec, inp_vec, out_span, n_threads);
+    run_interp(bin_span, inp_span, out_span, n_threads);
 
     nb::capsule owner(output_ptr, [](void *p) noexcept { delete[] (double_t *)p; });
     return nb::ndarray<nb::numpy, double_t>(

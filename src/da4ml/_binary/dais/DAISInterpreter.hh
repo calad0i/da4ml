@@ -121,7 +121,7 @@ namespace dais {
 
         void load_from_file(const std::string &filename);
 
-        void load_from_binary(const std::vector<int32_t> &binary_data);
+        void load_from_binary(const std::span<const int32_t> &binary_data);
 
         std::vector<double> inference(const std::span<const double> &inputs);
         void inference(const std::span<const double> &inputs, std::span<double> &outputs);
