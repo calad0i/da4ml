@@ -37,7 +37,6 @@ classifiers = [
 dynamic = [ "version" ]
 dependencies = [ "llvmlite>=0.44", "numba>=0.61", "quantizers>=1,<2" ]
 optional-dependencies.docs = [
-  "hgq2",
   "myst-parser",
   "pyparsing",
   "sphinx",
