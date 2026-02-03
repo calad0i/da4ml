@@ -1,7 +1,7 @@
 project('da4ml', 'cpp',
   version: run_command('python3', 'tools/gitversion.py', check: true).stdout().strip(),
   meson_version: '>=1.9.0',
-  default_options: ['buildtype=release', 'cpp_std=c++20'],
+  default_options: ['buildtype=release', 'cpp_std=c++23'],
   license: 'LGPL-3.0-or-later',
 )
 
@@ -18,6 +18,7 @@ vcs_tag(
 
 nanobind_dep = dependency('nanobind')
 omp_dep = dependency('openmp')
+xtensor_dep = dependency('xtensor', default_options: ['use_xsimd=true', 'use_tbb=true'])
 
 _limited_abi = py.language_version().version_compare('>=3.12') ? '3.12' : ''
 
@@ -28,6 +29,19 @@ dais_bin = py.extension_module(
     'src/da4ml/_binary/dais/DAISInterpreter.cc',
   ],
   dependencies: [nanobind_dep, omp_dep],
+  install: true,
+  subdir: 'da4ml/_binary',
+  cpp_args: ['-Wno-sign-compare', '-Wno-unused-variable'],
+  limited_api: _limited_abi,
+)
+
+cmvm_bin = py.extension_module(
+  'cmvm_bin',
+  sources: [
+    'src/da4ml/_binary/cmvm/bit_decompose.cc',
+    'src/da4ml/_binary/cmvm/mat_decompose.cc',
+  ],
+  dependencies: [nanobind_dep, xtensor_dep, omp_dep],
   install: true,
   subdir: 'da4ml/_binary',
   cpp_args: ['-Wno-sign-compare', '-Wno-unused-variable'],
