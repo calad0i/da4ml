@@ -62,7 +62,7 @@ class OperationTest:
 
 class OperationTestSynth(OperationTest):
     @pytest.mark.parametrize('flavor', ('verilog', 'vhdl'))
-    @pytest.mark.parametrize('latency_cutoff', (-1, 1))
+    @pytest.mark.parametrize('latency_cutoff', (-1, 0.5, 1))
     def test_rtl_gen(self, comb: CombLogic, flavor: str, latency_cutoff, temp_directory: str, test_data: np.ndarray):
         rtl_model = RTLModel(comb, 'test', temp_directory, flavor=flavor, latency_cutoff=latency_cutoff)
         before = rtl_model.__repr__()

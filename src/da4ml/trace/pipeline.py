@@ -1,4 +1,4 @@
-from math import ceil, floor
+from math import floor
 
 from ..cmvm.types import CombLogic, Op, Pipeline
 from .fixed_variable import FixedVariable, HWConfig
@@ -7,8 +7,8 @@ from .tracer import comb_trace
 
 def retime_pipeline(csol: Pipeline, verbose=True):
     n_stages = len(csol[0])
-    cutoff_high = ceil(max(max(sol.out_latency) / (i + 1) for i, sol in enumerate(csol[0])))
-    cutoff_low = 0
+    cutoff_high = max(max(sol.out_latency) / (i + 1) for i, sol in enumerate(csol[0]))
+    cutoff_low = max(csol.out_latencies) / n_stages
     adder_size, carry_size = csol[0][0].adder_size, csol[0][0].carry_size
     best = csol
     while cutoff_high - cutoff_low > 1:
@@ -130,12 +130,12 @@ def to_pipeline(comb: CombLogic, latency_cutoff: float, retiming=True, verbose=T
     sols = []
     max_stage = max(opd.keys())
     n_in = comb.shape[0]
-    for i, stage in enumerate(opd.keys()):
+    for stage in range(len(opd.keys())):
         _ops = opd[stage]
         _out_idx = out_idxd[stage]
         n_out = len(_out_idx)
 
-        if i == max_stage:
+        if stage == max_stage:
             out_shifts = comb.out_shifts
             out_negs = comb.out_negs
         else:
