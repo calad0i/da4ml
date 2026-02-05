@@ -1,4 +1,5 @@
 import os
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -21,8 +22,27 @@ def temp_directory(request: pytest.FixtureRequest):
 
 def pytest_sessionfinish(session, exitstatus):
     """whole test run finishes."""
+    # Skip on xdist worker nodes
+    if hasattr(session.config, 'workerinput'):
+        return
     root = Path(os.environ.get('DA4ML_TEST_DIR', '/tmp/da4ml_test'))
     # Purge empty directories
+    if exitstatus == 0:
+        os.system(f'rm -rf {root}')
+        return
     for path in root.glob('*'):
         if path.is_dir() and not any(path.iterdir()):
             path.rmdir()
+    if not any(root.iterdir()):
+        root.rmdir()
+
+
+def pytest_sessionstart(session):
+    """whole test run starts."""
+    # Skip on xdist worker nodes
+    if hasattr(session.config, 'workerinput'):
+        return
+    root = Path(os.environ.get('DA4ML_TEST_DIR', '/tmp/da4ml_test'))
+    root.mkdir(exist_ok=True)
+    with tarfile.open(Path(__file__).parent / 'test_data.tar.xz', 'r:xz') as tar:
+        tar.extractall(root, filter='data')

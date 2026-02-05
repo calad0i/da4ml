@@ -319,7 +319,7 @@ def pretty_print(arr: list[list]):
 
 
 def stdout_print(arr: list[list], full: bool, columns: list[str] | None):
-    whitelist = [
+    default_columns = [
         'epoch',
         'flavor',
         'actual_period',
@@ -330,12 +330,13 @@ def stdout_print(arr: list[list], full: bool, columns: list[str] | None):
         'DSP',
         'LUT',
         'FF',
+        'RAMB18',
         'comb_metric',
         'Fmax(MHz)',
         'latency(ns)',
     ]
     if columns is None:
-        columns = whitelist
+        columns = default_columns
 
     if not full:
         idx_row = arr[0]
