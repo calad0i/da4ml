@@ -19,10 +19,10 @@ w = np.random.randint(-2**7, 2**7, (4, 5, 6)) / 2**7
 def operation(inp):
    inp = quantize(inp, 1, 7, 0) # Input must be quantized before any non-trivial operation
    out1 = relu(inp) # Only activation supported for now; can attach quantization at the same time
-   out2 = quantize(np.sin(out1), 1, 0, 7, 'SAT', 'RND')
 
    # many native numpy operations are supported
    out2 = inp[:, 1:3].transpose()
+   out2 = quantize(np.sin(out2), 1, 0, 7, 'SAT', 'RND')
    out2 = np.repeat(out2, 2, axis=0) * 3 + 4
    out2 = np.amax(np.stack([out2, -out2 * 2], axis=0), axis=0)
 
