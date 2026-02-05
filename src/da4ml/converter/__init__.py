@@ -59,6 +59,10 @@ def trace_model(  # type: ignore
         raise ValueError(f'No plugin found for model type from module: {module}. Available plugins: {list(plugins.keys())}')
 
     entry = plugins[module]
+
+    if verbose:
+        print(f'Loading DAIS tracer plugin from {entry.module}:{entry.attr}.')
+
     _class: type[DAISTracerPluginBase] = entry.load()
     tracer = _class(model, hwconf, solver_options)
     return tracer.trace(

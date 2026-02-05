@@ -61,7 +61,7 @@ class DAISTracerPluginBase:
 
     def get_input_shapes(
         self,
-    ) -> list[tuple[int, ...]] | None:
+    ) -> Sequence[tuple[int, ...]] | None:
         """Get the input shapes for the model. Only used if get_input_kifs returns None.
 
         Returns
