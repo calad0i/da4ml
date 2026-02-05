@@ -25,24 +25,6 @@ class QInterval(NamedTuple):
     max: float
     step: float
 
-    @classmethod
-    def from_kif(cls, k: int | bool, i: int, f: int):
-        _high = 2.0**i
-        step = 2.0**-f
-        low, high = -k * step, _high - step
-        return cls(low, high, step)
-
-    @classmethod
-    def from_precision(cls, prec: 'Precision'):
-        return cls.from_kif(*prec)
-
-    @property
-    def precision(self):
-        return Precision.from_qint(self)
-
-    def __repr__(self):
-        return f'[{self.min}, {self.max}, {self.step}]'
-
 
 class Precision(NamedTuple):
     """A class representing the precision of a quantized interval."""
@@ -50,21 +32,6 @@ class Precision(NamedTuple):
     keep_negative: bool
     integers: int
     fractional: int
-
-    def __str__(self):
-        k, i, f = self.keep_negative, self.integers, self.fractional
-        return f'fixed({k=}, {i=}, {f=})'
-
-    def __repr__(self):
-        return str(self)
-
-    @classmethod
-    def from_qint(cls, qint: QInterval, symmetric: bool = False):
-        return _minimal_kif(qint, symmetric=symmetric)
-
-    @property
-    def qint(self):
-        return QInterval.from_kif(*self)
 
 
 class Op(NamedTuple):
@@ -185,21 +152,6 @@ def _(v, i: int | None = None, f: int | None = None, inv: bool = False, round_mo
     return v
 
 
-@_relu.register
-def _(v: Decimal, i: int | None = None, f: int | None = None, inv: bool = False, round_mode: str = 'TRN'):
-    if inv:
-        v = -v
-    v = max(Decimal(0), v)
-    if f is not None:
-        if round_mode.upper() == 'RND':
-            v += Decimal(2) ** (-f - 1)
-        sf = Decimal(2) ** f
-        v = floor(v * sf) / sf
-    if i is not None:
-        v = v % Decimal(2) ** i
-    return v
-
-
 @singledispatch
 def _quantize(v: 'T', k: int | bool, i: int, f: int, round_mode: str = 'TRN') -> 'T':
     from ..trace.fixed_variable import FixedVariable
@@ -219,16 +171,6 @@ def _(v, k: int | bool, i: int, f: int, round_mode: str = 'TRN'):
     bias = 2.0 ** (b - 1) * k
     eps = 2.0**-f
     return eps * ((np.floor(v / eps) + bias) % 2**b - bias)
-
-
-@_quantize.register
-def _(v: Decimal, k: int | bool, i: int, f: int, round_mode: str = 'TRN'):
-    if round_mode.upper() == 'RND':
-        v += Decimal(2) ** (-f - 1)
-    b = k + i + f
-    bias = Decimal(2) ** (b - 1) * k
-    eps = Decimal(2) ** -f
-    return eps * ((floor(v / eps) + bias) % Decimal(2) ** b - bias)
 
 
 class JSONEncoder(json.JSONEncoder):

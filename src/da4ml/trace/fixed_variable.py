@@ -741,11 +741,6 @@ class FixedVariable:
                 return b if self.high == 0 else a
             else:
                 return b if log2(abs(self.low)) % 1 == 0 else a
-        elif self.opr == 'quantize':
-            k, i, _ = self.kif
-            pk, pi, _ = self._from[0].kif
-            if k + i == pk + pi:
-                return self._from[0].msb_mux(a, b, qint=qint)
 
         if a._factor < 0:
             qint = (-qint[1], -qint[0], qint[2]) if qint else None

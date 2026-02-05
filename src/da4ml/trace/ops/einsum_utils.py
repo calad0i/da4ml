@@ -57,7 +57,7 @@ def _validate_einsum_expr(fn: str, shape0: tuple[int, ...], shape1: tuple[int, .
     sax_in0, sax_in1, sax_out = set(ax_in0), set(ax_in1), set(ax_out)
     free_indices = ''.join(sorted(s_alphabets - sax_in0 - sax_in1 - sax_out))
 
-    # Repeated indices
+    # Repeated indices # no cover: start
     if len(sax_in0) != len(ax_in0):
         for a in in0:
             if in0.count(a) == 1:
@@ -87,6 +87,7 @@ def _validate_einsum_expr(fn: str, shape0: tuple[int, ...], shape1: tuple[int, .
     # Output index out of nowhere
     if remaining := sax_out - sax_in0 - sax_in1:
         raise ValueError(f'einsum string {fn} is invalid: output subscripts {remaining} not found in inputs')
+    # no cover: stop
 
     _common_in = sax_in0 & sax_in1
 

@@ -49,7 +49,7 @@ class OperationTest:
 
     def test_retrace(self, comb: CombLogic, inp: FixedVariableArray, test_data: np.ndarray):
         inp2 = FixedVariableArrayInput(inp.shape).quantize(*inp.kif)
-        out2 = comb(inp2)  # type: ignore
+        out2 = comb(inp2, debug=True, quantize=True)  # type: ignore
         comb2 = comb_trace(inp2, out2)
         r1, r2 = comb.predict(test_data), comb2.predict(test_data)
         np.testing.assert_equal(r1, r2)
