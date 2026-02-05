@@ -228,10 +228,6 @@ class RTLModel:
             'cost': self._solution.cost,
             'flavor': self._flavor,
             'part_name': self._part_name,
-            'clock_period': self._clock_period,
-            'clock_uncertainty': self._clock_uncertainty,
-            'io_delay_min': self._io_delay_minmax[0],
-            'io_delay_max': self._io_delay_minmax[1],
         }
         _comb = self._solution if isinstance(self._solution, CombLogic) else self._solution.solutions[0]
         _metadata['adder_size'] = _comb.adder_size
@@ -241,6 +237,10 @@ class RTLModel:
             _metadata['reg_bits'] = self._pipe.reg_bits
             _metadata['clock_period'] = self._clock_period
             _metadata['latency_cutoff'] = self._latency_cutoff
+            _metadata['clock_period'] = self._clock_period
+            _metadata['clock_uncertainty'] = self._clock_uncertainty
+            _metadata['io_delay_min'] = self._io_delay_minmax[0]
+            _metadata['io_delay_max'] = self._io_delay_minmax[1]
 
         if metadata is not None:
             metadata.update(_metadata)

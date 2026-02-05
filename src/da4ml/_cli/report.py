@@ -10,6 +10,13 @@ from typing import Any, TypeVar
 T = TypeVar('T')
 
 
+def to_float(s: str):
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
 def parse_timing_summary_vivado(timing_summary: str):
     loc0 = timing_summary.find('Design Timing Summary')
     lines = timing_summary[loc0:].split('\n')[3:10]
@@ -17,7 +24,7 @@ def parse_timing_summary_vivado(timing_summary: str):
 
     assert set(lines[1]) == {' ', '-'}
     keys = [k.strip() for k in lines[0].split('  ') if k]
-    vals = [int(v) if '.' not in v else float(v) for v in lines[2].split('  ') if v]
+    vals = [int(v) if v.isdigit() else to_float(v) for v in lines[2].split('  ') if v]
     assert len(keys) == len(vals)
     d = dict(zip(keys, vals))
     return d
@@ -201,13 +208,7 @@ def _load_project(path: str | Path) -> dict[str, Any]:
 
     d = metadata
 
-    if metadata['flavor'] in ('verilog', 'vhdl'):
-        suffix = 'vhd' if metadata['flavor'] == 'vhdl' else 'v'
-        with open(path / f'src/{top_name}.{suffix}') as f:
-            latency = f.read().count('<=') - 1
-        d['latency'] = latency
-    else:
-        assert metadata['flavor'] == 'vitis'
+    if metadata['flavor'] == 'vitis':
         latency = parse_if_exists(path / f'output_{top_name}/test_ooc/syn/report/csynth.xml', parse_vitis_latency)
         if latency is not None:
             d['latency'] = latency
@@ -220,9 +221,10 @@ def _load_project(path: str | Path) -> dict[str, Any]:
         d.update(util)
     if timing is not None:
         d.update(timing)
-        d['actual_period'] = d['clock_period'] - d['WNS(ns)']
-        d['Fmax(MHz)'] = 1000.0 / d['actual_period']
-        d['latency(ns)'] = d['latency'] * d['actual_period']
+        if 'latency' in d:  # pipelined logic
+            d['actual_period'] = d['clock_period'] - d['WNS(ns)']
+            d['Fmax(MHz)'] = 1000.0 / d['actual_period']
+            d['latency(ns)'] = d['latency'] * d['actual_period']
     if power is not None:
         d.update(power)
 
@@ -273,7 +275,7 @@ def extra_info_from_fname(fname: str):
 
 def pretty_print(arr: list[list]):
     n_cols = len(arr[0])
-    terminal_width = os.get_terminal_size().columns
+    terminal_width = os.get_terminal_size().columns if os.isatty(1) else 65535
     default_width = [
         max(min(6, len(str(arr[i][j]))) if isinstance(arr[i][j], float) else len(str(arr[i][j])) for i in range(len(arr)))
         for j in range(n_cols)
@@ -294,7 +296,10 @@ def pretty_print(arr: list[list]):
         for i, v in enumerate(row):
             w = col_width[i]
             if type(v) is float:
-                n_int = ceil(log10(abs(v) + 1)) if v != 0 else 1 + (v < 0)
+                if v != v:  # NaN
+                    n_int = 3
+                else:
+                    n_int = ceil(log10(abs(v) + 1)) if v != 0 else 1 + (v < 0)
                 v = round(v, 10 - n_int)
                 if type(v) is int:
                     fmt = f'{{:>{w}d}}'
