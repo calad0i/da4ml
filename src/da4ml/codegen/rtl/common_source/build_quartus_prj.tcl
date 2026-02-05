@@ -27,18 +27,14 @@ if { "${source_type}" == "vhdl" } {
     foreach file [glob -nocomplain "${prj_root}/src/static/*.vhd"] {
         set_global_assignment -name VHDL_FILE "${file}"
     }
-
-    set_global_assignment -name VHDL_FILE "${prj_root}/src/${project_name}.vhd"
-    foreach file [glob -nocomplain "${prj_root}/src/${project_name}_stage*.vhd"] {
+    foreach file [glob -nocomplain "${prj_root}/src/*.vhd"] {
         set_global_assignment -name VHDL_FILE "${file}"
     }
 } else {
     foreach file [glob -nocomplain "${prj_root}/src/static/*.v"] {
         set_global_assignment -name VERILOG_FILE "${file}"
     }
-
-    set_global_assignment -name VERILOG_FILE "${prj_root}/src/${project_name}.v"
-    foreach file [glob -nocomplain "${prj_root}/src/${project_name}_stage*.v"] {
+    foreach file [glob -nocomplain "${prj_root}/src/*.v"] {
         set_global_assignment -name VERILOG_FILE "${file}"
     }
 }
@@ -103,10 +99,6 @@ execute_flow -compile
 
 foreach report [glob -nocomplain "${output_dir}/*.rpt"] {
     file copy -force $report "${output_dir}/reports/"
-}
-
-foreach f $mems {
-    file delete $f
 }
 
 project_close

@@ -19,10 +19,9 @@ if { $source_type == "vhdl" } {
     set_property TARGET_LANGUAGE VHDL [current_project]
 
     set static_files [glob -nocomplain "${prj_root}/src/static/*.vhd"]
-    set top_file "${prj_root}/src/${project_name}.vhd"
-    set stage_files [glob -nocomplain "${prj_root}/src/${project_name}_stage*.vhd"]
+    set prj_files [glob -nocomplain "${prj_root}/src/*.vhd"]
 
-    foreach file "${top_file} ${static_files} ${stage_files}" {
+    foreach file "${prj_files} ${static_files}" {
         read_vhdl -vhdl2008 $file
     }
 
@@ -30,10 +29,9 @@ if { $source_type == "vhdl" } {
     set_property TARGET_LANGUAGE Verilog [current_project]
 
     set static_files [glob -nocomplain "${prj_root}/src/static/*.v"]
-    set top_file "${prj_root}/src/${project_name}.v"
-    set stage_files [glob -nocomplain "${prj_root}/src/${project_name}_stage*.v"]
+    set prj_files [glob -nocomplain "${prj_root}/src/*.v"]
 
-    read_verilog $top_file $static_files $stage_files
+    read_verilog $prj_files $static_files
 
 }
 
