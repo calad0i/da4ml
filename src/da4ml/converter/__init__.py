@@ -26,6 +26,7 @@ def trace_model(  # type: ignore
     inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
     inputs_kif: tuple[int, int, int] | None = None,
     dump: Literal[False] = False,
+    framework: None | str = None,
 ) -> tuple[FixedVariableArray, FixedVariableArray]: ...
 
 
@@ -38,6 +39,7 @@ def trace_model(  # type: ignore
     inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
     inputs_kif: tuple[int, int, int] | None = None,
     dump: Literal[True] = False,  # type: ignore
+    framework: None | str = None,
 ) -> dict[str, FixedVariableArray]: ...
 
 
@@ -49,16 +51,17 @@ def trace_model(  # type: ignore
     inputs: tuple[FixedVariableArray, ...] | None = None,
     inputs_kif: tuple[int, int, int] | None = None,
     dump=False,
+    framework: None | str = None,
 ):
     hwconf = HWConfig(*hwconf) if isinstance(hwconf, tuple) else hwconf
 
-    module = type(model).__module__.split('.', 1)[0]
+    framework = framework or type(model).__module__.split('.', 1)[0]
 
     plugins = get_available_plugins()
-    if module not in plugins:
-        raise ValueError(f'No plugin found for model type from module: {module}. Available plugins: {list(plugins.keys())}')
+    if framework not in plugins:
+        raise ValueError(f'No plugin found for model type from module: {framework}. Available plugins: {list(plugins.keys())}')
 
-    entry = plugins[module]
+    entry = plugins[framework]
 
     if verbose:
         print(f'Loading DAIS tracer plugin from {entry.module}:{entry.attr}.')

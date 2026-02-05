@@ -15,8 +15,9 @@ keywords = [
   "CMVM",
   "distributed arithmetic",
   "high-level synthesis",
+  "HLS Complier",
   "machine learning",
-  "RTL/HLS compilation",
+  "RTL Generator",
 ]
 
 license = { text = "GNU Lesser General Public License v3 (LGPLv3)" }
@@ -32,7 +33,6 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
-  # "Programming Language :: Python :: 3.14",
 ]
 dynamic = [ "version" ]
 dependencies = [ "llvmlite>=0.44", "numba>=0.61", "quantizers>=1,<2" ]

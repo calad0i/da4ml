@@ -70,6 +70,7 @@ Index
    getting_started.md
    dais.md
    cmvm.md
+   plugin.md
    faq.md
 
 .. toctree::
