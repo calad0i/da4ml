@@ -1,15 +1,12 @@
 from collections.abc import Callable, Sequence
+from hashlib import sha256
+from uuid import UUID
 
 from ...cmvm.types import CombLogic, Op, QInterval, _minimal_kif
 from ...trace.fixed_variable import _const_f, interpret_as
-from ..rtl.verilog.comb import get_table_name as get_table_name_rtl
 
 
-def get_table_name(sol: CombLogic, op: Op) -> str:
-    return get_table_name_rtl(sol, op)[:-4].replace('-', '_')
-
-
-def gen_mem_line(sol: CombLogic, op: Op, typestr_fn: Callable[[bool | int, int, int], str]) -> tuple[str, str]:
+def gen_table_name_defline(sol: CombLogic, op: Op, typestr_fn: Callable[[bool | int, int, int], str]) -> tuple[str, str]:
     assert op.opcode == 8
     assert sol.lookup_tables is not None
     table = sol.lookup_tables[op.data]
@@ -17,7 +14,10 @@ def gen_mem_line(sol: CombLogic, op: Op, typestr_fn: Callable[[bool | int, int, 
     data = interpret_as(data, *table.spec.out_kif)
     values = ','.join(map(str, data))
     type_str = typestr_fn(*table.spec.out_kif)
-    table_name = get_table_name(sol, op)
+    hash_obj = sha256(data.tobytes())
+    _int = int(hash_obj.hexdigest()[:32], 16)
+    uuid = UUID(int=_int, version=4)
+    table_name = 'table_' + str(uuid).replace('-', '_')
     line = f'static const {type_str} {table_name}[] = {{{values}}};'
     return table_name, line
 
@@ -26,7 +26,7 @@ def gen_mem_def(sol: CombLogic, typestr_fn: Callable[[bool | int, int, int], str
     lines: dict[str, str] = {}
     for op in sol.ops:
         if op.opcode == 8:
-            table_name, line = gen_mem_line(sol, op, typestr_fn)
+            table_name, line = gen_table_name_defline(sol, op, typestr_fn)
             lines[table_name] = line
     return list(lines.values())
 
@@ -131,7 +131,7 @@ def ssa_gen(comb: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | i
                 val = f'{ref0} * {ref1}'
             case 8:
                 # Look-up
-                table_name = get_table_name(comb, op)
+                table_name = gen_table_name_defline(comb, op, typestr_fn)[0]
                 ref0 = f'v{op.id0}'
                 val = f'{table_name}[{ref0}.range()]'
             case _:

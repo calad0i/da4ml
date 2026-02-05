@@ -25,7 +25,7 @@ def make_neg(lines: list[str], idx: int, qint: QInterval, v0_name: str, neg_repo
     return bw0, v0_name
 
 
-def gen_mem_file(sol: CombLogic, op: Op) -> str:
+def gen_memfile(sol: CombLogic, op: Op) -> str:
     assert op.opcode == 8
     assert sol.lookup_tables is not None
     table = sol.lookup_tables[op.data]
@@ -36,12 +36,12 @@ def gen_mem_file(sol: CombLogic, op: Op) -> str:
     return '\n'.join(mem_lines)
 
 
-def get_table_name(sol: CombLogic, op: Op) -> str:
-    memfile = gen_mem_file(sol, op)
+def get_table_name_memfile(sol: CombLogic, op: Op) -> tuple[str, str]:
+    memfile = gen_memfile(sol, op)
     hash_obj = sha256(memfile.encode('utf-8'))
     _int = int(hash_obj.hexdigest()[:32], 16)
     uuid = UUID(int=_int, version=4)
-    return f'table_{str(uuid)}.mem'
+    return f'table_{str(uuid)}.mem', memfile
 
 
 def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency: bool = False) -> list[str]:
@@ -161,7 +161,7 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 line = f'{_def} multiplier #({bw0}, {bw1}, {s0}, {s1}, {bw}) op_{i} ({v0}, {v1}, {v});'
 
             case 8:  # Lookup Table
-                name = get_table_name(sol, op)
+                name = get_table_name_memfile(sol, op)[0]
                 bw0 = widths[op.id0]
 
                 line = f'{_def} lookup_table #({bw0}, {bw}, "{name}") op_{i} (v{op.id0}, {v});'
@@ -235,5 +235,10 @@ endmodule
 def table_mem_gen(sol: CombLogic) -> dict[str, str]:
     if not sol.lookup_tables:
         return {}
-    mem_files = {get_table_name(sol, op): gen_mem_file(sol, op) for op in sol.ops if op.opcode == 8}
+    mem_files = {}
+    for op in sol.ops:
+        if not op.opcode == 8:
+            continue
+        name, memfile = get_table_name_memfile(sol, op)
+        mem_files[name] = memfile
     return mem_files
