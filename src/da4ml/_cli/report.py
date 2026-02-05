@@ -37,12 +37,12 @@ def parse_utilization_vivado(utilization: str):
         'Register as Flip Flop',
         'RAMB18',
         'URAM',
-        'RAMB36/FIFO*',
+        'Block RAM Tile',
     ]
     matchers = []
     for name in track:
         m = re.compile(
-            rf'\|\s*{name}\s*\|\s*(?P<Used>\d+)\s*\|\s*(?P<Fixed>\d+)\s*\|\s*(?P<Prohibited>\d+)\s*\|\s*(?P<Available>\d+)\s*\|'
+            rf'\|\s*{name}\s*\|\s*(?P<Used>\d+)\s*\|\s*(?P<Fixed>\d+)\s*\|\s*(?P<Prohibited>\d+)\s*\|\s*(?P<Available>\d+)\s*\|\s*[<\d\.]+\s*\|\s*\n'
         )
         matchers.append(m)
 
