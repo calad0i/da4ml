@@ -1,8 +1,8 @@
 # da4ml: Distributed Arithmetic for Machine Learning
 
 [![LGPLv3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
-[![Documentation](https://github.com/calad0i/da4ml/actions/workflows/sphinx-build.yml/badge.svg)](https://calad0i.github.io/da4ml/)
-[![PyPI version](https://badge.fury.io/py/da4ml.svg)](https://badge.fury.io/py/da4ml)
+[![Documentation](https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/sphinx-build.yml)](https://calad0i.github.io/da4ml/)
+[![PyPI version](https://img.shields.io/pypi/v/da4ml)](https://pypi.org/project/da4ml/)
 [![ArXiv](https://img.shields.io/badge/arXiv-2507.04535-b31b1b.svg)](https://arxiv.org/abs/2507.04535)
 
 da4ml is a static computation graph to RTL/HLS design compiler targeting ultra-low latency applications on FPGAs. It as two major components:
