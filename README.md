@@ -4,6 +4,7 @@
 [![Documentation](https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/sphinx-build.yml?label=doc)](https://calad0i.github.io/da4ml/)
 [![PyPI version](https://img.shields.io/pypi/v/da4ml)](https://pypi.org/project/da4ml/)
 [![ArXiv](https://img.shields.io/badge/arXiv-2507.04535-b31b1b.svg)](https://arxiv.org/abs/2507.04535)
+[![Cov](https://img.shields.io/codecov/c/github/calad0i/da4ml)](https://codecov.io/gh/calad0i/da4ml)
 
 da4ml is a static computation graph to RTL/HLS design compiler targeting ultra-low latency applications on FPGAs. It as two major components:
  - A fast and performant constant-matrix-vector multiplications (CMVM) optimizer to implement them as

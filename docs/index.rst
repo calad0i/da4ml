@@ -10,6 +10,8 @@ Distributed Arithmetic for Machine Learning
    :target: https://pypi.org/project/da4ml/
 .. image:: https://img.shields.io/badge/arXiv-2507.04535-b31b1b.svg
    :target: https://arxiv.org/abs/2507.04535
+.. image:: https://img.shields.io/codecov/c/github/calad0i/da4ml
+   :target: https://codecov.io/gh/calad0i/da4ml
 
 
 .. rst-class:: light

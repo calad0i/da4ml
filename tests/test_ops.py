@@ -67,9 +67,11 @@ class OperationTestSynth(OperationTest):
         rtl_model = RTLModel(comb, 'test', temp_directory, flavor=flavor, latency_cutoff=latency_cutoff)
         before = rtl_model.__repr__()
         if flavor == 'verilog' and os.system('verilator --version') != 0:
+            rtl_model.write()
             os.system(f'rm -rf {temp_directory}')
             pytest.skip('verilator not found')
         if flavor == 'vhdl' and os.system('ghdl --version') != 0:
+            rtl_model.write()
             os.system(f'rm -rf {temp_directory}')
             pytest.skip('ghdl not found')
         rtl_model.compile(nproc=1)
