@@ -536,6 +536,12 @@ class FixedVariableArray:
     def T(self):
         return self.transpose()
 
+    def as_new(self):
+        """Create a new FixedVariableArray with the same shape and hardware configuration, but new FixedVariable instances."""
+        shape = self._vars.shape
+        _vars = np.array([v._with(_from=(), opr='new', renew_id=True) for v in self._vars.ravel()]).reshape(shape)
+        return FixedVariableArray(_vars, self.solver_options)
+
 
 class FixedVariableArrayInput(FixedVariableArray):
     """Similar to FixedVariableArray, but initializes all elements as FixedVariableInput - the precisions are unspecified when initialized, and the highest precision requested (i.e., quantized to) will be recorded for generation of the logic."""

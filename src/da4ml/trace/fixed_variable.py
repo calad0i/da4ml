@@ -725,6 +725,7 @@ class FixedVariable:
         a: 'FixedVariable|float|Decimal',
         b: 'FixedVariable|float|Decimal',
         qint: tuple[Decimal, Decimal, Decimal] | None = None,
+        zt_sensitive: bool = True,
     ):
         """If the MSB of this variable is 1, return a, else return b.
         When the variable is signed, the MSB is determined by the sign bit (1 for <0, 0 for >=0)
@@ -734,17 +735,28 @@ class FixedVariable:
         if not isinstance(b, FixedVariable):
             b = FixedVariable.from_const(b, hwconf=self.hwconf, _factor=1)
         if self._factor < 0:
-            return (-self).msb_mux(b, a, qint)
+            if zt_sensitive:
+                return self.msb().msb_mux(a, b, qint)
+            else:
+                return (-self).msb_mux(b, a, qint, zt_sensitive=False)
 
         if self.opr == 'const':
             if self.low >= 0:
                 return b if self.high == 0 else a
             else:
                 return b if log2(abs(self.low)) % 1 == 0 else a
+        if self.opr == 'wrap':
+            k, i, _ = self.kif
+            k0, i0, _ = self._from[0].kif
+            _factor = self._factor
+            _factor0 = self._from[0]._factor
+            if k + i == k0 + i0 + log2(abs(_factor / _factor0)):
+                if _factor * _factor0 > 0 or not zt_sensitive:
+                    return self._from[0].msb_mux(a, b, qint=qint, zt_sensitive=zt_sensitive)
 
         if a._factor < 0:
             qint = (-qint[1], -qint[0], qint[2]) if qint else None
-            return -(self.msb_mux(-a, -b, qint=qint))
+            return -(self.msb_mux(-a, -b, qint=qint, zt_sensitive=zt_sensitive))
 
         _factor = a._factor
 
@@ -762,16 +774,18 @@ class FixedVariable:
             cost=dcost,
         )
 
-    def is_negative(self) -> 'FixedVariable|bool':
+    def is_negative(self) -> 'FixedVariable':
         if self.low >= 0:
             return self.from_const(0, hwconf=self.hwconf)
         if self.high < 0:
             return self.from_const(1, hwconf=self.hwconf)
-        _, i, _ = self.kif
-        sign_bit = self.quantize(0, i + 1, -i) >> i
-        return sign_bit
+        return self.msb()
 
-    def is_positive(self) -> 'FixedVariable|bool':
+    def msb(self) -> 'FixedVariable':
+        k, i, _ = self.kif
+        return self.quantize(0, i + k, -i - k + 1) >> i
+
+    def is_positive(self) -> 'FixedVariable':
         return (-self).is_negative()
 
     def __abs__(self):
@@ -779,17 +793,17 @@ class FixedVariable:
             return self
         step = self.step
         high = max(-self.low, self.high)
-        return self.msb_mux(-self, self, (Decimal(0), high, step))
+        return self.msb_mux(-self, self, (Decimal(0), high, step), zt_sensitive=False)
 
     def abs(self):
         """Get the absolute value of this variable."""
         return abs(self)
 
-    def __gt__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __gt__(self, other: 'FixedVariable'):
         """Get a variable that is 1 if this variable is greater than other, else 0."""
         return (self - other).is_positive()
 
-    def __lt__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __lt__(self, other: 'FixedVariable'):
         """Get a variable that is 1 if this variable is less than other, else 0."""
         return (other - self).is_positive()
 
@@ -824,7 +838,7 @@ class FixedVariable:
             return self.relu()
 
         qint = (max(self.low, other.low), max(self.high, other.high), min(self.step, other.step))
-        return (self - other).msb_mux(other, self, qint=qint)
+        return (self - other).msb_mux(other, self, qint=qint, zt_sensitive=False)
 
     def min_of(self, other):
         """Get the minimum of this variable and another variable or constant."""
@@ -844,7 +858,7 @@ class FixedVariable:
             return -(-self).relu()
 
         qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
-        return (self - other).msb_mux(self, other, qint=qint)
+        return (self - other).msb_mux(self, other, qint=qint, zt_sensitive=False)
 
     def lookup(self, table: LookupTable | np.ndarray) -> 'FixedVariable':
         """Use a lookup table to map the variable.
