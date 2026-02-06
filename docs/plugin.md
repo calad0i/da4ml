@@ -1,4 +1,4 @@
-# Conversion Plugin Documentation
+# Conversion Plugin
 
 To define a static computation graph, da4ml always use the numpy-style symbolic tracing internally. However, for user convenience, da4ml also provides a plugin system that allows users to convert models defined in other QAT frameworks into da4ml's static computation graph format. For any frontend to be supported, a conversion plugin needs to be implemented, either as a separate package or inside the frontend framework itself. da4ml itself only provides a minimal example plugin for testing and demonstration purpose.
 

@@ -28,7 +28,7 @@ da4ml is a static computation graph to RTL/HLS design compiler targeting ultra-l
 
 
 Key Features
------------
+------------
 
 - **Optimized Algorithms**: Comparing to hls4ml's latency strategy, da4ml's CMVM implementation uses no DSO and consumes up to 50% less LUT usage.
 - **Fast code generation**: da4ml can generate HDL for a fully pipelined network in seconds. For the same models, high-level synthesis tools like Vivado/Vitis HLS can take up to days to generate the HDL code.
@@ -77,10 +77,7 @@ Index
    :maxdepth: 3
    :caption: API Reference:
 
-   autodoc/da4ml.cmvm
-   autodoc/da4ml.trace
-   autodoc/da4ml.codegen
-   autodoc/da4ml.converter
+   autodoc/da4ml
 
 Indices and tables
 ==================

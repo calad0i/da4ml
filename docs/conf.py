@@ -39,17 +39,23 @@ myst_enable_extensions = [
 
 autosummary_generate = True
 
+autodoc_default_options = {
+    'ignore-module-all': True,
+}
+
 extensions = ['myst_parser', 'sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'sphinx.ext.napoleon', 'sphinx_rtd_theme']
 
-source_suffix = ['.rst', '.md']
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 
 templates_path = ['_templates']
-exclude_patterns = ['_build']
+exclude_patterns = ['_build', 'autodoc/modules.rst']
 
 html_logo = '_static/icon.svg'
 html_theme_options = {
     'logo_only': True,
-    'display_version': True,
 }
 
 html_context = {

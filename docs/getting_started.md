@@ -1,6 +1,6 @@
 # Getting Started with da4ml
 
-da4ml can be used in three different ways. When standalone code generation, it is recommended to use the functional API or HGQ2 integration. See [FAQ](./faq.html) for more details on when to use which flow.
+da4ml can be used in three different ways. When standalone code generation, it is recommended to use the functional API or HGQ2 integration. See [FAQ](faq.md) for more details on when to use which flow.
 
 ## functional API:
 
