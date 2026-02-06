@@ -1,6 +1,7 @@
 # da4ml: Distributed Arithmetic for Machine Learning
 
-[![LGPLv3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+<!-- [![LGPLv3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0) -->
+[![Tests](https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/unit-test.yml?label=test)](https://github.com/calad0i/da4ml/actions/workflows/unit-test.yml)
 [![Documentation](https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/sphinx-build.yml?label=doc)](https://calad0i.github.io/da4ml/)
 [![PyPI version](https://img.shields.io/pypi/v/da4ml)](https://pypi.org/project/da4ml/)
 [![ArXiv](https://img.shields.io/badge/arXiv-2507.04535-b31b1b.svg)](https://arxiv.org/abs/2507.04535)
@@ -39,7 +40,11 @@ Getting Started
 - See the [Getting Started](https://calad0i.github.io/da4ml/getting_started.html) guide for a quick introduction to using da4ml.
 - See [JEDI-linear](https://github.com/calad0i/JEDI-linear) project which is based on da4ml
 
-# Citation
+## License
+
+LGPLv3. See the [LICENSE](LICENSE) file for details.
+
+## Citation
 
 If you use da4ml in a publication, please cite our [TRETS'25 paper](https://doi.org/10.1145/3777387) with the following bibtex entry:
 
