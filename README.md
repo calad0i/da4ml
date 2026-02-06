@@ -1,7 +1,7 @@
 # da4ml: Distributed Arithmetic for Machine Learning
 
 [![LGPLv3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
-[![Documentation](https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/sphinx-build.yml)](https://calad0i.github.io/da4ml/)
+[![Documentation](https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/sphinx-build.yml?label=doc)](https://calad0i.github.io/da4ml/)
 [![PyPI version](https://img.shields.io/pypi/v/da4ml)](https://pypi.org/project/da4ml/)
 [![ArXiv](https://img.shields.io/badge/arXiv-2507.04535-b31b1b.svg)](https://arxiv.org/abs/2507.04535)
 

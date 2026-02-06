@@ -4,7 +4,7 @@ Distributed Arithmetic for Machine Learning
 
 .. image:: https://img.shields.io/badge/License-LGPLv3-blue.svg
    :target: https://www.gnu.org/licenses/lgpl-3.0.en.html
-.. image:: https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/sphinx-build.yml
+.. image:: https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/sphinx-build.yml?label=doc
    :target: https://calad0i.github.io/da4ml/
 .. image:: https://img.shields.io/pypi/v/da4ml
    :target: https://pypi.org/project/da4ml/
