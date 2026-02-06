@@ -66,6 +66,12 @@ class OperationTestSynth(OperationTest):
     def test_rtl_gen(self, comb: CombLogic, flavor: str, latency_cutoff, temp_directory: str, test_data: np.ndarray):
         rtl_model = RTLModel(comb, 'test', temp_directory, flavor=flavor, latency_cutoff=latency_cutoff)
         before = rtl_model.__repr__()
+        if flavor == 'verilog' and os.system('verilator --version') != 0:
+            os.system(f'rm -rf {temp_directory}')
+            pytest.skip('verilator not found')
+        if flavor == 'vhdl' and os.system('ghdl --version') != 0:
+            os.system(f'rm -rf {temp_directory}')
+            pytest.skip('ghdl not found')
         rtl_model.compile(nproc=1)
         after = rtl_model.__repr__()
         assert before != after
