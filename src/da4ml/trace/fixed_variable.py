@@ -225,6 +225,32 @@ def to_csd_powers(x: float) -> Generator[float, None, None]:
             yield v * s
 
 
+def _binary_bit_op(a: float, b: float, op: int, qint0: QInterval, qint1: QInterval, qint: QInterval):
+    _fn = {0: lambda x, y: x & y, 1: lambda x, y: x | y, 2: lambda x, y: x ^ y}[op]
+    assert isinstance(a, float) and isinstance(b, float)
+    assert qint0 is not None and qint1 is not None and qint is not None
+    k, i, f = _minimal_kif(qint)
+    step = min(qint0.step, qint1.step)
+    _a, _b = round(a / step), round(b / step)
+    return interpret_as(_fn(_a, _b), k, i, f)
+
+
+def _unary_bit_op(a: float, op: int, qint: QInterval) -> float:
+    assert isinstance(a, float)
+    assert qint is not None
+    k, i, f = _minimal_kif(qint)
+    _a = round(a / qint.step)
+    match op:
+        case 0:
+            return interpret_as(~_a, k, i, f)
+        case 1:
+            return float(_a != 0)
+        case 2:
+            return float(_a == qint.max) if qint.min >= 0 else float(_a == -1)
+        case _:
+            raise ValueError(f'Invalid unary bit op {op}')
+
+
 class FixedVariable:
     __normal__variable__ = True
 
@@ -352,6 +378,17 @@ class FixedVariable:
             if self.opr == 'relu':
                 _cost += sum(self.kif) / 2
 
+        elif self.opr == 'bit_binary':
+            _cost = sum(self.kif) * 0.2
+            _latency = 1.0
+
+        elif self.opr == 'bit_unary':
+            if self._data == 0:
+                _cost = 0.0
+                _latency = self._from[0].latency
+            else:
+                _cost = sum(self._from[0].kif) / 6
+                _latency = 1.0 + max(v.latency for v in self._from)
         elif self.opr == 'new':
             # new variable, no cost
             _latency = 0.0
@@ -896,6 +933,84 @@ class FixedVariable:
             hwconf=self.hwconf,
             _data=Decimal(table_id),
         )
+
+    def unary_bit_op(self, _type: str):
+        ops = {
+            'not': 0,
+            'any': 1,
+            'all': 2,
+        }
+        if self.opr == 'const':
+            qint = QInterval(float(self.low), float(self.high), float(self.step))
+            v = _unary_bit_op(float(self.low), ops[_type], qint)
+            return self.from_const(v, hwconf=self.hwconf)
+
+        _data = Decimal(ops[_type])
+        if _type == 'not':
+            k, i, f = self.kif
+            return FixedVariable.from_kif(k, i, f, hwconf=self.hwconf, opr='bit_unary', _data=_data, _from=(self,))
+        if _type == 'all':
+            if self.low > 0:
+                return self.from_const(0, hwconf=self.hwconf)
+            if self.low < -self.step:
+                return self.from_const(0, hwconf=self.hwconf)
+            if self.low == 0:
+                _max = log2(self.high + self.step)
+                if _max % 1 != 0:  # max number unreachable for uint
+                    return self.from_const(0, hwconf=self.hwconf)
+        return FixedVariable(0, 1, 1, hwconf=self.hwconf, opr='bit_unary', _data=_data, _from=(self,), _factor=abs(self._factor))
+
+    def binary_bit_op(self, other: 'FixedVariable', _type: str):
+        ops = {
+            'and': 0,
+            'or': 1,
+            'xor': 2,
+        }
+        k, i, f = self.kif
+        k_other, i_other, f_other = other.kif
+        k, i, f = max(k, k_other), max(i, i_other), max(f, f_other)
+        qint = QInterval(-k * 2.0**i, 2.0**i - 2.0**-f, 2.0**-f)
+        if self.opr == 'const' and other.opr == 'const':
+            qint0 = QInterval(float(self.low), float(self.high), float(self.step))
+            qint1 = QInterval(float(other.low), float(other.high), float(other.step))
+            v = _binary_bit_op(float(self.low), float(other.low), ops[_type], qint0, qint1, qint)
+            return self.from_const(v, hwconf=self.hwconf)
+        _data = Decimal(ops[_type])
+        if other.opr == 'const' and other.low == 0:
+            if _type == 'and':
+                return self.from_const(0, hwconf=self.hwconf)
+            if _type == 'or' or _type == 'xor':
+                return self
+        return FixedVariable(
+            *qint, hwconf=self.hwconf, opr='bit_binary', _data=_data, _from=(self, other), _factor=abs(self._factor)
+        )
+
+    def __and__(self, other: 'FixedVariable|float|Decimal|int'):
+        if not isinstance(other, FixedVariable):
+            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+        return self.binary_bit_op(other, 'and')
+
+    def __or__(self, other: 'FixedVariable|float|Decimal|int'):
+        if not isinstance(other, FixedVariable):
+            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+        return self.binary_bit_op(other, 'or')
+
+    def __xor__(self, other: 'FixedVariable|float|Decimal|int'):
+        if not isinstance(other, FixedVariable):
+            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+        return self.binary_bit_op(other, 'xor')
+
+    def __rand__(self, other: 'float|Decimal|int|FixedVariable'):
+        return self.__and__(other)
+
+    def __ror__(self, other: 'float|Decimal|int|FixedVariable'):
+        return self.__or__(other)
+
+    def __rxor__(self, other: 'float|Decimal|int|FixedVariable'):
+        return self.__xor__(other)
+
+    def __invert__(self):
+        return self.unary_bit_op('not')
 
 
 class FixedVariableInput(FixedVariable):

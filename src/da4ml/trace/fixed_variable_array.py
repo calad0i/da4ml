@@ -444,6 +444,36 @@ class FixedVariableArray:
         r = np.array([av < bv for av, bv in zip(a.ravel(), b.ravel())])
         return FixedVariableArray(r.reshape(shape), self.solver_options)
 
+    def __and__(self, other):
+        a = self._vars
+        b = other._vars if isinstance(other, FixedVariableArray) else other
+        a, b = np.broadcast_arrays(a, b)
+        shape = a.shape
+        r = np.array([av & bv for av, bv in zip(a.ravel(), b.ravel())])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
+
+    def __or__(self, other):
+        a = self._vars
+        b = other._vars if isinstance(other, FixedVariableArray) else other
+        a, b = np.broadcast_arrays(a, b)
+        shape = a.shape
+        r = np.array([av | bv for av, bv in zip(a.ravel(), b.ravel())])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
+
+    def __invert__(self):
+        a = self._vars
+        shape = a.shape
+        r = np.array([~av for av in a.ravel()])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
+
+    def __xor__(self, other):
+        a = self._vars
+        b = other._vars if isinstance(other, FixedVariableArray) else other
+        a, b = np.broadcast_arrays(a, b)
+        shape = a.shape
+        r = np.array([av ^ bv for av, bv in zip(a.ravel(), b.ravel())])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
+
     def relu(
         self,
         i: NDArray[np.integer] | None = None,

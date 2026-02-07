@@ -132,6 +132,22 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 assert data is not None, 'lookup must have data'
                 assert id0 < i, f'{id0} {i} {v.id}'
                 op = Op(id0, -1, opcode, table_map[int(data)], v.unscaled.qint, v.latency, v.cost)
+            case 'bit_unary':
+                v0 = v._from[0]
+                id0 = index[v0.id]
+                assert id0 < i, f'{id0} {i} {v.id}'
+                assert v._data is not None, 'bit_unary must have data'
+                opcode = 9 if v._factor > 0 else -9
+                op = Op(id0, -1, opcode, int(v._data), v.unscaled.qint, v.latency, v.cost)
+            case 'bit_binary':
+                id0, id1 = index[v._from[0].id], index[v._from[1].id]
+                assert id0 < i and id1 < i, f'{id0} {id1} {i} {v.id}'
+                assert v._data is not None, 'bit_binary must have data'
+                v0, v1 = v._from
+                f0, f1 = v0._factor, v1._factor
+                _data = int(log2(abs(f1 / f0))) & 0xFFFFFFFF
+                _data += (int(v._data) << 56) + (int(f0 < 0) << 32) + (int(f1 < 0) << 33)
+                op = Op(id0, id1, 10, _data, v.unscaled.qint, v.latency, v.cost)
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
 

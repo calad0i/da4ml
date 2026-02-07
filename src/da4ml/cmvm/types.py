@@ -247,6 +247,7 @@ class CombLogic(NamedTuple):
         """
 
         from ..trace.fixed_variable import FixedVariable
+        from ..trace.ops.bit_oprs import binary_bit_op, unary_bit_op
 
         buf = np.empty(len(self.ops), dtype=object)
         inp = np.asarray(inp)
@@ -292,19 +293,32 @@ class CombLogic(NamedTuple):
                         else:
                             _k, _i, _f = _minimal_kif(qint_k)
                             buf[i] = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
-                case 7:
+                case 7:  # multiplication
                     v0, v1 = buf[op.id0], buf[op.id1]
                     buf[i] = v0 * v1
-                case 8:
+                case 8:  # lookup table
                     v0 = buf[op.id0]
                     tables = self.lookup_tables
                     assert tables is not None, 'No lookup table provided for lookup operation'
                     table = tables[op.data]
                     buf[i] = table.lookup(v0, self.ops[op.id0].qint)
+                case 9 | -9:  # Unary bitwise operation
+                    v0 = buf[op.id0]
+                    buf[i] = unary_bit_op(v0 if op.opcode == 9 else -v0, op.data, self.ops[op.id0].qint)
+                case 10:  # Binary bitwise operation
+                    v0, v1 = buf[op.id0], buf[op.id1]
+                    inv0, inv1 = (op.data >> 32) & 1, (op.data >> 33) & 1
+                    v0, v1 = (-v0 if inv0 else v0), (-v1 if inv1 else v1)
+                    shift = ((int(op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                    _opcode = (op.data >> 56) & 0xFF
+                    _qint1 = self.ops[op.id1].qint
+                    s = 2.0**shift
+                    qint1 = QInterval(_qint1.min * s, _qint1.max * s, _qint1.step * s)
+                    buf[i] = binary_bit_op(v0, v1 * s, _opcode, self.ops[op.id0].qint, qint1, op.qint)
                 case _:
                     raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
-        sf = 2.0 ** np.array(self.out_shifts, dtype=np.float64)
+        sf = 2.0 ** np.array(self.out_shifts, dtype=np.float64)  # type: ignore
         sign = np.where(self.out_negs, -1, 1)
         out_idx = np.array(self.out_idxs, dtype=np.int32)
         mask = np.where(out_idx < 0, 0, 1)
@@ -335,6 +349,17 @@ class CombLogic(NamedTuple):
                         op_str = f'buf[{op.id0}] * buf[{op.id1}]'
                     case 8:
                         op_str = f'tables[{int(op.data)}].lookup(buf[{op.id0}])'
+                    case 9 | -9:
+                        _sign = '' if op.opcode == 9 else '-'
+                        op_symbol = {0: '~', 1: 'any*', 2: 'all*'}[op.data]
+                        op_str = f'{op_symbol}({_sign}buf[{op.id0}])'
+                    case 10:
+                        _sign0, _sign1 = bool((op.data >> 32) & 1), bool((op.data >> 33) & 1)
+                        _sign0, _sign1 = '-' if _sign0 else '', '-' if _sign1 else ''
+                        _opcode = (op.data >> 56) & 0xFF
+                        op_symbol = {0: '&', 1: '|', 2: '^'}[_opcode]
+                        shift = ((int(op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                        op_str = f'{_sign0}buf[{op.id0}] {op_symbol} {_sign1}buf[{op.id1}] << {shift}'
                     case _:
                         raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 

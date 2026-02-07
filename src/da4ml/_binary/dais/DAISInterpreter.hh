@@ -116,6 +116,10 @@ namespace dais {
         // 8
         int64_t logic_lookup(int64_t v1, const Op &op, const DType dtype_in) const;
 
+        int64_t bit_unary(int64_t v, const Op &op) const;
+
+        int64_t bit_binary(int64_t v1, int64_t v2, const Op &op) const;
+
       public:
         static const int dais_version = 0;
 

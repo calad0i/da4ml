@@ -223,6 +223,58 @@ namespace dais {
         return static_cast<int64_t>(table[index]);
     }
 
+    int64_t DAISInterpreter::bit_unary(int64_t v, const Op &op) const {
+        int64_t mask = (1LL << ops[op.id0].dtype.width()) - 1;
+        switch (op.data_low) {
+        case 0: // NOT
+            if (op.dtype.is_signed) {
+                return ~v;
+            }
+            else {
+                return (~v) & mask;
+            }
+        case 1: // REDUCE_OR
+            return v != 0;
+        case 2: // REDUCE_AND
+            return (v & mask) == mask;
+        default:
+            throw std::runtime_error(
+                "Unknown bit unary operation with data_low=" + std::to_string(op.data_low)
+            );
+        }
+    }
+
+    int64_t DAISInterpreter::bit_binary(int64_t v1, int64_t v2, const Op &op) const {
+        int32_t actual_shift =
+            op.data_low + ops[op.id0].dtype.fractionals - ops[op.id1].dtype.fractionals;
+        if (op.data_high & 1) {
+            v1 = -v1;
+        }
+        if (op.data_high & 2) {
+            v2 = -v2;
+        }
+        if (actual_shift > 0) {
+            v2 = v2 << actual_shift;
+        }
+        else {
+            v1 = v1 << -actual_shift;
+        }
+
+        switch (op.data_high >> 24) {
+        case 0: // AND
+            return v1 & v2;
+        case 1: // OR
+            return v1 | v2;
+        case 2: // XOR
+            return v1 ^ v2;
+        default:
+            throw std::runtime_error(
+                "Unknown bit binary operation with data_low=" +
+                std::to_string(op.data_low)
+            );
+        }
+    }
+
     std::vector<int64_t>
     DAISInterpreter::exec_ops(const std::span<const double> &inputs) {
         if (inputs.size() != n_in)
@@ -303,6 +355,12 @@ namespace dais {
             case 8:
                 buffer[i] = logic_lookup(buffer[op.id0], op, ops[op.id0].dtype);
                 break;
+            case 9:
+            case -9:
+                buffer[i] =
+                    bit_unary(op.opcode == -9 ? -buffer[op.id0] : buffer[op.id0], op);
+                break;
+            case 10: buffer[i] = bit_binary(buffer[op.id0], buffer[op.id1], op); break;
 
             default:
                 throw std::runtime_error(
