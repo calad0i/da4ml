@@ -73,6 +73,8 @@ void run_interp(
 
     // =============== exec ===============
 
+    std::exception_ptr eptr = nullptr;
+
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(n_thread) schedule(static)
 #endif
@@ -88,8 +90,22 @@ void run_interp(
             &input_ptr[offset_in], n_samples_this_thread * n_in
         );
         std::span<double_t> out_span(&output[offset_out], n_samples_this_thread * n_out);
-        _run_interp(bin_logic, inp_span, out_span, n_samples_this_thread);
+        try {
+            _run_interp(bin_logic, inp_span, out_span, n_samples_this_thread);
+        }
+        catch (...) {
+#ifdef _OPENMP
+#pragma omp critical
+#endif
+            {
+                if (!eptr)
+                    eptr = std::current_exception();
+            }
+        }
     }
+
+    if (eptr)
+        std::rethrow_exception(eptr);
 }
 
 nb::ndarray<nb::numpy, double_t> run_interp_numpy(
