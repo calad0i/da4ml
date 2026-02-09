@@ -1,3 +1,4 @@
+from math import log2
 from typing import TypeVar, overload
 
 from ...cmvm.types import QInterval
@@ -25,23 +26,15 @@ def binary_bit_op(
     return _binary_bit_op(a, b, op, qint0, qint1, qint)
 
 
-@overload
-def unary_bit_op(a: FixedVariable, op: int, *args, **kwargs) -> FixedVariable: ...
-
-
-@overload
-def unary_bit_op(a: float, op: int, qint: QInterval) -> float: ...
-
-
-def unary_bit_op(a: T, op: int, qint: QInterval | None = None) -> T:
+def unary_bit_op(a: T, op: int, qint_from: QInterval, qint_to: QInterval) -> T:
     if isinstance(a, FixedVariable):
         match op:
             case 0:
-                return ~a
+                return ~a << round(log2(qint_to.step / qint_from.step))
             case 1:
                 return a.unary_bit_op('any')
             case 2:
                 return a.unary_bit_op('all')
     assert isinstance(a, float)
-    assert qint is not None
-    return _unary_bit_op(a, op, qint)
+    assert qint_to is not None and qint_from is not None
+    return _unary_bit_op(a, op, qint_from, qint_to)

@@ -140,6 +140,9 @@ def ssa_gen(comb: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | i
                     ref0 = f'(-{ref0})'
                 match op.data:
                     case 0:  # NOT
+                        _shift = all_kifs[op.id0][2] - all_kifs[i][2]
+                        if _shift != 0:
+                            ref0 = f'bit_shift<{_shift}>({ref0})'
                         val = f'~{ref0}'
                     case 1:  # OR
                         val = f'({ref0} != 0)'

@@ -304,7 +304,7 @@ class CombLogic(NamedTuple):
                     buf[i] = table.lookup(v0, self.ops[op.id0].qint)
                 case 9 | -9:  # Unary bitwise operation
                     v0 = buf[op.id0]
-                    buf[i] = unary_bit_op(v0 if op.opcode == 9 else -v0, op.data, self.ops[op.id0].qint)
+                    buf[i] = unary_bit_op(v0 if op.opcode == 9 else -v0, op.data, self.ops[op.id0].qint, op.qint)
                 case 10:  # Binary bitwise operation
                     v0, v1 = buf[op.id0], buf[op.id1]
                     inv0, inv1 = (op.data >> 32) & 1, (op.data >> 33) & 1
@@ -344,7 +344,8 @@ class CombLogic(NamedTuple):
                         op_str = f'const {op.data * op.qint.step}'
                     case 6 | -6:
                         _sign = '-' if op.opcode == -6 else ''
-                        op_str = f'msb(buf[{op.data}]) ? buf[{op.id0}] : {_sign}buf[{op.id1}]'
+                        shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                        op_str = f'msb(buf[{op.data & 0xFFFFFFFF}]) ? buf[{op.id0}] : {_sign}buf[{op.id1}] << {shift}'
                     case 7:
                         op_str = f'buf[{op.id0}] * buf[{op.id1}]'
                     case 8:
@@ -364,6 +365,8 @@ class CombLogic(NamedTuple):
                         raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
                 result = f'|-> buf[{i}] = {v}'
+                if isinstance(v, (int, float, np.integer, np.floating)):
+                    result += f' (int={round(v / op.qint.step)})'
                 operands.append((op_str, result))
             max_len = max(len(op[0]) for op in operands)
             for op_str, result in operands:
@@ -501,15 +504,15 @@ class CombLogic(NamedTuple):
             ref_count[i] += 1
         return ref_count
 
-    def to_binary(self) -> NDArray[np.int32]:
-        DAIS_VERSION = 1
+    def to_binary(self, version: int = 0) -> NDArray[np.int32]:
+        DAIS_SPEC_VERSION = 1
         n_in, n_out = self.shape
         header_size_i32 = 6 + n_in + n_out * 3
         n_tables = len(self.lookup_tables) if self.lookup_tables is not None else 0
 
         header = np.concatenate(
             [
-                [DAIS_VERSION, 0, n_in, n_out, len(self.ops), n_tables],
+                [DAIS_SPEC_VERSION, version, n_in, n_out, len(self.ops), n_tables],
                 self.inp_shifts,
                 self.out_idxs,
                 self.out_shifts,
