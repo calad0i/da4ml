@@ -124,9 +124,13 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 inv = '1' if op.opcode == -6 else '0'
                 bwk, bw0, bw1 = widths[k], widths[a], widths[b]
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
+                fo = kifs[i][2]
                 _shift = (op.data >> 32) & 0xFFFFFFFF
                 _shift = _shift if _shift < 0x80000000 else _shift - 0x100000000
-                shift = f0 - f1 + _shift
+                shift1 = fo - f1 + _shift
+                shift0 = fo - f0
+                assert shift0 == 0 or shift1 == 0, f'{i}, {op}, shift0={shift0}, shift1={shift1}'
+                shift = shift1 * (shift1 > 0) - shift0 * (shift0 > 0)
                 v0, v1 = f'v{a}', f'v{b}'
                 if bw0 == 0:
                     v0, bw0 = 'B"0"', 1
