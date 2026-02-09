@@ -150,7 +150,7 @@ class TestReLU(OperationTestSynth):
 
 
 class TestBranching(OperationTestSynth):
-    @pytest.fixture(params=['abs', 'max', 'min', 'mux'])
+    @pytest.fixture(params=['abs', 'max', 'min', 'mux', 'cmp', 'mux2'])
     def op_func(self, request):
         if request.param == 'abs':
             return np.abs
@@ -160,6 +160,10 @@ class TestBranching(OperationTestSynth):
             return lambda x: np.min(x, axis=-1)
         elif request.param == 'mux':
             return lambda x: np.where(x[..., :1] < x[..., 1:], x[..., :7], x[..., 1:])
+        elif request.param == 'cmp':
+            return lambda x: x[..., :4] >= x[..., 4:]
+        elif request.param == 'mux2':
+            return lambda x: np.where(x[..., :4] <= x[..., 4:], x[..., 4:] * -2, x[..., :4] * 7)
         else:
             raise ValueError()
 

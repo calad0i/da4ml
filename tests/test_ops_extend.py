@@ -46,6 +46,8 @@ functions = {
     'dot1': lambda x, w: np.dot(np.mean(x, axis=-1, keepdims=True), np.array(1.25)),
     'where1': lambda x, w: np.where(x - 3 == 0, x * 2, x / 2),
     'where2': lambda x, w: np.where(x != 0, x, -1),
+    'where3': lambda x, w: np.where(x >= 1.375, -1, x),
+    'where4': lambda x, w: np.where(x[..., :4] <= x[..., 4:], x[..., 4:] + 1, x[..., 4:] - 1),
 }
 
 

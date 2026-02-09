@@ -195,7 +195,7 @@ def _const_f(const: float | Decimal):
     """Get the minimum f such that const * 2^f is an integer."""
     const = float(const)
     if const == 0:
-        return 0
+        return -32
     _low, _high = -32, 32
     while _high - _low > 1:
         _mid = (_high + _low) // 2
@@ -235,18 +235,21 @@ def _binary_bit_op(a: float, b: float, op: int, qint0: QInterval, qint1: QInterv
     return interpret_as(_fn(_a, _b), k, i, f)
 
 
-def _unary_bit_op(a: float, op: int, qint: QInterval) -> float:
+def _unary_bit_op(a: float, op: int, qint_from: QInterval, qint_to: QInterval | None = None) -> float:
     assert isinstance(a, float)
-    assert qint is not None
-    k, i, f = _minimal_kif(qint)
-    _a = round(a / qint.step)
+    assert qint_from is not None
+    k, i, f = _minimal_kif(qint_from) if qint_from.min != 0 or qint_from.max != 0 else (False, 1, 0)
+    _a = round(a / qint_from.step)
     match op:
         case 0:
-            return interpret_as(~_a, k, i, f)
+            if not qint_to:
+                return interpret_as(~_a, k, i, f)
+            kk, ii, ff = _minimal_kif(qint_to)
+            return interpret_as((~_a) % 2 ** (k + i + f), kk, ii, ff)
         case 1:
             return float(_a != 0)
         case 2:
-            return float(_a == qint.max) if qint.min >= 0 else float(_a == -1)
+            return float(_a == qint_from.max) if qint_from.min >= 0 else float(_a == -1)
         case _:
             raise ValueError(f'Invalid unary bit op {op}')
 
@@ -801,6 +804,10 @@ class FixedVariable:
 
         if qint is None:
             qint = (min(a.low, b.low), max(a.high, b.high), min(a.step, b.step))
+        else:
+            assert qint[-1] == min(a.step, b.step), (
+                f'Step size in provided qint does not match for msb_mux: {qint[-1]} != min({a.step}, {b.step})'
+            )
 
         dlat, dcost = cost_add(a.qint, b.qint, 0, False, self.hwconf.adder_size, self.hwconf.carry_size)
         return FixedVariable(
@@ -822,7 +829,7 @@ class FixedVariable:
 
     def msb(self) -> 'FixedVariable':
         k, i, f = self.kif
-        return self.quantize(0, i + k, -i - k + 1) << f
+        return self.quantize(0, i + k, -i - k + 1) >> i + k - 1
 
     def is_positive(self) -> 'FixedVariable':
         return (-self).is_negative()

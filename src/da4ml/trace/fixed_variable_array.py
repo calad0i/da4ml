@@ -442,6 +442,22 @@ class FixedVariableArray:
         r = np.array([av < bv for av, bv in zip(a.ravel(), b.ravel())])
         return FixedVariableArray(r.reshape(shape), self.solver_options)
 
+    def __ge__(self, other):
+        a = self._vars
+        b = other._vars if isinstance(other, FixedVariableArray) else other
+        a, b = np.broadcast_arrays(a, b)
+        shape = a.shape
+        r = np.array([av >= bv for av, bv in zip(a.ravel(), b.ravel())])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
+
+    def __le__(self, other):
+        a = self._vars
+        b = other._vars if isinstance(other, FixedVariableArray) else other
+        a, b = np.broadcast_arrays(a, b)
+        shape = a.shape
+        r = np.array([av <= bv for av, bv in zip(a.ravel(), b.ravel())])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
+
     def __and__(self, other):
         a = self._vars
         b = other._vars if isinstance(other, FixedVariableArray) else other
