@@ -974,6 +974,13 @@ class FixedVariable:
             qint1 = QInterval(float(other.low), float(other.high), float(other.step))
             v = _binary_bit_op(float(self.low), float(other.low), ops[_type], qint0, qint1, qint)
             return self.from_const(v, hwconf=self.hwconf)
+        if self.opr == 'const' and self.low == 0:
+            if _type == 'and':
+                return self
+            if _type == 'or' or _type == 'xor':
+                return other
+        if other.opr == 'const' and other.low == 0:
+            return other.binary_bit_op(self, _type)
         _data = Decimal(ops[_type])
         if other.opr == 'const' and other.low == 0:
             if _type == 'and':
