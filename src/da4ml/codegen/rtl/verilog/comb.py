@@ -166,6 +166,44 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
 
                 line = f'{_def} lookup_table #({bw0}, {bw}, "{name}") op_{i} (v{op.id0}, {v});'
 
+            case 9 | -9:  # Bitwise Unary
+                if op.opcode == -9 and op.data != 1:
+                    _, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, f'v{op.id0}', neg_repo)
+                else:
+                    v0_name = f'v{op.id0}'
+                match op.data:
+                    case 0:  # NOT
+                        line = f'{_def} assign {v} = ~{v0_name};'
+                    case 1:  # OR with self (reduction)
+                        line = f'{_def} assign {v} = |{v0_name};'
+                    case 2:  # AND with self (reduction)
+                        line = f'{_def} assign {v} = &{v0_name};'
+                    case _:
+                        raise ValueError(f'Unknown bitwise operation {op.data} for operation {i} ({op})')
+
+            case 10:  # Bitwise Binary
+                # data: {subopcode[63:56], pad0, v1_neg[33], v0_neg[32], shift[31:0]}
+                data = op.data
+                subop, _shift = (data >> 56) & 0xFF, data & 0xFFFFFFFF
+                shift = (_shift + 0x80000000) % 0x100000000 - 0x80000000 + kifs[op.id0][2] - kifs[op.id1][2]
+                v0_neg, v1_neg = (data >> 32) & 1, (data >> 33) & 1
+                if v0_neg:
+                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, f'v{op.id0}', neg_repo)
+                    s0 = ops[op.id0].qint.max > 0
+                else:
+                    bw0, v0_name = widths[op.id0], f'v{op.id0}'
+                    s0 = ops[op.id0].qint.min < 0
+                if v1_neg:
+                    bw1, v1_name = make_neg(lines, op.id1, ops[op.id1].qint, f'v{op.id1}', neg_repo)
+                    s1 = ops[op.id1].qint.max > 0
+                else:
+                    bw1, v1_name = widths[op.id1], f'v{op.id1}'
+                    s1 = ops[op.id1].qint.min < 0
+
+                s0, s1 = int(s0), int(s1)
+
+                line = f'{_def} binop #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {subop}) op_{i} ({v0_name}, {v1_name}, {v});'
+
             case _:
                 raise ValueError(f'Unknown opcode {op.opcode} for operation {i} ({op})')
 

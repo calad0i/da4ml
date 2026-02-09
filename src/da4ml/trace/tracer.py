@@ -145,6 +145,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 assert v._data is not None, 'bit_binary must have data'
                 v0, v1 = v._from
                 f0, f1 = v0._factor, v1._factor
+                # data: {subopcode[63:56], pad0, v1_neg[33], v0_neg[32], shift[31:0]}
                 _data = int(log2(abs(f1 / f0))) & 0xFFFFFFFF
                 _data += (int(v._data) << 56) + (int(f0 < 0) << 32) + (int(f1 < 0) << 33)
                 op = Op(id0, id1, 10, _data, v.unscaled.qint, v.latency, v.cost)

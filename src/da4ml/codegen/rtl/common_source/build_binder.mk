@@ -13,7 +13,7 @@ VERILATOR_FLAGS ?=
 # vhdl specific - convert to verilog first for verilating
 	mkdir -p obj_dir
 	cp ../src/memfiles/* ./ 2>/dev/null || true
-	ghdl -a --std=08 --workdir=obj_dir ../src/static/multiplier.vhd ../src/static/mux.vhd ../src/static/negative.vhd ../src/static/shift_adder.vhd ../src/static/lookup_table.vhd $(wildcard ../src/$(VM_PREFIX:_wrapper=)_stage*.vhd) $(wildcard ../src/$(VM_PREFIX:_wrapper=).vhd) ../src/$(VM_PREFIX).vhd
+	ghdl -a --std=08 --workdir=obj_dir $(wildcard ../src/static/*.vhd) $(wildcard ../src/$(VM_PREFIX:_wrapper=)_stage*.vhd) $(wildcard ../src/$(VM_PREFIX:_wrapper=).vhd) ../src/$(VM_PREFIX).vhd
 	ghdl synth --std=08 --workdir=obj_dir --out=verilog $(VM_PREFIX) > $(VM_PREFIX).v
 
 ./obj_dir/libV$(VM_PREFIX).a ./obj_dir/libverilated.a ./obj_dir/V$(VM_PREFIX)__ALL.a: ../src/$(VM_PREFIX).v $(wildcard ../src/$(VM_PREFIX)_stage*.v)
