@@ -501,14 +501,15 @@ class CombLogic(NamedTuple):
             ref_count[i] += 1
         return ref_count
 
-    def to_binary(self, version: int = 0) -> NDArray[np.int32]:
+    def to_binary(self) -> NDArray[np.int32]:
+        DAIS_VERSION = 1
         n_in, n_out = self.shape
         header_size_i32 = 6 + n_in + n_out * 3
         n_tables = len(self.lookup_tables) if self.lookup_tables is not None else 0
 
         header = np.concatenate(
             [
-                [0, version, n_in, n_out, len(self.ops), n_tables],
+                [DAIS_VERSION, 0, n_in, n_out, len(self.ops), n_tables],
                 self.inp_shifts,
                 self.out_idxs,
                 self.out_shifts,
@@ -525,13 +526,13 @@ class CombLogic(NamedTuple):
             buf[1] = op.id0
             buf[2] = op.id1
             buf[5:] = _minimal_kif(op.qint)
-            buf_i64 = buf[3:5].view(np.int64)
+            buf_u64 = buf[3:5].view(np.uint64)
             if op.opcode != 8:
-                buf_i64[0] = op.data
+                buf_u64[0] = op.data & 0xFFFFFFFFFFFFFFFF
             else:
                 assert self.lookup_tables is not None
                 pad_left = self.lookup_tables[op.data]._get_pads(self.ops[op.id0].qint)[0]
-                buf_i64[0] = (pad_left << 32) | op.data
+                buf_u64[0] = ((pad_left << 32) | op.data) & 0xFFFFFFFFFFFFFFFF
         data = np.concatenate([header, code.flatten()])
 
         if self.lookup_tables is None:

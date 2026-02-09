@@ -121,7 +121,7 @@ namespace dais {
         int64_t bit_binary(int64_t v1, int64_t v2, const Op &op) const;
 
       public:
-        static const int dais_version = 0;
+        static const int dais_version = 1;
 
         void load_from_file(const std::string &filename);
 
