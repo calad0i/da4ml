@@ -183,9 +183,14 @@ namespace dais {
         const DType &dtype_out
     ) const {
         bool cond = get_msb(v_cond, dtype_cond);
-        int32_t shift = dtype0.fractionals - dtype1.fractionals + _shift;
-        int32_t shift0 = shift > 0 ? 0 : -shift;
-        int32_t shift1 = shift > 0 ? shift : 0;
+        int32_t shift1 = dtype_out.fractionals - dtype1.fractionals + _shift;
+        int32_t shift0 = dtype_out.fractionals - dtype0.fractionals;
+        if (shift1 != 0 && shift0 != 0) {
+            throw std::runtime_error(
+                "Unsupported msb_mux shift configuration: shift0=" +
+                std::to_string(shift0) + ", shift1=" + std::to_string(shift1)
+            );
+        }
         int64_t result;
         DType dtype_in;
 
