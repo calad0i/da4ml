@@ -174,9 +174,7 @@ class FixedVariableArray:
             assert len(args) == 3, 'Where function requires exactly three arguments'
             cond, x, y = args
             if isinstance(cond, FixedVariableArray):
-                assert np.all(np.sum(cond.kif, axis=0) <= 1), (
-                    f'Condition array in `where` must be boolean FixedVariableArray, got kif={cond.kif}'
-                )
+                cond = cond.to_bool('any')
             else:
                 return FixedVariableArray(np.where(cond, to_raw_arr(x), to_raw_arr(y)), self.solver_options)
             cond, x, y = np.broadcast_arrays(cond, x, y)  # type: ignore
@@ -473,6 +471,24 @@ class FixedVariableArray:
         shape = a.shape
         r = np.array([av ^ bv for av, bv in zip(a.ravel(), b.ravel())])
         return FixedVariableArray(r.reshape(shape), self.solver_options)
+
+    def __eq__(self, other):  # type: ignore
+        return ~(self.__ne__(other))
+
+    def __ne__(self, other):  # type: ignore
+        if not isinstance(other, (FixedVariableArray, np.ndarray, int, float, np.integer, np.floating)):
+            raise ValueError(f'Illegal comparison between FixedVariableArray and {type(other)}')
+        a = self._vars
+        b = other._vars if isinstance(other, FixedVariableArray) else other
+        a, b = np.broadcast_arrays(a, b)
+        shape = a.shape
+        r = np.array([av._ne(bv) for av, bv in zip(a.ravel(), b.ravel())])
+        return FixedVariableArray(r.reshape(shape), self.solver_options)
+
+    def to_bool(self, reduction='any'):
+        assert reduction in ('any', 'all'), f'Reduction must be either "any" or "all", got {reduction}'
+        _vars = np.array([v.unary_bit_op(reduction) for v in self._vars.ravel()]).reshape(self._vars.shape)
+        return FixedVariableArray(_vars, self.solver_options)
 
     def relu(
         self,

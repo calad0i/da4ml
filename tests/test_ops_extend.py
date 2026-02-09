@@ -44,6 +44,8 @@ functions = {
     'clip1': lambda x, w: np.clip(x[..., :4], x[..., 4:8], 1.5),
     'dot0': lambda x, w: np.dot(x, w),
     'dot1': lambda x, w: np.dot(np.mean(x, axis=-1, keepdims=True), np.array(1.25)),
+    'where1': lambda x, w: np.where(x - 3 == 0, x * 2, x / 2),
+    'where2': lambda x, w: np.where(x != 0, x, -1),
 }
 
 

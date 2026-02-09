@@ -198,7 +198,34 @@ class TestBinaryBitOps(OperationTest):
         return func
 
 
-class TestUnaryBitOps(OperationTest):
+class TestBitReduction(OperationTest):
+    @pytest.fixture(params=[0, 1])
+    def signed(self, request) -> bool:
+        return bool(request.param)
+
+    @pytest.fixture()
+    def inp(self, signed) -> FixedVariableArray:
+        k = np.ones(8, dtype=np.int64) * signed
+        i = np.full(8, 4, dtype=np.int64)
+        f = np.zeros(8, dtype=np.int64)
+        inp = FixedVariableArray.from_kif(k, i, f)
+        return inp
+
+    @pytest.fixture(params=['all', 'any'])
+    def op_func(self, request, signed):
+        def func(x):
+            if request.param == 'any':
+                return x != 0
+            else:
+                if isinstance(x, np.ndarray):
+                    return x == -1 if signed else x == 15
+                else:
+                    return x.to_bool('all')
+
+        return func
+
+
+class TestBitNot(OperationTest):
     @pytest.fixture(params=[0, 1])
     def signed(self, request) -> bool:
         return bool(request.param)

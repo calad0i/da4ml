@@ -416,6 +416,8 @@ class FixedVariable:
 
     @classmethod
     def from_const(cls, const: float | Decimal, hwconf: HWConfig, _factor: float | Decimal = 1):
+        if const.__class__ is not Decimal:
+            const = float(const)
         return cls(const, const, -1, hwconf=hwconf, opr='const', _factor=_factor)
 
     def __repr__(self) -> str:
@@ -819,8 +821,8 @@ class FixedVariable:
         return self.msb()
 
     def msb(self) -> 'FixedVariable':
-        k, i, _ = self.kif
-        return self.quantize(0, i + k, -i - k + 1) >> i
+        k, i, f = self.kif
+        return self.quantize(0, i + k, -i - k + 1) << f
 
     def is_positive(self) -> 'FixedVariable':
         return (-self).is_negative()
@@ -836,27 +838,21 @@ class FixedVariable:
         """Get the absolute value of this variable."""
         return abs(self)
 
-    def __gt__(self, other: 'FixedVariable'):
+    def __gt__(self, other: 'FixedVariable|float|Decimal|int'):
         """Get a variable that is 1 if this variable is greater than other, else 0."""
         return (self - other).is_positive()
 
-    def __lt__(self, other: 'FixedVariable'):
+    def __lt__(self, other: 'FixedVariable|float|Decimal|int'):
         """Get a variable that is 1 if this variable is less than other, else 0."""
         return (other - self).is_positive()
 
-    # def __ge__(self, other: 'FixedVariable|float|Decimal|int'):
-    #     """Get a variable that is 1 if this variable is greater than or equal to other, else 0."""
-    #     r = (other - self).is_negative()
-    #     if isinstance(r, bool):
-    #         return not r
-    #     return ~r
+    def __ge__(self, other: 'FixedVariable|float|Decimal|int'):
+        """Get a variable that is 1 if this variable is greater than or equal to other, else 0."""
+        return ~(self < other)
 
-    # def __le__(self, other: 'FixedVariable|float|Decimal|int'):
-    #     """Get a variable that is 1 if this variable is less than or equal to other, else 0."""
-    #     r = (self - other).is_negative()
-    #     if isinstance(r, bool):
-    #         return not r
-    #     return ~r
+    def __le__(self, other: 'FixedVariable|float|Decimal|int'):
+        """Get a variable that is 1 if this variable is less than or equal to other, else 0."""
+        return ~(self > other)
 
     def max_of(self, other):
         """Get the maximum of this variable and another variable or constant."""
@@ -945,6 +941,9 @@ class FixedVariable:
             v = _unary_bit_op(float(self.low), ops[_type], qint)
             return self.from_const(v, hwconf=self.hwconf)
 
+        if sum(self.kif) == 1 and _type in ('any', 'all'):
+            return self.msb()
+
         _data = Decimal(ops[_type])
         if _type == 'not':
             k, i, f = self.kif
@@ -952,7 +951,7 @@ class FixedVariable:
         if _type == 'all':
             if self.low > 0:
                 return self.from_const(0, hwconf=self.hwconf)
-            if self.low < -self.step:
+            if self.high < -self.step:
                 return self.from_const(0, hwconf=self.hwconf)
             if self.low == 0:
                 _max = log2(self.high + self.step)
@@ -1011,6 +1010,14 @@ class FixedVariable:
 
     def __invert__(self):
         return self.unary_bit_op('not')
+
+    def _ne(self, other):
+        if not isinstance(other, FixedVariable):
+            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+        return (self - other).unary_bit_op('any')
+
+    def _eq(self, other):
+        return ~(self._ne(other))
 
 
 class FixedVariableInput(FixedVariable):
