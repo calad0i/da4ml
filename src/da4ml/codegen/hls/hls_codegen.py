@@ -134,6 +134,44 @@ def ssa_gen(comb: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | i
                 table_name = gen_table_name_defline(comb, op, typestr_fn)[0]
                 ref0 = f'v{op.id0}'
                 val = f'{table_name}[{ref0}.range()]'
+            case 9 | -9:
+                # Unary bit ops
+                if op.opcode == -9 and op.data == 0:
+                    ref0 = f'(-{ref0})'
+                match op.data:
+                    case 0:  # NOT
+                        val = f'~{ref0}'
+                    case 1:  # OR
+                        val = f'({ref0} != 0)'
+                    case 2:  # AND
+                        if op.opcode == -9:
+                            _k, _i, _f = _minimal_kif(QInterval(-op.qint.max, -op.qint.min, op.qint.step))
+                        else:
+                            _k, _i, _f = all_kifs[i]
+                        target = -(2.0**-_f) if _k else 2.0**_i - 2.0**-_f
+                        if op.opcode == 9:
+                            target = -target
+                        val = f'({ref0} == {all_types[op.id0]}({target}))'
+                    case _:
+                        raise ValueError(f'Unsupported unary bit op subop: {op.data}')
+            case 10:
+                # Binary bit ops
+                # data: {subopcode[63:56], pad0, v1_neg[33], v0_neg[32], shift[31:0]}
+                ref1 = f'v{op.id1}'
+                shift = ((op.data & 0xFFFFFFFF) + 0x80000000) % 0x100000000 - 0x80000000
+                neg0, neg1 = (op.data >> 32) & 1, (op.data >> 33) & 1
+                ref1 = ref1 if shift == 0 else f'bit_shift<{shift}>({ref1})'
+                ref0 = ref0 if neg0 == 0 else f'-{ref0}'
+                ref1 = ref1 if neg1 == 0 else f'-{ref1}'
+                match (op.data >> 56) & 0xFF:
+                    case 0:  # AND
+                        val = f'{_type}({ref0}) & {_type}({ref1})'
+                    case 1:  # OR
+                        val = f'{_type}({ref0}) | {_type}({ref1})'
+                    case 2:  # XOR
+                        val = f'{_type}({ref0}) ^ {_type}({ref1})'
+                    case _:
+                        raise ValueError(f'Unknown binary bit op subop: {op.data}')
             case _:
                 raise ValueError(f'Unsupported opcode: {op.opcode}')
 

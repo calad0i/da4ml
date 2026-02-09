@@ -170,7 +170,7 @@ class TestMul(OperationTestSynth):
         return lambda x: x[..., 0:4] * x[..., 4:8]
 
 
-class TestBinaryBitOps(OperationTest):
+class TestBinaryBitOps(OperationTestSynth):
     @pytest.fixture(params=['and', 'or', 'xor'])
     def op_func(self, request):
         w0 = np.arange(8) - 4
@@ -198,7 +198,7 @@ class TestBinaryBitOps(OperationTest):
         return func
 
 
-class TestBitReduction(OperationTest):
+class TestBitReduction(OperationTestSynth):
     @pytest.fixture(params=[0, 1])
     def signed(self, request) -> bool:
         return bool(request.param)
@@ -225,7 +225,7 @@ class TestBitReduction(OperationTest):
         return func
 
 
-class TestBitNot(OperationTest):
+class TestBitNot(OperationTestSynth):
     @pytest.fixture(params=[0, 1])
     def signed(self, request) -> bool:
         return bool(request.param)
