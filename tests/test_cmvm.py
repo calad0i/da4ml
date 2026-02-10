@@ -1,9 +1,7 @@
 import numpy as np
 import pytest
 
-from da4ml.cmvm.api import solve
-from da4ml.cmvm.util.bit_decompose import csd_decompose
-from da4ml.cmvm.util.mat_decompose import kernel_decompose
+from da4ml._binary import csd_decompose, kernel_decompose, solve
 
 
 @pytest.fixture(params=[2, 4, 8])
@@ -23,7 +21,7 @@ def kernel(n_dim, bits):
 
 
 def test_decompose(kernel):
-    csd, shift0, shift1 = csd_decompose(kernel.astype(np.float64))
+    csd, shift0, shift1 = csd_decompose(kernel.astype(np.float32))
     shift2 = np.arange(csd.shape[-1])
     recon = csd * (2.0 ** shift0[:, None, None]) * (2.0 ** shift1[None, :, None]) * (2.0 ** shift2[None, None, :])
     recon_sum = np.sum(recon, axis=-1)
@@ -32,7 +30,7 @@ def test_decompose(kernel):
 
 @pytest.mark.parametrize('dc', [-2, -1, 0, 1, 2])
 def test_kernel_decompose(kernel, dc: int):
-    m0, m1 = kernel_decompose(kernel.astype(np.float64), dc=dc)
+    m0, m1 = kernel_decompose(kernel.astype(np.float32), dc=dc)
     recon = m0 @ m1
     assert np.all(recon == kernel)
 

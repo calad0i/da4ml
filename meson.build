@@ -2,7 +2,7 @@ project('da4ml', 'cpp',
   version: run_command('python3', 'tools/gitversion.py', check: true).stdout().strip(),
   meson_version: '>=1.9.0',
   default_options: ['buildtype=release', 'cpp_std=c++23'],
-  license: 'LGPL-3.0-or-later',
+  license: 'LGPL-3.0-only',
 )
 
 py = import('python').find_installation(pure: false)
@@ -38,8 +38,15 @@ dais_bin = py.extension_module(
 cmvm_bin = py.extension_module(
   'cmvm_bin',
   sources: [
+    'src/da4ml/_binary/cmvm/api.cc',
+    'src/da4ml/_binary/cmvm/bindings.cc',
     'src/da4ml/_binary/cmvm/bit_decompose.cc',
+    'src/da4ml/_binary/cmvm/cmvm_core.cc',
+    'src/da4ml/_binary/cmvm/indexers.cc',
     'src/da4ml/_binary/cmvm/mat_decompose.cc',
+    'src/da4ml/_binary/cmvm/state_opr.cc',
+    'src/da4ml/_binary/dais/bindings.cc',
+    'src/da4ml/_binary/dais/DAISInterpreter.cc',
   ],
   dependencies: [nanobind_dep, xtensor_dep, omp_dep],
   install: true,
