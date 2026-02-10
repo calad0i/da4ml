@@ -24,7 +24,7 @@ license = { text = "GNU Lesser General Public License v3 (LGPLv3)" }
 authors = [ { name = "Chang Sun", email = "chsun@cern.ch" } ]
 requires-python = ">=3.10"
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3 :: Only",
@@ -85,8 +85,7 @@ addopts = [
   "--cov-report=html",
 ]
 
-[tool.coverage.run]
-omit = [ "*/_version.py", "src/da4ml/_cli/*.py" ]
-
 [tool.coverage.report]
 exclude_also = [ 'no cover: start(?s:.)*?no cover: stop', 'raise ValueError' ]
+[tool.coverage.run]
+omit = [ "*/_version.py", "src/da4ml/_cli/*.py" ]

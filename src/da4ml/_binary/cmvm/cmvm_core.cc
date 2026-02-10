@@ -37,24 +37,24 @@ DAState cmvm(
         if (state.freq_stat.empty())
             break;
 
-        int64_t pair_idx;
+        Pair pair_chosen;
         if (method == "mc") {
-            pair_idx = idx_mc(state);
+            pair_chosen = idx_mc(state);
         }
         else if (method == "mc-dc") {
-            pair_idx = idx_mc_dc(state, true);
+            pair_chosen = idx_mc_dc(state, true);
         }
         else if (method == "mc-pdc") {
-            pair_idx = idx_mc_dc(state, false);
+            pair_chosen = idx_mc_dc(state, false);
         }
         else if (method == "wmc") {
-            pair_idx = idx_wmc(state);
+            pair_chosen = idx_wmc(state);
         }
         else if (method == "wmc-dc") {
-            pair_idx = idx_wmc_dc(state, true);
+            pair_chosen = idx_wmc_dc(state, true);
         }
         else if (method == "wmc-pdc") {
-            pair_idx = idx_wmc_dc(state, false);
+            pair_chosen = idx_wmc_dc(state, false);
         }
         else if (method == "dummy") {
             break;
@@ -63,10 +63,9 @@ DAState cmvm(
             throw std::runtime_error("Unknown method: " + method);
         }
 
-        if (pair_idx < 0)
+        if (pair_chosen.id0 == -1 || pair_chosen.id1 == -1)
             break;
 
-        Pair pair_chosen = state.freq_stat.key_at(static_cast<size_t>(pair_idx));
         update_state(state, pair_chosen, adder_size, carry_size);
     }
     return state;

@@ -2,6 +2,7 @@
 #include "bit_decompose.hh"
 #include <cmath>
 #include <algorithm>
+#include <unordered_map>
 
 QInterval
 qint_add(const QInterval &q0, const QInterval &q1, int64_t shift, bool sub0, bool sub1) {
@@ -72,6 +73,7 @@ DAState create_state(
 ) {
     size_t n_in = kernel_in.shape(0);
     size_t n_out = kernel_in.shape(1);
+    DAState state;
 
     xt::xarray<std::float32_t> kernel_f32(kernel_in);
     auto [csd, shift0, shift1] = csd_decompose(kernel_f32);
@@ -89,7 +91,7 @@ DAState create_state(
         expr.push_back(xt::view(csd, i));
     }
 
-    OrderedMap stat;
+    auto &stat = state.freq_stat;
     if (!no_stat_init) {
         for (size_t i_out = 0; i_out < n_out; ++i_out) {
             for (size_t i0 = 0; i0 < n_in; ++i0) {
@@ -110,17 +112,20 @@ DAState create_state(
                                 bit0 != bit1,
                                 (int64_t)j1 - (int64_t)j0
                             };
-                            stat.set(pair, stat.get(pair, 0) + 1);
+                            stat[pair] = stat[pair] + 1;
                         }
                     }
                 }
             }
         }
         // Remove pairs with count < 2
-        auto ks = stat.keys();
-        for (auto &k : ks) {
-            if (stat.get(k, 0) < 2)
-                stat.erase(k);
+        for (auto it = stat.begin(); it != stat.end();) {
+            if (it->second < 2) {
+                it = stat.erase(it);
+            }
+            else {
+                ++it;
+            }
         }
     }
 
@@ -129,12 +134,11 @@ DAState create_state(
         ops.push_back(Op{(int64_t)i, -1, -1, 0, qintervals[i], inp_latencies[i], 0.0});
     }
 
-    DAState state;
     state.shift0 = shift0;
     state.shift1 = shift1;
     state.expr = std::move(expr);
     state.ops = std::move(ops);
-    state.freq_stat = std::move(stat);
+    // state.freq_stat = std::move(stat);
     state.kernel = kernel_in;
     return state;
 }
@@ -250,10 +254,13 @@ void update_stats(DAState &state, const Pair &pair) {
     int64_t id0 = pair.id0, id1 = pair.id1;
 
     // Delete all entries involving id0 or id1
-    auto ks = state.freq_stat.keys();
-    for (auto &k : ks) {
-        if (k.id0 == id0 || k.id1 == id1 || k.id1 == id0 || k.id0 == id1) {
-            state.freq_stat.erase(k);
+    for (auto it = state.freq_stat.begin(); it != state.freq_stat.end();) {
+        const Pair &p = it->first;
+        if (p.id0 == id0 || p.id0 == id1 || p.id1 == id0 || p.id1 == id1) {
+            it = state.freq_stat.erase(it);
+        }
+        else {
+            ++it;
         }
     }
 
@@ -293,7 +300,7 @@ void update_stats(DAState &state, const Pair &pair) {
                         if (lo == hi && j0 <= (int64_t)j1)
                             continue;
                         Pair p{lo, hi, bit0 != bit1, (int64_t)j1 - (int64_t)j0};
-                        state.freq_stat.set(p, state.freq_stat.get(p, 0) + 1);
+                        state.freq_stat[p] = state.freq_stat[p] + 1;
                     }
                 }
             }
@@ -301,11 +308,13 @@ void update_stats(DAState &state, const Pair &pair) {
     }
 
     // Remove pairs with count < 2
-    ks = state.freq_stat.keys();
-    auto vs = state.freq_stat.values();
-    for (size_t i = 0; i < ks.size(); ++i) {
-        if (vs[i] < 2)
-            state.freq_stat.erase(ks[i]);
+    for (auto it = state.freq_stat.begin(); it != state.freq_stat.end();) {
+        if (it->second < 2) {
+            it = state.freq_stat.erase(it);
+        }
+        else {
+            ++it;
+        }
     }
 }
 

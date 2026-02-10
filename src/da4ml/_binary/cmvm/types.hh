@@ -46,7 +46,7 @@ struct PairHash {
 
 // Ordered map preserving insertion order (Python dict semantics).
 // Re-inserting a deleted key places it at the end.
-class OrderedMap {
+class Map {
     struct Entry {
         Pair key;
         int value;
@@ -128,7 +128,7 @@ struct DAState {
     xt::xarray<int8_t> shift1; // output shifts
     std::vector<xt::xarray<int8_t>> expr;
     std::vector<Op> ops;
-    OrderedMap freq_stat;
+    std::unordered_map<Pair, int32_t, PairHash> freq_stat;
     xt::xarray<std::float32_t> kernel;
 };
 
@@ -146,3 +146,5 @@ struct CombLogicResult {
 struct PipelineResult {
     std::vector<CombLogicResult> solutions;
 };
+
+enum struct Method { MC, MC_DC, MC_PDC, WMC, WMC_DC, WMC_PDC, DUMMY };
