@@ -34,13 +34,14 @@ jobs:
           CIBW_TEST_COMMAND: "python -c 'import da4ml; print(da4ml.__version__)'"
           CIBW_CONFIG_SETTINGS: "setup-args=-Dpython.allow_limited_api=false"
 
-          # Linux specific: install g++-14 for C++23 support
-          CIBW_BEFORE_BUILD_LINUX: "yum install -y gcc-toolset-14-gcc-c++ || (apt-get update && apt-get install -y g++-14)"
-          CIBW_ENVIRONMENT_LINUX: "CC=gcc-14 CXX=g++-14 PATH=/opt/rh/gcc-toolset-14/root/usr/bin:$PATH"
-
-          # macOS specific environment for OpenMP
-          CIBW_BEFORE_BUILD_MACOS: "brew install libomp"
-          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=15.0"
+          # macOS specific environment for OpenMP, TBB, and CPP23...
+          CIBW_BEFORE_BUILD_MACOS: "brew install libomp tbb"
+          CIBW_ENVIRONMENT_MACOS: >
+            MACOSX_DEPLOYMENT_TARGET=15.0
+            LDFLAGS="-L/opt/homebrew/opt/llvm@18/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm@18/lib/c++"
+            CPPFLAGS="-I/opt/homebrew/opt/llvm@18/include/c++/v1 -I/opt/homebrew/opt/libomp/include'"
+            CC=/opt/homebrew/opt/llvm@18/bin/clang
+            CXX=/opt/homebrew/opt/llvm@18/bin/clang++
 
       - name: Build wheels (Python 3.12+ abi3)
         uses: pypa/cibuildwheel@v3.3.0
@@ -52,13 +53,14 @@ jobs:
           CIBW_SKIP: "*-musllinux_*"
           CIBW_TEST_COMMAND: "python -c 'import da4ml; print(da4ml.__version__)'"
 
-          # Linux specific: install g++-14 for C++23 support
-          CIBW_BEFORE_BUILD_LINUX: "yum install -y gcc-toolset-14-gcc-c++ || (apt-get update && apt-get install -y g++-14)"
-          CIBW_ENVIRONMENT_LINUX: "CC=gcc-14 CXX=g++-14 PATH=/opt/rh/gcc-toolset-14/root/usr/bin:$PATH"
-
-          # macOS specific environment for OpenMP
-          CIBW_BEFORE_BUILD_MACOS: "brew install libomp"
-          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=15.0"
+          # macOS specific environment for OpenMP, TBB, and CPP23...
+          CIBW_BEFORE_BUILD_MACOS: "brew install libomp tbb"
+          CIBW_ENVIRONMENT_MACOS: >
+            MACOSX_DEPLOYMENT_TARGET=15.0
+            LDFLAGS="-L/opt/homebrew/opt/llvm@18/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm@18/lib/c++"
+            CPPFLAGS="-I/opt/homebrew/opt/llvm@18/include/c++/v1 -I/opt/homebrew/opt/libomp/include'"
+            CC=/opt/homebrew/opt/llvm@18/bin/clang
+            CXX=/opt/homebrew/opt/llvm@18/bin/clang++
 
       - uses: actions/upload-artifact@v5
         with:
