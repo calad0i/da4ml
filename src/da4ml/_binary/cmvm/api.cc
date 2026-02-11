@@ -1,6 +1,7 @@
 #include "api.hh"
 #include "cmvm_core.hh"
 #include "mat_decompose.hh"
+#include "src/da4ml/_binary/cmvm/types.hh"
 #include "state_opr.hh"
 #include <cmath>
 #include <algorithm>
@@ -27,7 +28,7 @@ double minimal_latency(
     return max_lat;
 }
 
-PipelineResult single_solve(
+PipelineResult _solve(
     const xt::xarray<std::float32_t> &kernel,
     std::string method0,
     std::string method1,
@@ -39,9 +40,6 @@ PipelineResult single_solve(
     int carry_size
 ) {
     size_t n_in = kernel.shape(0);
-
-    if (hard_dc < 0)
-        hard_dc = 1000000000;
 
     if (method1 == "auto") {
         if (hard_dc >= 6 || method0.ends_with("dc")) {
@@ -70,8 +68,10 @@ PipelineResult single_solve(
         inp_latencies = latencies_in;
     }
 
-    double min_lat =
-        minimal_latency(kernel, qintervals, inp_latencies, carry_size, adder_size);
+    double min_lat = std::numeric_limits<double>::infinity();
+    if (hard_dc >= 0)
+        min_lat =
+            minimal_latency(kernel, qintervals, inp_latencies, carry_size, adder_size);
     double latency_allowed = hard_dc + min_lat;
 
     int log2_n = static_cast<int>(std::ceil(std::log2(static_cast<double>(n_in))));
@@ -178,7 +178,7 @@ PipelineResult solve(
     }
 
     if (!search_all_decompose_dc) {
-        return single_solve(
+        return _solve(
             kernel,
             method0,
             method1,
@@ -205,13 +205,14 @@ PipelineResult solve(
     }
 
     size_t n_tries = try_dcs.size();
-    std::vector<double> costs(n_tries);
+    std::vector<PipelineResult> solution_candidates(n_tries);
+    std::vector<float> costs(n_tries);
 
 #ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic)
 #endif
     for (size_t i = 0; i < n_tries; ++i) {
-        auto _csol = single_solve(
+        auto _csol = _solve(
             kernel,
             method0,
             method1,
@@ -222,12 +223,13 @@ PipelineResult solve(
             adder_size,
             carry_size
         );
-        double _cost = 0.0;
+        float _cost = 0.0;
         for (auto &sol : _csol.solutions) {
             for (auto &op : sol.ops) {
                 _cost += op.cost;
             }
         }
+        solution_candidates[i] = _csol;
         costs[i] = _cost;
     }
 
@@ -238,15 +240,5 @@ PipelineResult solve(
             best = i;
     }
 
-    return single_solve(
-        kernel,
-        method0,
-        method1,
-        _hard_dc,
-        try_dcs[best],
-        qintervals,
-        latencies,
-        adder_size,
-        carry_size
-    );
+    return solution_candidates[best];
 }

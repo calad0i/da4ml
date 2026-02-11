@@ -31,7 +31,7 @@ int8_t get_lsb_loc(std::float32_t x);
 template <int32_container T> xt::xarray<int8_t> _volatile_int_arr_to_csd(T &x) {
     int32_t max_val = static_cast<int32_t>(xt::amax(xt::abs(x))());
     size_t N = static_cast<size_t>(
-        std::ceil(std::log2(static_cast<float>(max_val) * 1.5 + 1e-19))
+        std::ceil(std::log2(std::max(static_cast<float>(max_val), 1.0f) * 1.5))
     );
     N = std::max(N, size_t(1));
     auto out_shape = x.shape();

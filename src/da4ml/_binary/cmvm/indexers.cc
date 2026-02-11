@@ -7,7 +7,7 @@ Pair idx_mc(const DAState &state) {
     Pair best_pair = {-1, -1, false, 0};
     size_t max_freq = 0;
     for (const auto &kv : state.freq_stat) {
-        if (kv.second > max_freq) {
+        if (kv.second >= max_freq) {
             max_freq = kv.second;
             best_pair = kv.first;
         }
@@ -26,7 +26,7 @@ Pair idx_mc_dc(const DAState &state, bool absolute) {
         float lat0 = state.ops[k.id0].latency;
         float lat1 = state.ops[k.id1].latency;
         float score = kv.second - factor * std::abs(lat0 - lat1);
-        if (score > max_score) {
+        if (score >= max_score) {
             max_score = score;
             best_pair = k;
         }
@@ -67,10 +67,8 @@ Pair idx_wmc(const DAState &state) {
         auto &k = kv.first;
         auto [n_overlap, _] =
             overlap_and_accum(state.ops[k.id0].qint, state.ops[k.id1].qint);
-        float lat0 = state.ops[k.id0].latency;
-        float lat1 = state.ops[k.id1].latency;
         float score = kv.second * n_overlap;
-        if (score > max_score) {
+        if (score >= max_score) {
             max_score = score;
             best_pair = k;
         }
@@ -88,7 +86,7 @@ Pair idx_wmc_dc(const DAState &state, bool absolute) {
         float lat0 = state.ops[k.id0].latency;
         float lat1 = state.ops[k.id1].latency;
         float score = kv.second * n_overlap - 256 * std::abs(lat0 - lat1);
-        if (score > max_score) {
+        if (score >= max_score) {
             max_score = score;
             best_pair = k;
         }

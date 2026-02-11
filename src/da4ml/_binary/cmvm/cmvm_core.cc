@@ -90,7 +90,7 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
     auto ops = state.ops; // copy
     int64_t n_out = static_cast<int64_t>(state.kernel.shape(1));
     size_t n_expr = state.expr.size();
-    size_t n_bits = state.expr[0].shape(1);
+    size_t n_bits = state.n_bits;
 
     // Build 3D expr array for indexing
     // expr[i_in][i_out, j_bit]
@@ -106,13 +106,10 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
         std::vector<int64_t> idx, shifts;
         std::vector<int64_t> sub_vals;
         for (size_t i_in = 0; i_in < n_expr; ++i_in) {
-            for (size_t j = 0; j < n_bits; ++j) {
-                int8_t val = state.expr[i_in](i_out, j);
-                if (val != 0) {
-                    idx.push_back(static_cast<int64_t>(i_in));
-                    shifts.push_back(static_cast<int64_t>(j));
-                    sub_vals.push_back(val == -1 ? 1 : 0);
-                }
+            for (int16_t v : state.expr[i_in].rows[i_out]) {
+                idx.push_back(static_cast<int64_t>(i_in));
+                shifts.push_back(static_cast<int64_t>(SparseExpr::to_shift(v)));
+                sub_vals.push_back(SparseExpr::to_sign(v) == -1 ? 1 : 0);
             }
         }
 

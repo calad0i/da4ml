@@ -2,12 +2,12 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <sys/types.h>
 #include <vector>
-#include <unordered_map>
 #include <utility>
 #include <stdexcept>
-#include <functional>
 #include <xtensor/containers/xarray.hpp>
+#include <flat_map>
 
 #ifndef __STDCPP_FLOAT32_T__
 #define __STDCPP_FLOAT32_T__
@@ -29,106 +29,132 @@ struct Op {
 
 struct Pair {
     int64_t id0, id1;
+    int8_t shift;
     bool sub;
-    int64_t shift;
     bool operator==(const Pair &) const = default;
-};
-
-struct PairHash {
-    size_t operator()(const Pair &p) const {
-        size_t h = std::hash<int64_t>{}(p.id0);
-        h ^= std::hash<int64_t>{}(p.id1) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        h ^= std::hash<bool>{}(p.sub) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        h ^= std::hash<int64_t>{}(p.shift) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        return h;
+    bool operator<(const Pair &o) const {
+        if (id1 != o.id1)
+            return id1 < o.id1;
+        if (id0 != o.id0)
+            return id0 < o.id0;
+        if (sub != o.sub)
+            return sub < o.sub;
+        return shift < o.shift;
     }
 };
 
-// Ordered map preserving insertion order (Python dict semantics).
-// Re-inserting a deleted key places it at the end.
-class Map {
-    struct Entry {
-        Pair key;
-        int value;
-        bool alive;
-    };
-    std::vector<Entry> entries_;
-    std::unordered_map<Pair, size_t, PairHash> lookup_;
-    size_t alive_count_ = 0;
+class FreqMap {
+  public:
+    using value_type = std::pair<Pair, uint32_t>;
+
+  private:
+    std::vector<value_type> entries_;
 
   public:
-    size_t size() const { return alive_count_; }
-    bool empty() const { return alive_count_ == 0; }
+    size_t size() const { return entries_.size(); }
+    bool empty() const { return entries_.empty(); }
 
-    void set(const Pair &key, int value) {
-        auto it = lookup_.find(key);
-        if (it != lookup_.end() && entries_[it->second].alive) {
-            // Key exists and alive: update in-place
-            entries_[it->second].value = value;
-        }
-        else {
-            // New key or re-insertion after delete: append at end
-            lookup_[key] = entries_.size();
-            entries_.push_back({key, value, true});
-            alive_count_++;
-        }
+    auto begin() { return entries_.begin(); }
+    auto end() { return entries_.end(); }
+    auto begin() const { return entries_.begin(); }
+    auto end() const { return entries_.end(); }
+
+    void reserve(size_t n) { entries_.reserve(n); }
+
+    template <typename Pred> void erase_if(Pred &&pred) {
+        auto new_end = std::remove_if(entries_.begin(), entries_.end(), pred);
+        entries_.erase(new_end, entries_.end());
     }
-
-    int get(const Pair &key, int default_val) const {
-        auto it = lookup_.find(key);
-        if (it != lookup_.end() && entries_[it->second].alive) {
-            return entries_[it->second].value;
-        }
-        return default_val;
+    void merge_sorted(const std::vector<value_type> &new_entries) {
+        std::vector<value_type> merged(entries_.size() + new_entries.size());
+        std::merge(
+            entries_.begin(),
+            entries_.end(),
+            new_entries.begin(),
+            new_entries.end(),
+            merged.begin(),
+            [](const value_type &a, const value_type &b) { return a.first < b.first; }
+        );
+        entries_ = std::move(merged);
     }
-
-    void erase(const Pair &key) {
-        auto it = lookup_.find(key);
-        if (it != lookup_.end() && entries_[it->second].alive) {
-            entries_[it->second].alive = false;
-            alive_count_--;
-        }
-    }
-
-    std::vector<Pair> keys() const {
-        std::vector<Pair> result;
-        result.reserve(alive_count_);
-        for (auto &e : entries_) {
-            if (e.alive)
-                result.push_back(e.key);
-        }
-        return result;
-    }
-
-    std::vector<int> values() const {
-        std::vector<int> result;
-        result.reserve(alive_count_);
-        for (auto &e : entries_) {
-            if (e.alive)
-                result.push_back(e.value);
-        }
-        return result;
-    }
-
-    Pair key_at(size_t idx) const {
-        size_t count = 0;
-        for (auto &e : entries_) {
-            if (e.alive) {
-                if (count == idx)
-                    return e.key;
+    void batch_add(std::vector<Pair> &raw) {
+        std::sort(raw.begin(), raw.end());
+        std::vector<value_type> new_entries;
+        size_t n = raw.size();
+        uint32_t count = 1;
+        for (size_t i = 0; i < n; ++i) {
+            if (i + 1 < n && raw[i] == raw[i + 1]) {
                 count++;
             }
+            else {
+                if (count >= 2) {
+                    new_entries.emplace_back(raw[i], count);
+                }
+                count = 1;
+            }
+        };
+        std::sort(
+            new_entries.begin(),
+            new_entries.end(),
+            [](const value_type &a, const value_type &b) { return a.first < b.first; }
+        );
+        merge_sorted(new_entries);
+    }
+
+    void initialize(std::vector<Pair> &raw) {
+        entries_.clear();
+        batch_add(raw);
+    }
+};
+
+// Sparse CSD expression slice.
+class SparseExpr {
+  public:
+    std::vector<std::vector<int8_t>> rows; // rows[i_out][j_bit_idx]
+
+    const static int8_t to_shift(int8_t v) { return abs(v) - 1; }
+    const static int8_t to_sign(int8_t v) { return v > 0 ? 1 : -1; }
+
+    const std::pair<int8_t, int8_t> pos_sign(size_t i_out, int8_t bit_pos) {
+        int8_t v = rows[i_out][bit_pos];
+        return {to_shift(v), to_sign(v)};
+    }
+
+    void set_bit(size_t i_out, int8_t shift, int8_t sign) {
+        int8_t v = sign * (shift + 1); // sign: +/-1. encoded as +/- (shift + 1)
+        rows[i_out].push_back(v);
+    }
+    void set_removal(size_t i_out, int8_t j_bit) {
+        int8_t v = 0; // sentinel for removal
+        rows[i_out][j_bit] = 0;
+    }
+    void compact(size_t i_out) {
+        rows[i_out].erase(
+            std::remove(rows[i_out].begin(), rows[i_out].end(), (int8_t)0),
+            rows[i_out].end()
+        );
+    }
+    void compact_all() {
+        for (auto &r : rows) {
+            r.erase(std::remove(r.begin(), r.end(), (int8_t)0), r.end());
         }
-        throw std::out_of_range("OrderedMap::key_at");
+    }
+    int8_t to_idx(size_t i_out, int8_t shift) {
+        for (int8_t i = 0; i < (int8_t)rows[i_out].size(); ++i) {
+            if (to_shift(rows[i_out][i]) == shift)
+                return i;
+        }
+        return -1;
     }
 };
 
 struct DAState {
     xt::xarray<int8_t> shift0; // input shifts
     xt::xarray<int8_t> shift1; // output shifts
-    std::vector<xt::xarray<int8_t>> expr;
+    std::vector<SparseExpr> expr;
+    size_t n_bits; // bit-width of CSD representation
     std::vector<Op> ops;
-    std::unordered_map<Pair, int32_t, PairHash> freq_stat;
+    FreqMap freq_stat;
     xt::xarray<std::float32_t> kernel;
 };
 

@@ -12,7 +12,7 @@ double minimal_latency(
     int adder_size = -1
 );
 
-PipelineResult single_solve(
+PipelineResult _solve(
     const xt::xarray<std::float32_t> &kernel,
     std::string method0 = "wmc",
     std::string method1 = "auto",
