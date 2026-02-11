@@ -3,10 +3,9 @@ from inspect import signature
 from typing import TypeVar
 
 import numpy as np
-from numba.typed import List as NumbaList
 from numpy.typing import NDArray
 
-from ..cmvm.api import solve, solver_options_t
+from ..cmvm import solve, solver_options_t
 from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, LookupTable, QInterval
 from .ops import _quantize, einsum, reduce
 
@@ -68,10 +67,8 @@ def cmvm(cm: np.ndarray, v: 'FixedVariableArray', solver_options: solver_options
             return mmm(v._vars, offload_cm)
     else:
         offload_cm = None
-    _qintervals = [QInterval(float(_v.low), float(_v.high), float(_v.step)) for _v in v._vars]
-    _latencies = [float(_v.latency) for _v in v._vars]
-    qintervals = NumbaList(_qintervals)  # type: ignore
-    latencies = NumbaList(_latencies)  # type: ignore
+    qintervals = [QInterval(float(_v.low), float(_v.high), float(_v.step)) for _v in v._vars]
+    latencies = [float(_v.latency) for _v in v._vars]
     hwconf = v._vars.ravel()[0].hwconf
     solver_options = solver_options.copy()
     solver_options.setdefault('adder_size', hwconf.adder_size)

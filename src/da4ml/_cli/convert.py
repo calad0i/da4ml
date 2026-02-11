@@ -23,10 +23,10 @@ def to_da4ml(
     metadata=None,
     inputs_kif: tuple[int, int, int] | None = None,
 ):
-    from da4ml.cmvm.types import CombLogic
     from da4ml.codegen import HLSModel, RTLModel
     from da4ml.converter import trace_model
     from da4ml.trace import HWConfig, comb_trace
+    from da4ml.types import CombLogic
 
     if model_path.suffix in {'.h5', '.keras'}:
         import hgq  # noqa: F401

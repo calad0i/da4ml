@@ -3,7 +3,6 @@
 #include "src/da4ml/_binary/cmvm/types.hh"
 #include <cmath>
 #include <algorithm>
-#include <unordered_map>
 #include <array>
 
 QInterval
@@ -65,6 +64,28 @@ std::pair<double, double> cost_add(
     double n_accum = k + i + f;
 
     return {std::ceil(n_accum / carry_size), std::ceil(n_accum / adder_size)};
+}
+
+nb::tuple cost_add_numpy(
+    const nb::tuple &q0_obj,
+    const nb::tuple &q1_obj,
+    int64_t shift,
+    bool sub,
+    int adder_size,
+    int carry_size
+) {
+    QInterval q0{
+        nb::cast<double>(q0_obj[0]),
+        nb::cast<double>(q0_obj[1]),
+        nb::cast<double>(q0_obj[2])
+    };
+    QInterval q1{
+        nb::cast<double>(q1_obj[0]),
+        nb::cast<double>(q1_obj[1]),
+        nb::cast<double>(q1_obj[2])
+    };
+    auto [lat, cost] = cost_add(q0, q1, shift, sub, adder_size, carry_size);
+    return nb::make_tuple(lat, cost);
 }
 
 inline Pair _make_pair(int64_t id0, int64_t id1, int8_t v0, int8_t v1) {

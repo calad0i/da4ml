@@ -5,7 +5,7 @@ from uuid import UUID
 
 import numpy as np
 
-from ..cmvm.types import CombLogic, Op, QInterval
+from ..types import CombLogic, Op, QInterval
 from .fixed_variable import FixedVariable, _const_f, table_context
 
 

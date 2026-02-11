@@ -4,7 +4,7 @@ from uuid import UUID
 
 import numpy as np
 
-from ....cmvm.types import CombLogic, Op, QInterval, _minimal_kif
+from ....types import CombLogic, Op, QInterval, minimal_kif
 
 
 def make_neg(lines: list[str], idx: int, qint: QInterval, v0_name: str, neg_repo: dict[int, tuple[int, str]]):
@@ -13,8 +13,8 @@ def make_neg(lines: list[str], idx: int, qint: QInterval, v0_name: str, neg_repo
     if idx in neg_repo:
         return neg_repo[idx]
     _min, _max, step = qint
-    bw0 = sum(_minimal_kif(qint))
-    bw_neg = sum(_minimal_kif(QInterval(-_max, -_min, step)))
+    bw0 = sum(minimal_kif(qint))
+    bw_neg = sum(minimal_kif(QInterval(-_max, -_min, step)))
     was_signed = int(_min < 0)
     lines.append(
         f'wire [{bw_neg - 1}:0] v{idx}_neg; negative #({bw0}, {bw_neg}, {was_signed}) op_neg_{idx} ({v0_name}, v{idx}_neg);'
@@ -46,9 +46,9 @@ def get_table_name_memfile(sol: CombLogic, op: Op) -> tuple[str, str]:
 
 def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency: bool = False) -> list[str]:
     ops = sol.ops
-    kifs = list(map(_minimal_kif, (op.qint for op in ops)))
+    kifs = list(map(minimal_kif, (op.qint for op in ops)))
     widths: list[int] = list(map(sum, kifs))
-    inp_kifs = [_minimal_kif(qint) for qint in sol.inp_qint]
+    inp_kifs = [minimal_kif(qint) for qint in sol.inp_qint]
     inp_widths = list(map(sum, inp_kifs))
     _inp_widths = np.cumsum([0] + inp_widths)
     inp_idxs = np.stack([_inp_widths[1:] - 1, _inp_widths[:-1]], axis=1)
@@ -219,7 +219,7 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
 
 def output_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]]) -> list[str]:
     lines = []
-    widths = list(map(sum, map(_minimal_kif, sol.out_qint)))
+    widths = list(map(sum, map(minimal_kif, sol.out_qint)))
     _widths = np.cumsum([0] + widths)
     out_idxs = np.stack([_widths[1:] - 1, _widths[:-1]], axis=1)
     for i, idx in enumerate(sol.out_idxs):
@@ -239,8 +239,8 @@ def output_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]]) -> list[str
 
 
 def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, timescale: str | None = None):
-    inp_bits = sum(map(sum, map(_minimal_kif, sol.inp_qint)))
-    out_bits = sum(map(sum, map(_minimal_kif, sol.out_qint)))
+    inp_bits = sum(map(sum, map(minimal_kif, sol.inp_qint)))
+    out_bits = sum(map(sum, map(minimal_kif, sol.out_qint)))
 
     fn_signature = [
         f'module {fn_name} (',

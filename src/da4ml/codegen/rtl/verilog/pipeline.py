@@ -1,4 +1,4 @@
-from ....cmvm.types import Pipeline, _minimal_kif
+from ....types import Pipeline, minimal_kif
 from .comb import comb_logic_gen
 
 
@@ -10,8 +10,8 @@ def pipeline_logic_gen(
     register_layers: int = 1,
 ):
     N = len(csol.solutions)
-    inp_bits = [sum(map(sum, map(_minimal_kif, sol.inp_qint))) for sol in csol.solutions]
-    out_bits = inp_bits[1:] + [sum(map(sum, map(_minimal_kif, csol.out_qint)))]
+    inp_bits = [sum(map(sum, map(minimal_kif, sol.inp_qint))) for sol in csol.solutions]
+    out_bits = inp_bits[1:] + [sum(map(sum, map(minimal_kif, csol.out_qint)))]
 
     registers = [f'reg [{width - 1}:0] stage{i}_inp;' for i, width in enumerate(inp_bits)]
     for i in range(0, register_layers - 1):

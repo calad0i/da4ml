@@ -54,15 +54,12 @@ functions = {
 class TestOperations(OperationTest):
     @pytest.fixture(params=list(functions.keys()))
     def op_func(self, request, w8x8: np.ndarray, test_data, inp):
-        np.save('/tmp/wtf1.npy', w8x8)
-        np.save('/tmp/wtf2.npy', test_data)
-        np.save('/tmp/wtf3.npy', inp.kif)
         return lambda x: functions[request.param](x, w8x8)
 
 
 @pytest.mark.parametrize('thres', [0.0, 0.5, 1.0])
 def test_offload(thres):
-    w = (np.random.randn(8, 8).astype(np.float32) * 10).round() / 10
+    w = (np.random.randn(8, 8).astype(np.float32) * 10).round() / 16
 
     def offload_fn(weights, vector):
         return np.random.rand(*np.shape(weights)) > thres

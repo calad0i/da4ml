@@ -2,8 +2,8 @@ from collections.abc import Callable, Sequence
 from hashlib import sha256
 from uuid import UUID
 
-from ...cmvm.types import CombLogic, Op, QInterval, _minimal_kif
 from ...trace.fixed_variable import _const_f, interpret_as
+from ...types import CombLogic, Op, QInterval, minimal_kif
 
 
 def gen_table_name_defline(sol: CombLogic, op: Op, typestr_fn: Callable[[bool | int, int, int], str]) -> tuple[str, str]:
@@ -63,7 +63,7 @@ def get_typestr_fn(flavor: str):
 
 def ssa_gen(comb: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | int, int, int], str]):
     ops = comb.ops
-    all_kifs = list(map(_minimal_kif, (op.qint for op in ops)))
+    all_kifs = list(map(minimal_kif, (op.qint for op in ops)))
     all_types = list(map(lambda x: typestr_fn(*x), all_kifs))
 
     lines = []
@@ -104,7 +104,7 @@ def ssa_gen(comb: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | i
                 _number = op.data * op.qint.step
                 sign, mag = ('-' if _number < 0 else '+'), abs(_number)
                 f = _const_f(mag)
-                const_type_str = typestr_fn(*_minimal_kif(QInterval(mag, mag, 2.0**-f)))
+                const_type_str = typestr_fn(*minimal_kif(QInterval(mag, mag, 2.0**-f)))
                 val = f'{ref0} {sign} {const_type_str}({mag})'
             case 5:
                 # Define constant
@@ -148,7 +148,7 @@ def ssa_gen(comb: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | i
                         val = f'({ref0} != 0)'
                     case 2:  # AND
                         if op.opcode == -9:
-                            _k, _i, _f = _minimal_kif(QInterval(-op.qint.max, -op.qint.min, op.qint.step))
+                            _k, _i, _f = minimal_kif(QInterval(-op.qint.max, -op.qint.min, op.qint.step))
                         else:
                             _k, _i, _f = all_kifs[i]
                         target = -(2.0**-_f) if _k else 2.0**_i - 2.0**-_f
@@ -197,7 +197,7 @@ def output_gen(sol: CombLogic, typestr_fn: Callable[[bool | int, int, int], str]
         if idx < 0:
             lines.append(f'model_out[{i}] = 0;')
             continue
-        _type = typestr_fn(*_minimal_kif(sol.out_qint[i]))
+        _type = typestr_fn(*minimal_kif(sol.out_qint[i]))
         shift = sol.out_shifts[i]
         neg_str = '-' if sol.out_negs[i] else ''
         if shift == 0:
@@ -209,9 +209,9 @@ def output_gen(sol: CombLogic, typestr_fn: Callable[[bool | int, int, int], str]
 
 def get_io_types(sol: CombLogic, flavor: str):
     typestr_fn = get_typestr_fn(flavor)
-    in_kif = map(max, zip(*map(_minimal_kif, sol.inp_qint)))
+    in_kif = map(max, zip(*map(minimal_kif, sol.inp_qint)))
     inp_type = typestr_fn(*in_kif)
-    out_kif = map(max, zip(*map(_minimal_kif, sol.out_qint)))
+    out_kif = map(max, zip(*map(minimal_kif, sol.out_qint)))
     out_type = typestr_fn(*out_kif)
     return inp_type, out_type
 

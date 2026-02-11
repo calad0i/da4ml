@@ -1,7 +1,7 @@
 from math import log2
 from typing import TypeVar, overload
 
-from ...cmvm.types import QInterval
+from ...types import QInterval
 from ..fixed_variable import FixedVariable, _binary_bit_op, _unary_bit_op
 
 T = TypeVar('T', FixedVariable, float)

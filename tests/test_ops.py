@@ -3,10 +3,10 @@ import os
 import numpy as np
 import pytest
 
-from da4ml.cmvm.types import CombLogic
 from da4ml.codegen import HLSModel, RTLModel
 from da4ml.trace import FixedVariableArray, FixedVariableArrayInput, comb_trace
 from da4ml.trace.ops import quantize, relu
+from da4ml.types import CombLogic
 
 
 class OperationTest:

@@ -1,6 +1,6 @@
 from math import floor
 
-from ..cmvm.types import CombLogic, Op, Pipeline
+from ..types import CombLogic, Op, Pipeline
 from .fixed_variable import FixedVariable, HWConfig
 from .tracer import comb_trace
 

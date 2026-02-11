@@ -13,10 +13,10 @@ from uuid import uuid4
 import numpy as np
 from numpy.typing import NDArray
 
-from da4ml.cmvm.types import CombLogic
 from da4ml.codegen.hls.hls_codegen import get_io_types, hls_logic_and_bridge_gen
+from da4ml.types import CombLogic
 
-from ...cmvm.types import _minimal_kif
+from ...types import minimal_kif
 from .. import hls
 
 T = TypeVar('T', bound=np.floating)
@@ -313,8 +313,8 @@ class HLSModel:
         inp_size, out_size = self._solution.shape
         inp_size, out_size = self._solution.shape
         cost = round(self._solution.cost)
-        inp_kifs = tuple(zip(*map(_minimal_kif, self._solution.inp_qint)))
-        out_kifs = tuple(zip(*map(_minimal_kif, self._solution.out_qint)))
+        inp_kifs = tuple(zip(*map(minimal_kif, self._solution.inp_qint)))
+        out_kifs = tuple(zip(*map(minimal_kif, self._solution.out_qint)))
         in_bits, out_bits = np.sum(inp_kifs), np.sum(out_kifs)
 
         spec = f"""Top Function: {self._prj_name}\n====================

@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 
-from ..cmvm.api import solver_options_t
+from ..cmvm import solver_options_t
 from ..trace import FixedVariable, FixedVariableArray, FixedVariableArrayInput, HWConfig
 
 

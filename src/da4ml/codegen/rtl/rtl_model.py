@@ -13,20 +13,20 @@ from uuid import uuid4
 import numpy as np
 from numpy.typing import NDArray
 
-from ...cmvm.types import CombLogic, Pipeline, _minimal_kif
 from ...trace.pipeline import to_pipeline
+from ...types import CombLogic, Pipeline, minimal_kif
 from .. import rtl
 
 
 def get_io_kifs(sol: CombLogic | Pipeline):
-    inp_kifs = tuple(zip(*map(_minimal_kif, sol.inp_qint)))
-    out_kifs = tuple(zip(*map(_minimal_kif, sol.out_qint)))
+    inp_kifs = tuple(zip(*map(minimal_kif, sol.inp_qint)))
+    out_kifs = tuple(zip(*map(minimal_kif, sol.out_qint)))
     return np.array(inp_kifs, np.int8), np.array(out_kifs, np.int8)
 
 
 def binder_gen(csol: Pipeline | CombLogic, module_name: str, II: int = 1, latency_multiplier: int = 1):
-    k_in, i_in, f_in = zip(*map(_minimal_kif, csol.inp_qint))
-    k_out, i_out, f_out = zip(*map(_minimal_kif, csol.out_qint))
+    k_in, i_in, f_in = zip(*map(minimal_kif, csol.inp_qint))
+    k_out, i_out, f_out = zip(*map(minimal_kif, csol.out_qint))
     max_inp_bw = max(k_in) + max(i_in) + max(f_in)
     max_out_bw = max(k_out) + max(i_out) + max(f_out)
     if isinstance(csol, CombLogic):

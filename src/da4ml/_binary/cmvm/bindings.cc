@@ -2,6 +2,7 @@
 #include "mat_decompose.hh"
 #include "api.hh"
 #include "types.hh"
+#include "state_opr.hh"
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -14,7 +15,7 @@ using namespace nb::literals;
 
 // Convert C++ CombLogicResult -> Python CombLogic NamedTuple
 static nb::object make_py_comblogic(const CombLogicResult &sol) {
-    auto types = nb::module_::import_("da4ml.cmvm.types");
+    auto types = nb::module_::import_("da4ml.types");
     auto CombLogic_cls = types.attr("CombLogic");
     auto Op_cls = types.attr("Op");
     auto QInterval_cls = types.attr("QInterval");
@@ -50,7 +51,7 @@ static nb::object make_py_comblogic(const CombLogicResult &sol) {
 
 // Convert C++ PipelineResult -> Python Pipeline NamedTuple
 static nb::object make_py_pipeline(const PipelineResult &result) {
-    auto types = nb::module_::import_("da4ml.cmvm.types");
+    auto types = nb::module_::import_("da4ml.types");
     auto Pipeline_cls = types.attr("Pipeline");
 
     nb::list solutions;
@@ -137,7 +138,7 @@ NB_MODULE(cmvm_bin, m) {
         "_volatile_int_arr_to_csd", &_volatile_int_arr_to_csd_numpy, "in"_a.noconvert()
     );
     m.def("get_lsb_loc", &get_lsb_loc, "x"_a);
-    m.def("csd_decompose", &csd_decompose_numpy, "in"_a.noconvert(), "center"_a = true);
+    m.def("csd_decompose", &csd_decompose_numpy, "inp"_a.noconvert(), "center"_a = true);
     m.def(
         "kernel_decompose", &kernel_decompose_numpy, "kernel"_a.noconvert(), "dc"_a = -2
     );
@@ -154,5 +155,20 @@ NB_MODULE(cmvm_bin, m) {
         "adder_size"_a = -1,
         "carry_size"_a = -1,
         "search_all_decompose_dc"_a = true
+    );
+    m.def(
+        "cost_add",
+        &cost_add_numpy,
+        "q0"_a,
+        "q1"_a,
+        "shift"_a,
+        "sub"_a,
+        "adder_size"_a,
+        "carry_size"_a,
+        nb::sig(
+            "def cost_add(q0: tuple[float, float, float], q1: tuple[float, float, "
+            "float], shift: int, sub: bool, adder_size: int, carry_size: int) -> "
+            "tuple[float, float]"
+        )
     );
 }

@@ -8,14 +8,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, TypeVar
 
 import numpy as np
-from numba import jit
 from numpy import float32, int8
 from numpy.typing import NDArray
 
-from .._binary import dais_interp_run
+from ._binary import dais_interp_run
 
 if TYPE_CHECKING:
-    from ..trace.fixed_variable import FixedVariable, LookupTable
+    from .trace.fixed_variable import FixedVariable, LookupTable
 
 
 class QInterval(NamedTuple):
@@ -83,7 +82,7 @@ class DAState(NamedTuple):
     kernel: NDArray[float32]
 
 
-def _minimal_kif(qi: QInterval, symmetric: bool = False) -> Precision:
+def minimal_kif(qi: QInterval, symmetric: bool = False) -> Precision:
     """Calculate the minimal KIF for a given QInterval.
 
     Parameters
@@ -114,19 +113,12 @@ def _minimal_kif(qi: QInterval, symmetric: bool = False) -> Precision:
     return Precision(keep_negative=keep_negative, integers=integers, fractional=fractional)
 
 
-if TYPE_CHECKING:
-
-    def minimal_kif(qi: QInterval, symmetric: bool = False) -> Precision: ...
-else:
-    minimal_kif = jit(_minimal_kif)
-
-
 T = TypeVar('T', 'FixedVariable', float, int, np.float32, np.float64, Decimal)
 
 
 @singledispatch
 def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False, round_mode: str = 'TRN') -> 'T':
-    from ..trace.fixed_variable import FixedVariable
+    from .trace.fixed_variable import FixedVariable
 
     assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic relu'
     if inv:
@@ -154,7 +146,7 @@ def _(v, i: int | None = None, f: int | None = None, inv: bool = False, round_mo
 
 @singledispatch
 def _quantize(v: 'T', k: int | bool, i: int, f: int, round_mode: str = 'TRN') -> 'T':
-    from ..trace.fixed_variable import FixedVariable
+    from .trace.fixed_variable import FixedVariable
 
     assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic quantization'
     return v.quantize(k, i, f, round_mode=round_mode)
@@ -246,8 +238,8 @@ class CombLogic(NamedTuple):
 
         """
 
-        from ..trace.fixed_variable import FixedVariable
-        from ..trace.ops.bit_oprs import binary_bit_op, unary_bit_op
+        from .trace.fixed_variable import FixedVariable
+        from .trace.ops.bit_oprs import binary_bit_op, unary_bit_op
 
         buf = np.empty(len(self.ops), dtype=object)
         inp = np.asarray(inp)
@@ -265,11 +257,11 @@ class CombLogic(NamedTuple):
                     buf[i] = v0 + v1 if op.opcode == 0 else v0 - v1
                 case 2 | -2:  # relu(+/-x)
                     v = buf[op.id0]
-                    _, _i, _f = _minimal_kif(op.qint)
+                    _, _i, _f = minimal_kif(op.qint)
                     buf[i] = _relu(v, _i, _f, inv=op.opcode == -2, round_mode='TRN')
                 case 3 | -3:  # quantize(+/-x)
                     v = buf[op.id0] if op.opcode == 3 else -buf[op.id0]
-                    _k, _i, _f = _minimal_kif(op.qint)
+                    _k, _i, _f = minimal_kif(op.qint)
                     buf[i] = _quantize(v, _k, _i, _f, round_mode='TRN')
                 case 4:  # const addition
                     bias = op.data * op.qint.step
@@ -291,7 +283,7 @@ class CombLogic(NamedTuple):
                         if qint_k.min < 0:
                             buf[i] = v0 if k < 0 else v1 * 2.0**shift
                         else:
-                            _k, _i, _f = _minimal_kif(qint_k)
+                            _k, _i, _f = minimal_kif(qint_k)
                             buf[i] = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
                 case 7:  # multiplication
                     v0, v1 = buf[op.id0], buf[op.id1]
@@ -424,7 +416,7 @@ class CombLogic(NamedTuple):
     @property
     def out_kifs(self):
         """KIFs of all output elements of the solution."""
-        return np.array([_minimal_kif(qi) for qi in self.out_qint]).T
+        return np.array([minimal_kif(qi) for qi in self.out_qint]).T
 
     @property
     def inp_latency(self):
@@ -444,7 +436,7 @@ class CombLogic(NamedTuple):
     @property
     def inp_kifs(self):
         """KIFs of all input elements of the solution."""
-        return np.array([_minimal_kif(qi) for qi in self.inp_qint]).T
+        return np.array([minimal_kif(qi) for qi in self.inp_qint]).T
 
     def save(self, path: str | Path):
         """Save the solution to a file."""
@@ -461,7 +453,7 @@ class CombLogic(NamedTuple):
         assert len(data) in (8, 9), f'{len(data)}'
         lookup_tables = data[8] if len(data) > 8 else None
         if lookup_tables is not None:
-            from ..trace.fixed_variable import LookupTable
+            from .trace.fixed_variable import LookupTable
 
             lookup_tables = tuple(LookupTable.from_dict(tab) for tab in lookup_tables)
         return cls(
@@ -528,7 +520,7 @@ class CombLogic(NamedTuple):
             buf[0] = op.opcode
             buf[1] = op.id0
             buf[2] = op.id1
-            buf[5:] = _minimal_kif(op.qint)
+            buf[5:] = minimal_kif(op.qint)
             buf_u64 = buf[3:5].view(np.uint64)
             if op.opcode != 8:
                 buf_u64[0] = op.data & 0xFFFFFFFFFFFFFFFF
@@ -702,9 +694,9 @@ class Pipeline(NamedTuple):
     @property
     def reg_bits(self):
         """The number of bits used for the register in the solution."""
-        bits = sum(map(sum, (_minimal_kif(qint) for qint in self.inp_qint)))
+        bits = sum(map(sum, (minimal_kif(qint) for qint in self.inp_qint)))
         for _sol in self.solutions:
-            kifs = [_minimal_kif(qint) for qint in _sol.out_qint]
+            kifs = [minimal_kif(qint) for qint in _sol.out_qint]
             _bits = sum(map(sum, kifs))
             bits += _bits
         return bits

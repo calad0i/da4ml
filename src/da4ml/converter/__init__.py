@@ -2,7 +2,7 @@ from collections.abc import Callable
 from importlib.metadata import EntryPoint, entry_points
 from typing import Literal, overload
 
-from ..cmvm.api import solver_options_t
+from ..cmvm import solver_options_t
 from ..trace import FixedVariableArray, HWConfig
 from .plugin import DAISTracerPluginBase
 

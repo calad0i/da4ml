@@ -69,3 +69,11 @@ custom_target(
   install:true,
   install_dir: py.get_install_dir() / 'da4ml' / '_binary',
 )
+
+custom_target(
+  output: 'cmvm_bin.pyi',
+  depends: cmvm_bin,
+  command: [py, stubgen, '-m', 'cmvm_bin', '-M', 'py.typed'],
+  install:true,
+  install_dir: py.get_install_dir() / 'da4ml' / '_binary',
+)
