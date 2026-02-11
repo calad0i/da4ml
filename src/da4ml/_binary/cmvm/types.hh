@@ -5,9 +5,7 @@
 #include <sys/types.h>
 #include <vector>
 #include <utility>
-#include <stdexcept>
 #include <xtensor/containers/xarray.hpp>
-#include <flat_map>
 
 #ifndef __STDCPP_FLOAT32_T__
 #define __STDCPP_FLOAT32_T__
