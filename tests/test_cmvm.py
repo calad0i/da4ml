@@ -48,8 +48,8 @@ def test_solve(kernel, method0, method1, hard_dc, decompose_dc, search_all_decom
         method1=method1,
         decompose_dc=decompose_dc,
         search_all_decompose_dc=search_all_decompose_dc,
-        adder_size=4,
-        carry_size=4,
+        adder_size=1,
+        carry_size=-1,
     )
 
     assert np.all(sol.kernel == kernel)
