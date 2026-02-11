@@ -35,7 +35,7 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
 ]
 dynamic = [ "version" ]
-dependencies = [ "quantizers>=1,<2" ]
+dependencies = [ "numpy>=2", "quantizers>=1,<2" ]
 optional-dependencies.docs = [
   "myst-parser",
   "pyparsing",
