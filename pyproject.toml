@@ -76,7 +76,7 @@ lint.fixable = [ "ALL" ]
 lint.unfixable = [  ]
 
 [tool.pytest.ini_options]
-env = [ "DA_DEFAULT_THREADS=1", "NUMBA_DISABLE_JIT=1" ]
+env = [ "DA_DEFAULT_THREADS=1" ]
 
 addopts = [
   "--import-mode=importlib",

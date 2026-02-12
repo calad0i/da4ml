@@ -14,7 +14,8 @@ from numpy.typing import NDArray
 from ._binary import dais_interp_run
 
 if TYPE_CHECKING:
-    from .trace.fixed_variable import FixedVariable, LookupTable
+    from .trace import FixedVariable, FixedVariableArray
+    from .trace.fixed_variable import LookupTable
 
 
 class QInterval(NamedTuple):
@@ -213,7 +214,7 @@ class CombLogic(NamedTuple):
     adder_size: int
     lookup_tables: 'tuple[LookupTable, ...] | None' = None
 
-    def __call__(self, inp: list | np.ndarray | tuple, quantize=False, debug=False, dump=False):
+    def __call__(self, inp: 'list | np.ndarray | tuple | FixedVariableArray', quantize=False, debug=False, dump=False):
         """Executes the solution on the input data.
 
         Parameters

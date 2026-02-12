@@ -57,8 +57,28 @@ cmvm_bin = py.extension_module(
 
 install_subdir('src/da4ml',
   install_dir: py.get_install_dir(),
-  exclude_directories: ['_binary/dais', '__pycache__'],
+  exclude_directories: [
+    '_binary',
+    '**/__pycache__',
+    'codegen/hls/source/ap_types',
+    'codegen/hls/source/ac_types'
+  ],
   exclude_files: ['_version.py.in']
+)
+
+install_data('LICENSE', install_dir: py.get_install_dir() / 'da4ml')
+
+install_data(
+  'src/da4ml/_binary/__init__.py',
+  install_dir: py.get_install_dir() / 'da4ml' / '_binary',
+)
+
+install_subdir('src/da4ml/codegen/hls/source/ac_types/include',
+  install_dir: py.get_install_dir() / 'da4ml/codegen/hls/source/ac_types',
+)
+
+install_subdir('src/da4ml/codegen/hls/source/ap_types/include',
+  install_dir: py.get_install_dir() / 'da4ml/codegen/hls/source/ap_types',
 )
 
 stubgen = nanobind_dep.get_variable('stubgen')
