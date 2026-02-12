@@ -128,7 +128,7 @@ class LookupTable:
 
     def lookup(self, var, qint_in: QInterval | tuple[float, float, float]):
         if isinstance(var, FixedVariable):
-            return var.lookup(self)
+            return var.lookup(self, original_qint=qint_in)
         else:
             _min, _max, _step = qint_in
             assert _min <= var <= _max, f'Value {var} out of range [{_min}, {_max}]'
@@ -188,6 +188,14 @@ class LookupTable:
         if not isinstance(other, LookupTable):
             return False
         return self.spec == other.spec and np.array_equal(self.table, other.table)
+
+    def __len__(self) -> int:
+        return len(self.table)
+
+    def __getitem__(self, item) -> 'LookupTable':
+        table = self.float_table[item]
+        _table, _spec = to_spec(table)
+        return LookupTable(_spec, _table)
 
 
 def _const_f(const: float | Decimal):
@@ -517,6 +525,9 @@ class FixedVariable:
             assert other.high == other.low
             other = float(other.low)
 
+        if self.high == self.low:
+            return self.from_const(float(self.low) * float(other), hwconf=self.hwconf)
+
         if other == 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
@@ -532,7 +543,12 @@ class FixedVariable:
                 high, low = self.high * p, self.low * p
             else:
                 high, low = self.low * p, self.high * p
-            v.high, v.low = high, low
+            low, high = float(low), float(high)
+            step = float(v.step)
+
+            k = low < 0
+            i = ceil(log2(max(-low, high + 2.0**step)))
+            v = v.quantize(k, i, -int(log2(step)))
             variables.append((v, p))
         return variables[0][0]
 
@@ -765,12 +781,13 @@ class FixedVariable:
         self,
         a: 'FixedVariable|float|Decimal',
         b: 'FixedVariable|float|Decimal',
-        qint: tuple[Decimal, Decimal, Decimal] | None = None,
+        qint: tuple[float, float, float] | None = None,
         zt_sensitive: bool = True,
     ):
         """If the MSB of this variable is 1, return a, else return b.
         When the variable is signed, the MSB is determined by the sign bit (1 for <0, 0 for >=0)
         """
+
         if not isinstance(a, FixedVariable):
             a = FixedVariable.from_const(a, hwconf=self.hwconf, _factor=1)
         if not isinstance(b, FixedVariable):
@@ -802,13 +819,26 @@ class FixedVariable:
         _factor = a._factor
 
         if qint is None:
-            qint = (min(a.low, b.low), max(a.high, b.high), min(a.step, b.step))
+            qint = (float(min(a.low, b.low)), float(max(a.high, b.high)), float(min(a.step, b.step)))
         else:
-            assert qint[-1] == min(a.step, b.step), (
-                f'Step size in provided qint does not match for msb_mux: {qint[-1]} != min({a.step}, {b.step})'
+            _min, _max, _step = qint
+            step = float(min(a.step, b.step))
+            assert _step <= step, (
+                f'MSB mux cannot imply rounding operation, but its {_step} is larger than min(a.step {a.step}, b.step {b.step})'
             )
+            _min = max(floor(_min / step) * step, float(min(a.low, b.low)))
+            _max = min(floor(_max / step) * step, float(max(a.high, b.high)))
+            qint = (_min, _max, step)
 
         dlat, dcost = cost_add(a.qint, b.qint, 0, False, self.hwconf.adder_size, self.hwconf.carry_size)
+
+        if a.opr == 'const' and a._factor != b._factor:
+            _factor = b._factor
+            a = a._with(_factor=b._factor, renew_id=True)
+        if b.opr == 'const' and a._factor != b._factor:
+            _factor = a._factor
+            b = b._with(_factor=a._factor, renew_id=True)
+
         return FixedVariable(
             *qint,
             _from=(self, a, b),
@@ -838,7 +868,7 @@ class FixedVariable:
             return self
         step = self.step
         high = max(-self.low, self.high)
-        return self.msb_mux(-self, self, (Decimal(0), high, step), zt_sensitive=False)
+        return self.msb_mux(-self, self, (0, float(high), float(step)), zt_sensitive=False)
 
     def abs(self):
         """Get the absolute value of this variable."""
@@ -876,7 +906,8 @@ class FixedVariable:
         if other.high == other.low == 0:
             return self.relu()
 
-        qint = (max(self.low, other.low), max(self.high, other.high), min(self.step, other.step))
+        _qint = (max(self.low, other.low), max(self.high, other.high), min(self.step, other.step))
+        qint = (float(_qint[0]), float(_qint[1]), float(_qint[2]))
         return (self - other).msb_mux(other, self, qint=qint, zt_sensitive=False)
 
     def min_of(self, other):
@@ -896,10 +927,11 @@ class FixedVariable:
         if other.high == other.low == 0:
             return -(-self).relu()
 
-        qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
+        _qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
+        qint = (float(_qint[0]), float(_qint[1]), float(_qint[2]))
         return (self - other).msb_mux(self, other, qint=qint, zt_sensitive=False)
 
-    def lookup(self, table: LookupTable | np.ndarray) -> 'FixedVariable':
+    def lookup(self, table: LookupTable | np.ndarray, original_qint: tuple[float, float, float] | None = None) -> 'FixedVariable':
         """Use a lookup table to map the variable.
         When the table is a numpy array, the table starts at the lowest possible value of the variable
         When the table is in LookupTable format, the table starts at the normalized lowest value of the variable. (i.e., if the variable has negative _factor, the table is reversed)
@@ -908,22 +940,42 @@ class FixedVariable:
         ----------
         table : LookupTable | np.ndarray
             Lookup table to use
+        original_qint : tuple[float, float, float] | None
+            The original quantization interval of the variable where the original table is applied to. The table will be remapped to fit the variable's quantization interval if provided. If not provided, the table is assumed, and must match the variable's quantization interval.
 
         Returns
         -------
         FixedVariable
         """
-        if isinstance(table, np.ndarray):
+
+        size = len(table)
+
+        was_numpy_table = isinstance(table, np.ndarray)
+        if original_qint is not None:
+            o_min, o_max, o_step = original_qint
+            assert round((o_max - o_min) / o_step) + 1 == size, f'table size {size} does not match original qint {original_qint}'
+            _min, _max, _step = self.qint
+            assert o_step <= _step and o_max >= _max and o_min <= _min, (
+                f'Original quantization interval {original_qint} does not cover all values of the variable {self.qint}.'
+            )
+            _bias_0 = round((_min - o_min) / o_step)
+            _bias_1 = round((o_max - _max) / o_step)
+            stride = round(_step / o_step)
+            s = slice(_bias_0, size - _bias_1, stride)
+            table = table[s]
+            size = len(table)
+
+        assert round((self.high - self.low) / self.step) + 1 == size, (
+            f'Input variable size does not match lookup table size ({round((self.high - self.low) / self.step) + 1} != {size})'
+        )
+
+        if was_numpy_table and isinstance(table, np.ndarray):
             if len(table) == 1:
                 return self.from_const(float(table[0]), hwconf=self.hwconf)
             if self._factor < 0:
                 table = table[::-1]  # Reverse the table for negative factor
 
         _table, table_id = table_context.register_table(table)
-        size = len(table.table) if isinstance(table, LookupTable) else len(table)
-        assert round((self.high - self.low) / self.step) + 1 == size, (
-            f'Input variable size does not match lookup table size ({round((self.high - self.low) / self.step) + 1} != {size})'
-        )
 
         return FixedVariable(
             _table.spec.out_qint.min,
@@ -937,6 +989,8 @@ class FixedVariable:
         )
 
     def unary_bit_op(self, _type: str):
+        if self.id == UUID('17e0aa3c-0398-4ca8-aa7e-9d498c778ea6'):
+            pass
         ops = {
             'not': 0,
             'any': 1,
@@ -953,7 +1007,9 @@ class FixedVariable:
         _data = Decimal(ops[_type])
         if _type == 'not':
             k, i, f = self.kif
-            return FixedVariable.from_kif(k, i, f, hwconf=self.hwconf, opr='bit_unary', _data=_data, _from=(self,))
+            return FixedVariable.from_kif(
+                k, i, f, hwconf=self.hwconf, opr='bit_unary', _data=_data, _from=(self,), _factor=abs(self._factor)
+            )
         if _type == 'all':
             if self.low > 0:
                 return self.from_const(0, hwconf=self.hwconf)

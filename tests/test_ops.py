@@ -51,8 +51,7 @@ class OperationTest:
         inp2 = FixedVariableArrayInput(inp.shape).quantize(*inp.kif).as_new()
         out2 = comb(inp2, debug=True, quantize=True)  # type: ignore
         comb2 = comb_trace(inp2, out2)
-        r1, r2 = comb.predict(test_data), comb2.predict(test_data)
-        np.testing.assert_equal(r1, r2)
+        assert comb == comb2
 
     def test_serialization(self, comb: CombLogic, temp_directory: str):
         comb.save(f'{temp_directory}/comb.json')

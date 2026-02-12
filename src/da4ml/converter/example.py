@@ -1,7 +1,7 @@
 import numpy as np
 
 from ..trace import FixedVariableArray
-from ..trace.ops import einsum, quantize, relu
+from ..trace.ops import quantize, relu
 from .plugin import DAISTracerPluginBase
 
 
@@ -20,7 +20,7 @@ def operation(inp):
     out2 = np.amax(np.stack([out2, -out2 * 2], axis=0), axis=0)
 
     out3 = quantize(out2 @ out1, 1, 10, 2)  # can also be einsum here
-    out = einsum('ijk,ij->ik', w, out3)  # CMVM optimization is performed for all
+    out = np.einsum('ijk,ij->ik', w, out3)  # CMVM optimization is performed for all
     return out
 
 
