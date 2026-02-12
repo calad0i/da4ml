@@ -656,6 +656,7 @@ class FixedVariable:
             return (self + step / 2).relu(i, f, 'TRN')
         low = max(Decimal(0), self.low)
         high = self.high
+        high, low = floor(high / step) * step, floor(low / step) * step
 
         if i is not None:
             _high = Decimal(2) ** i - step
