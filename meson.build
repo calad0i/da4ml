@@ -31,7 +31,6 @@ dais_bin = py.extension_module(
   dependencies: [nanobind_dep, omp_dep],
   install: true,
   subdir: 'da4ml/_binary',
-  cpp_args: ['-Wno-sign-compare', '-Wno-unused-variable'],
   limited_api: _limited_abi,
 )
 
@@ -51,7 +50,6 @@ cmvm_bin = py.extension_module(
   dependencies: [nanobind_dep, xtensor_dep, omp_dep],
   install: true,
   subdir: 'da4ml/_binary',
-  cpp_args: ['-Wno-sign-compare', '-Wno-unused-variable'],
   limited_api: _limited_abi,
 )
 

@@ -17,7 +17,6 @@ Pair idx_mc(const DAState &state) {
 
 Pair idx_mc_dc(const DAState &state, bool absolute) {
     Pair best_pair = {-1, -1, false, 0};
-    size_t max_freq = 0;
     float factor = 1e9; // Large factor to prioritize latency difference
 
     float max_score = absolute ? 0 : -std::numeric_limits<float>::infinity();

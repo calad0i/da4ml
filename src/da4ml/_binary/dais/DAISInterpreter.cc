@@ -135,7 +135,7 @@ namespace dais {
     ) const {
         int32_t shift = dtype_from.fractionals - dtype_to.fractionals;
         value = value >> shift;
-        int32_t int_max = dtype_to.int_max();
+        // int32_t int_max = dtype_to.int_max();
         int32_t int_min = dtype_to.int_min();
         const int64_t _mod = 1LL << dtype_to.width();
         value =
@@ -217,7 +217,7 @@ namespace dais {
         int64_t zero = -dtype_in.is_signed * (1LL << (dtype_in.width() - 1));
 
         int64_t index = v0 - zero - op.data_high;
-        if (index < 0 || index >= table_size) {
+        if (index < 0 || index >= (int64_t)table_size) {
             throw std::runtime_error(
                 "Logic lookup index out of bounds: index=" + std::to_string(index) +
                 ", table_size=" + std::to_string(table_size) + ", zero=" +
@@ -402,12 +402,12 @@ namespace dais {
 
     void DAISInterpreter::print_program_info() const {
         size_t bits_in = 0, bits_out = 0;
-        for (int32_t i = 0; i < n_ops; ++i) {
+        for (size_t i = 0; i < n_ops; ++i) {
             const Op op = ops[i];
             if (op.opcode == -1)
                 bits_in += op.dtype.width();
         }
-        for (int32_t i = 0; i < n_out; ++i) {
+        for (size_t i = 0; i < n_out; ++i) {
             if (out_idxs[i] >= 0)
                 bits_out += ops[out_idxs[i]].dtype.width();
         }
@@ -419,20 +419,20 @@ namespace dais {
     }
 
     void DAISInterpreter::validate() const {
-        for (int32_t i = 0; i < n_ops; ++i) // Causality check
+        for (size_t i = 0; i < n_ops; ++i) // Causality check
         {
             const Op &op = ops[i];
-            if (op.id0 >= i && op.opcode != -1)
+            if (op.id0 >= (int32_t)i && op.opcode != -1)
                 throw std::runtime_error(
                     "Operation " + std::to_string(i) +
                     " has id0=" + std::to_string(op.id0) + "violating causality"
                 );
-            if (op.id1 >= i)
+            if (op.id1 >= (int32_t)i)
                 throw std::runtime_error(
                     "Operation " + std::to_string(i) +
                     " has id1=" + std::to_string(op.id1) + " violating causality"
                 );
-            if (abs(op.opcode) == 6 && op.data_low >= i)
+            if (abs(op.opcode) == 6 && (size_t)op.data_low >= i)
                 throw std::runtime_error(
                     "Operation " + std::to_string(i) + " has cond_idx=" +
                     std::to_string(op.data_low) + " violating causality"

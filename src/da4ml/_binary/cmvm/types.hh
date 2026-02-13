@@ -118,8 +118,7 @@ class SparseExpr {
         rows[i_out].push_back(v);
     }
     void set_removal(size_t i_out, int8_t j_bit) {
-        int8_t v = 0; // sentinel for removal
-        rows[i_out][j_bit] = 0;
+        rows[i_out][j_bit] = 0; // sentinel for removal
     }
     void compact(size_t i_out) {
         rows[i_out].erase(
@@ -145,7 +144,7 @@ struct DAState {
     xt::xarray<int8_t> shift0; // input shifts
     xt::xarray<int8_t> shift1; // output shifts
     std::vector<SparseExpr> expr;
-    size_t n_bits; // bit-width of CSD representation
+    int8_t n_bits; // bit-width of CSD representation
     std::vector<Op> ops;
     FreqMap freq_stat;
     xt::xarray<float> kernel;

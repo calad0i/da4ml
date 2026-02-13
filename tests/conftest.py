@@ -1,4 +1,5 @@
 import os
+import sys
 import tarfile
 from pathlib import Path
 
@@ -37,12 +38,14 @@ def pytest_sessionfinish(session, exitstatus):
         root.rmdir()
 
 
-def pytest_sessionstart(session):
-    """whole test run starts."""
+def pytest_collection_finish(session):
     # Skip on xdist worker nodes
     if hasattr(session.config, 'workerinput'):
         return
+    if not any('test_report' in str(item) for item in session.items):
+        return
     root = Path(os.environ.get('DA4ML_TEST_DIR', '/tmp/da4ml_test'))
     root.mkdir(exist_ok=True)
+    kwargs = {'filter': 'data'} if sys.version_info >= (3, 12) else {}
     with tarfile.open(Path(__file__).parent / 'test_data.tar.xz', 'r:xz') as tar:
-        tar.extractall(root, filter='data')
+        tar.extractall(root, **kwargs)  # type: ignore
