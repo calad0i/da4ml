@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest] # Windows ci build is broken for now. Reason unknown...
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v6
@@ -31,17 +31,11 @@ jobs:
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_MACOS: "arm64"
           CIBW_SKIP: "*-musllinux_*"
-          CIBW_TEST_COMMAND: "python -c 'import da4ml; print(da4ml.__version__)'"
+          CIBW_TEST_REQUIRES: "pytest"
+          CIBW_TEST_COMMAND: "pytest {project}/tests/test_cmvm.py"
           CIBW_CONFIG_SETTINGS: "setup-args=-Dpython.allow_limited_api=false"
 
-          # macOS specific environment for OpenMP, TBB, and CPP23...
-          CIBW_BEFORE_BUILD_MACOS: "brew install libomp tbb"
-          CIBW_ENVIRONMENT_MACOS: >
-            MACOSX_DEPLOYMENT_TARGET=15.0
-            LDFLAGS="-L/opt/homebrew/opt/llvm@18/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm@18/lib/c++"
-            CPPFLAGS="-I/opt/homebrew/opt/llvm@18/include/c++/v1 -I/opt/homebrew/opt/libomp/include'"
-            CC=/opt/homebrew/opt/llvm@18/bin/clang
-            CXX=/opt/homebrew/opt/llvm@18/bin/clang++
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=15.0
 
       - name: Build wheels (Python 3.12+ abi3)
         uses: pypa/cibuildwheel@v3.3.0
@@ -51,16 +45,10 @@ jobs:
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ARCHS_MACOS: "arm64"
           CIBW_SKIP: "*-musllinux_*"
-          CIBW_TEST_COMMAND: "python -c 'import da4ml; print(da4ml.__version__)'"
+          CIBW_TEST_REQUIRES: "pytest"
+          CIBW_TEST_COMMAND: "pytest {project}/tests/test_cmvm.py"
 
-          # macOS specific environment for OpenMP, TBB, and CPP23...
-          CIBW_BEFORE_BUILD_MACOS: "brew install libomp tbb"
-          CIBW_ENVIRONMENT_MACOS: >
-            MACOSX_DEPLOYMENT_TARGET=15.0
-            LDFLAGS="-L/opt/homebrew/opt/llvm@18/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm@18/lib/c++"
-            CPPFLAGS="-I/opt/homebrew/opt/llvm@18/include/c++/v1 -I/opt/homebrew/opt/libomp/include'"
-            CC=/opt/homebrew/opt/llvm@18/bin/clang
-            CXX=/opt/homebrew/opt/llvm@18/bin/clang++
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=15.0
 
       - uses: actions/upload-artifact@v5
         with:

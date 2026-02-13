@@ -18,7 +18,7 @@ vcs_tag(
 
 nanobind_dep = dependency('nanobind')
 omp_dep = dependency('openmp')
-xtensor_dep = dependency('xtensor', default_options: ['use_xsimd=true', 'use_tbb=true'])
+xtensor_dep = dependency('xtensor', default_options: ['use_xsimd=true', 'use_tbb=false', 'use_openmp=true'])
 
 _limited_abi = py.language_version().version_compare('>=3.12') ? '3.12' : ''
 
@@ -82,11 +82,12 @@ install_subdir('src/da4ml/codegen/hls/source/ap_types/include',
 )
 
 stubgen = nanobind_dep.get_variable('stubgen')
+
 custom_target(
   output: 'dais_bin.pyi',
   depends: dais_bin,
   command: [py, stubgen, '-m', 'dais_bin', '-M', 'py.typed'],
-  install:true,
+  install: true,
   install_dir: py.get_install_dir() / 'da4ml' / '_binary',
 )
 
@@ -94,6 +95,6 @@ custom_target(
   output: 'cmvm_bin.pyi',
   depends: cmvm_bin,
   command: [py, stubgen, '-m', 'cmvm_bin', '-M', 'py.typed'],
-  install:true,
+  install: true,
   install_dir: py.get_install_dir() / 'da4ml' / '_binary',
 )
