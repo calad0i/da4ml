@@ -204,28 +204,40 @@ PipelineResult solve(
     std::vector<PipelineResult> solution_candidates(n_tries);
     std::vector<float> costs(n_tries);
 
+    std::exception_ptr eptr = nullptr;
 #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < n_tries; ++i) {
-        auto _csol = _solve(
-            kernel,
-            method0,
-            method1,
-            _hard_dc,
-            try_dcs[i],
-            qintervals,
-            latencies,
-            adder_size,
-            carry_size
-        );
-        float _cost = 0.0;
-        for (auto &sol : _csol.solutions) {
-            for (auto &op : sol.ops) {
-                _cost += op.cost;
+        try {
+            auto _csol = _solve(
+                kernel,
+                method0,
+                method1,
+                _hard_dc,
+                try_dcs[i],
+                qintervals,
+                latencies,
+                adder_size,
+                carry_size
+            );
+            float _cost = 0.0;
+            for (auto &sol : _csol.solutions) {
+                for (auto &op : sol.ops) {
+                    _cost += op.cost;
+                }
+            }
+            solution_candidates[i] = _csol;
+            costs[i] = _cost;
+        }
+        catch (...) {
+#pragma omp critical
+            {
+                if (!eptr)
+                    eptr = std::current_exception();
             }
         }
-        solution_candidates[i] = _csol;
-        costs[i] = _cost;
     }
+    if (eptr)
+        std::rethrow_exception(eptr);
 
     // Find argmin
     size_t best = 0;
