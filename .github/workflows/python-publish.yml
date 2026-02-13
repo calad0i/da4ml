@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v6
@@ -23,17 +23,11 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Setup MSVC (Windows)
-        uses: ilammy/msvc-dev-cmd@v1
-        if: runner.os == 'Windows'
-
       - name: Build wheels (Python 3.10-3.11)
         uses: pypa/cibuildwheel@v3.3.0
         env:
           CIBW_BUILD: "cp31[01]-*"
           CIBW_ARCHS_LINUX: "x86_64"
-          CIBW_ARCHS_WINDOWS: "AMD64"
-          CIBW_ENVIRONMENT_WINDOWS: "CC=cl CXX=cl"
           CIBW_ARCHS_MACOS: "arm64"
           CIBW_SKIP: "*-musllinux_*"
           CIBW_TEST_REQUIRES: "pytest"
@@ -43,22 +37,17 @@ jobs:
           CIBW_BEFORE_BUILD_MACOS: "brew install libomp"
           CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=15.0
 
-          CIBW_BEFORE_BUILD_WINDOWS: "rm 'C:\\Program Files\\Git\\usr\\bin\\link.EXE'"
-
       - name: Build wheels (Python 3.12+ abi3)
         uses: pypa/cibuildwheel@v3.3.0
         env:
           CIBW_BUILD: "cp312-*"
           CIBW_ARCHS_LINUX: "x86_64"
-          CIBW_ARCHS_WINDOWS: "AMD64"
-          CIBW_ENVIRONMENT_WINDOWS: "CC=cl CXX=cl"
           CIBW_ARCHS_MACOS: "arm64"
           CIBW_SKIP: "*-musllinux_*"
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_TEST_COMMAND: "pytest -o 'addopts=--import-mode=importlib' {project}/tests/test_cmvm.py"
 
           CIBW_BEFORE_BUILD_MACOS: "brew install libomp"
-          CIBW_BEFORE_BUILD_WINDOWS: "rm 'C:\\Program Files\\Git\\usr\\bin\\link.EXE'"
           CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=15.0
 
       - uses: actions/upload-artifact@v5
