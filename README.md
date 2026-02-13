@@ -1,29 +1,17 @@
-# da4ml: Distributed Arithmetic for Machine Learning
+# da4ml: HLS Compiler for Low-latency, Static-dataflow Kernels on FPGAs
 
-<!-- [![LGPLv3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0) -->
 [![Tests](https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/unit-test.yml?label=test)](https://github.com/calad0i/da4ml/actions/workflows/unit-test.yml)
 [![Documentation](https://img.shields.io/github/actions/workflow/status/calad0i/da4ml/sphinx-build.yml?label=doc)](https://calad0i.github.io/da4ml/)
 [![PyPI version](https://img.shields.io/pypi/v/da4ml)](https://pypi.org/project/da4ml/)
 [![ArXiv](https://img.shields.io/badge/arXiv-2507.04535-b31b1b.svg)](https://arxiv.org/abs/2507.04535)
 [![Cov](https://img.shields.io/codecov/c/github/calad0i/da4ml)](https://codecov.io/gh/calad0i/da4ml)
 
-da4ml is a static computation graph to RTL/HLS design compiler targeting ultra-low latency applications on FPGAs. It as two major components:
- - A fast and performant constant-matrix-vector multiplications (CMVM) optimizer to implement them as
-   efficient adder trees. Common sub-expressions elimination (CSE) with graph-based pre-optimization are
-   performed to reduce the firmware footprint and improve the performance.
- - Low-level symbolic tracing frameworks for generating combinational/fully pipelined logics in HDL or HLS
-   code. da4ml can generate the firmware for almost all fully pipelined networks standalone.
-   Alternatively, da4ml also be used as a plugin in hls4ml to optimize the CMVM operations in the network.
+da4ml is a light-weight high-level synthesis (HLS) compiler for generating low-latency, static-dataflow kernels for FPGAs. The main motivation of da4ml is to provide a simple and efficient way for machine learning practitioners requiring ultra-low latency to deploy their models on FPGAs quickly and easily, similar to hls4ml but with a much simpler design and better performance, both for the generated kernels and for the compilation process.
 
-Key Features
-------------
+As a static dataflow compiler, da4ml is specialized for kernels that are equivalent to a combinational or fully pipelined logic circuit, which means that the kernel has no loops or has only fully unrolled loops. There is no specific limitation on the types of operations that can be used in the kernel. For resource sharing and time-multiplexing, the users are expected to use the generated kernels as building blocks and manually assemble them into a larger design. In the future, we may employ a XLS-like design to automate the communication and buffer instantiation between kernels, but for now we will keep it simple and let the users have full control over the design.
 
-- **Optimized Algorithms**: Comparing to hls4ml's latency strategy, da4ml's CMVM implementation uses no DSO and consumes up to 50% less LUT usage.
-- **Fast code generation**: da4ml can generate HDL for a fully pipelined network in seconds. For the same models, high-level synthesis tools like Vivado/Vitis HLS can take up to days to generate the HDL code.
-- **Low-level symbolic tracing**: As long as the operation can be expressed by a combination of the low-level operations supported, adding new operations is straightforward by "replaying" the operation on the symbolic tensor provided. In most cases, adding support for a new operation/layer takes just a few lines of code in numpy flavor.
-- **Automatic model conversion**: da4ml can automatically convert models trained in `HGQ2 <https://github.com/calad0i/hgq2>`_.
-- **Bit-accurate Emulation**: All operation in da4ml is bit-accurate, meaning the generated HDL code will produce the same output as the original model. da4ml's computation is converted to a RISC-like, instruction set level intermediate representation, distributed arithmetic instruction set (DAIS), which can be easily simulated in multiple ways. da4ml also provides a fast C++ based DAIS interpreter to run bit-exact inference on the traced models for verification and benchmarking.
-- **hls4ml integration**: da4ml can be used as a extension in hls4ml to optimize the CMVM operations in the network by setting `strategy='distributed_arithmetic'` for the strategy of the Dense, EinsumDense, or Conv1/2D layers.
+With DA in its name, da4ml do perform distributed arithmetic (DA) optimization to generate efficient kernels for linear DSP operations. The algorithm used is an efficient hybrid algorithm described in our [TRETS'25 paper](https://doi.org/10.1145/3777387). With DA optimization, any linear DSP operation can be implemented efficiently with only adders (i.e., fast accum and LUTs on FPGAs) without any hardened multipliers. If the user wishes, one can also control what multiplication pairs shall be excluded from DA optimization.
+
 
 Installation
 ------------
@@ -32,7 +20,7 @@ Installation
 pip install da4ml
 ```
 
-Note: da4ml is now released as binary wheels on PyPI for Linux X86_64 and MacOS ARM64 platforms. For other platforms, please install from source.
+Note: da4ml is now released as binary wheels on PyPI for Linux X86_64 and MacOS ARM64 platforms. For other platforms, please install from source. C++20 compliant compiler with OpenMP support is required to build da4ml from source. Windows is not officially supported, but you may try building it with MSVC or MinGW.
 
 Getting Started
 ---------------
