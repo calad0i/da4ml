@@ -1,11 +1,18 @@
 #include "bit_decompose.hh"
 
+#include <limits>
+
+static_assert(
+    std::numeric_limits<float>::is_iec559 && sizeof(float) == 4,
+    "float must be IEEE 754 binary32 for bit_cast to uint32_t"
+);
+
 int8_t get_lsb_loc(float x) {
     // s1, m24, e7
     if (x == 0.0f) {
         return 127;
     }
-    uint32_t bits = std::bit_cast<uint32_t>(_Float32(x));
+    uint32_t bits = std::bit_cast<uint32_t>(x);
     uint8_t exp = static_cast<uint8_t>((bits >> 23) & 0xFF);
     uint32_t mant = bits & 0x7FFFFF;
     int mtz = __builtin_ctz(mant + (1 << 23));
