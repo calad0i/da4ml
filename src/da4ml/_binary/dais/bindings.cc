@@ -4,12 +4,7 @@
 #include "DAISInterpreter.hh"
 #include <cstring>
 #include <span>
-
-#ifdef _OPENMP
 #include <omp.h>
-#else
-inline int omp_get_max_threads() { return 1; }
-#endif
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -75,9 +70,7 @@ void run_interp(
 
     std::exception_ptr eptr = nullptr;
 
-#ifdef _OPENMP
 #pragma omp parallel for num_threads(n_thread) schedule(static)
-#endif
 
     for (size_t i = 0; i < n_thread; ++i) {
         size_t start = i * n_samples_per_thread;
@@ -94,9 +87,7 @@ void run_interp(
             _run_interp(bin_logic, inp_span, out_span, n_samples_this_thread);
         }
         catch (...) {
-#ifdef _OPENMP
 #pragma omp critical
-#endif
             {
                 if (!eptr)
                     eptr = std::current_exception();

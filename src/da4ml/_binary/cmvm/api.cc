@@ -6,10 +6,7 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
-
-#ifdef _OPENMP
 #include <omp.h>
-#endif
 
 double minimal_latency(
     const xt::xarray<float> &kernel,
@@ -207,9 +204,7 @@ PipelineResult solve(
     std::vector<PipelineResult> solution_candidates(n_tries);
     std::vector<float> costs(n_tries);
 
-#ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic)
-#endif
     for (size_t i = 0; i < n_tries; ++i) {
         auto _csol = _solve(
             kernel,

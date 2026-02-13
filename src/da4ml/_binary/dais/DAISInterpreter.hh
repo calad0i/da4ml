@@ -5,13 +5,7 @@
 #include <string>
 #include <vector>
 #include <span>
-
-#ifdef _OPENMP
 #include <omp.h>
-constexpr bool _openmp = true;
-#else
-constexpr bool _openmp = false;
-#endif
 
 namespace dais {
 
