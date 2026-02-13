@@ -7,8 +7,8 @@
 
 QInterval
 qint_add(const QInterval &q0, const QInterval &q1, int64_t shift, bool sub0, bool sub1) {
-    double min0 = q0.min, max0 = q0.max, step0 = q0.step;
-    double min1 = q1.min, max1 = q1.max, step1 = q1.step;
+    float min0 = q0.min, max0 = q0.max, step0 = q0.step;
+    float min1 = q1.min, max1 = q1.max, step1 = q1.step;
     if (sub0) {
         std::swap(min0, max0);
         min0 = -min0;
@@ -20,7 +20,7 @@ qint_add(const QInterval &q0, const QInterval &q1, int64_t shift, bool sub0, boo
         max1 = -max1;
     }
 
-    double s = std::pow(2.0, shift);
+    float s = std::pow(2.0, shift);
     min1 *= s;
     max1 *= s;
     step1 *= s;
@@ -28,7 +28,7 @@ qint_add(const QInterval &q0, const QInterval &q1, int64_t shift, bool sub0, boo
     return QInterval{min0 + min1, max0 + max1, std::min(step0, step1)};
 }
 
-std::pair<double, double> cost_add(
+std::pair<float, float> cost_add(
     const QInterval &q0,
     const QInterval &q1,
     int64_t shift,
@@ -43,25 +43,25 @@ std::pair<double, double> cost_add(
     if (carry_size < 0)
         carry_size = 65535;
 
-    double min0 = q0.min, max0 = q0.max, step0 = q0.step;
-    double min1 = q1.min, max1 = q1.max, step1 = q1.step;
+    float min0 = q0.min, max0 = q0.max, step0 = q0.step;
+    float min1 = q1.min, max1 = q1.max, step1 = q1.step;
     if (sub)
         std::swap(min1, max1);
-    double sf = std::pow(2.0, shift);
+    float sf = std::pow(2.0, shift);
     min1 *= sf;
     max1 *= sf;
     step1 *= sf;
     max0 += step0;
     max1 += step1;
 
-    double f = -std::log2(std::max(step0, step1));
-    double i = std::ceil(
+    float f = -std::log2(std::max(step0, step1));
+    float i = std::ceil(
         std::log2(
             std::max({std::abs(min0), std::abs(min1), std::abs(max0), std::abs(max1)})
         )
     );
     int k = (q0.min < 0 || q1.min < 0) ? 1 : 0;
-    double n_accum = k + i + f;
+    float n_accum = k + i + f;
 
     return {std::ceil(n_accum / carry_size), std::ceil(n_accum / adder_size)};
 }
@@ -79,7 +79,7 @@ inline Pair _make_pair(int64_t id0, int64_t id1, int8_t v0, int8_t v1) {
 DAState create_state(
     const xt::xarray<float> &kernel_in,
     const std::vector<QInterval> &qintervals,
-    const std::vector<double> &inp_latencies,
+    const std::vector<float> &inp_latencies,
     bool no_stat_init
 ) {
     size_t n_in = kernel_in.shape(0);
@@ -217,8 +217,7 @@ Op pair_to_op(const Pair &pair, const DAState &state, int adder_size, int carry_
         adder_size,
         carry_size
     );
-    double lat =
-        std::max(state.ops[pair.id0].latency, state.ops[pair.id1].latency) + dlat;
+    float lat = std::max(state.ops[pair.id0].latency, state.ops[pair.id1].latency) + dlat;
     QInterval qint = qint_add(
         state.ops[pair.id0].qint, state.ops[pair.id1].qint, pair.shift, false, pair.sub
     );

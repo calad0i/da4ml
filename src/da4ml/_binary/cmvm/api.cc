@@ -8,18 +8,18 @@
 #include <limits>
 #include <omp.h>
 
-double minimal_latency(
+float minimal_latency(
     const xt::xarray<float> &kernel,
     const std::vector<QInterval> &qintervals,
-    const std::vector<double> &latencies,
+    const std::vector<float> &latencies,
     int carry_size,
     int adder_size
 ) {
     DAState state = create_state(kernel, qintervals, latencies, true);
     CombLogicResult sol = to_solution(state, adder_size, carry_size);
-    double max_lat = 0.0;
+    float max_lat = 0.0;
     for (auto idx : sol.out_idxs) {
-        double lat = (idx >= 0) ? sol.ops[idx].latency : 0.0;
+        float lat = (idx >= 0) ? sol.ops[idx].latency : 0.0;
         max_lat = std::max(max_lat, lat);
     }
     return max_lat;
@@ -32,7 +32,7 @@ PipelineResult _solve(
     int hard_dc,
     int decompose_dc,
     const std::vector<QInterval> &qintervals_in,
-    const std::vector<double> &latencies_in,
+    const std::vector<float> &latencies_in,
     int adder_size,
     int carry_size
 ) {
@@ -57,7 +57,7 @@ PipelineResult _solve(
     else {
         qintervals = qintervals_in;
     }
-    std::vector<double> inp_latencies;
+    std::vector<float> inp_latencies;
     if (latencies_in.empty()) {
         inp_latencies.assign(n_in, 0.0);
     }
@@ -65,13 +65,13 @@ PipelineResult _solve(
         inp_latencies = latencies_in;
     }
 
-    double min_lat = std::numeric_limits<double>::infinity();
+    float min_lat = std::numeric_limits<float>::infinity();
     if (hard_dc >= 0)
         min_lat =
             minimal_latency(kernel, qintervals, inp_latencies, carry_size, adder_size);
-    double latency_allowed = hard_dc + min_lat;
+    float latency_allowed = hard_dc + min_lat;
 
-    int log2_n = static_cast<int>(std::ceil(std::log2(static_cast<double>(n_in))));
+    int log2_n = static_cast<int>(std::ceil(std::log2(static_cast<float>(n_in))));
     if (decompose_dc == -2) {
         decompose_dc = std::min(hard_dc, log2_n);
     }
@@ -97,11 +97,11 @@ PipelineResult _solve(
             mat0, method0, qintervals, inp_latencies, adder_size, carry_size
         );
 
-        std::vector<double> latencies0;
+        std::vector<float> latencies0;
         std::vector<QInterval> qintervals0;
-        double max_lat0 = 0.0;
+        float max_lat0 = 0.0;
         for (auto idx : sol0.out_idxs) {
-            double lat = (idx >= 0) ? sol0.ops[idx].latency : 0.0;
+            float lat = (idx >= 0) ? sol0.ops[idx].latency : 0.0;
             latencies0.push_back(lat);
             max_lat0 = std::max(max_lat0, lat);
             if (idx >= 0) {
@@ -109,7 +109,7 @@ PipelineResult _solve(
             }
             else {
                 qintervals0.push_back(
-                    QInterval{0.0, 0.0, std::numeric_limits<double>::infinity()}
+                    QInterval{0.0, 0.0, std::numeric_limits<float>::infinity()}
                 );
             }
         }
@@ -124,9 +124,9 @@ PipelineResult _solve(
         sol1 =
             solve_single(mat1, method1, qintervals0, latencies0, adder_size, carry_size);
 
-        double max_lat1 = 0.0;
+        float max_lat1 = 0.0;
         for (auto idx : sol1.out_idxs) {
-            double lat = (idx >= 0) ? sol1.ops[idx].latency : 0.0;
+            float lat = (idx >= 0) ? sol1.ops[idx].latency : 0.0;
             max_lat1 = std::max(max_lat1, lat);
         }
 
@@ -151,7 +151,7 @@ PipelineResult solve(
     int hard_dc,
     int decompose_dc,
     const std::vector<QInterval> &qintervals_in,
-    const std::vector<double> &latencies_in,
+    const std::vector<float> &latencies_in,
     int adder_size,
     int carry_size,
     bool search_all_decompose_dc
@@ -165,7 +165,7 @@ PipelineResult solve(
     else {
         qintervals = qintervals_in;
     }
-    std::vector<double> latencies;
+    std::vector<float> latencies;
     if (latencies_in.empty()) {
         latencies.assign(n_in, 0.0);
     }
@@ -192,7 +192,7 @@ PipelineResult solve(
         _hard_dc = 1000000000;
 
     int max_decompose_dc = std::min(
-        _hard_dc, static_cast<int>(std::ceil(std::log2(static_cast<double>(n_in))))
+        _hard_dc, static_cast<int>(std::ceil(std::log2(static_cast<float>(n_in))))
     );
 
     std::vector<int> try_dcs;

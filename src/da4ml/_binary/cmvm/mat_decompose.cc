@@ -6,16 +6,16 @@
 xt::xarray<int32_t> prim_mst_dc(const xt::xarray<int64_t> &cost_mat, int dc) {
     size_t N = cost_mat.shape(0);
     auto lat_mat =
-        xt::cast<double>(xt::ceil(xt::log2(xt::cast<double>(xt::maximum(cost_mat, 1)))));
+        xt::cast<float>(xt::ceil(xt::log2(xt::cast<float>(xt::maximum(cost_mat, 1)))));
     std::vector<int32_t> parent(N, -2);
     parent[0] = -1;
 
     xt::xarray<int32_t> mapping = xt::empty<int32_t>({N - 1, size_t(2)});
     std::vector<int32_t> latency(N, 0);
 
-    double _dc = -1;
+    float _dc = -1;
     if (dc >= 0) {
-        double max_cost0 = xt::amax(xt::view(cost_mat, 0, xt::all()))();
+        float max_cost0 = xt::amax(xt::view(cost_mat, 0, xt::all()))();
         _dc = (std::pow(2.0, dc) - 1) + std::ceil(std::log2(max_cost0 + 1e-32));
     }
 
@@ -37,8 +37,8 @@ xt::xarray<int32_t> prim_mst_dc(const xt::xarray<int64_t> &cost_mat, int dc) {
                 size_t i = not_impl[ii], j = impl[jj];
                 int64_t c = cost_mat(i, j);
                 if (dc >= 0) {
-                    double lat = lat_mat(i, j);
-                    double max_lat = std::max(lat, (double)latency[j]) + 1;
+                    float lat = lat_mat(i, j);
+                    float max_lat = std::max(lat, (float)latency[j]) + 1;
                     if (max_lat > _dc) {
                         c = std::numeric_limits<int64_t>::max() / 2;
                     }
@@ -54,8 +54,7 @@ xt::xarray<int32_t> prim_mst_dc(const xt::xarray<int64_t> &cost_mat, int dc) {
         parent[i] = static_cast<int32_t>(j);
         mapping(n_impl - 1, 0) = static_cast<int32_t>(j);
         mapping(n_impl - 1, 1) = static_cast<int32_t>(i);
-        latency[i] =
-            static_cast<int32_t>(std::max(lat_mat(i, j), (double)latency[j]) + 1);
+        latency[i] = static_cast<int32_t>(std::max(lat_mat(i, j), (float)latency[j]) + 1);
     }
     return mapping;
 }

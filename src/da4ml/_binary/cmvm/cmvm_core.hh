@@ -8,7 +8,7 @@ DAState cmvm(
     const xt::xarray<float> &kernel,
     const std::string &method = "wmc",
     const std::vector<QInterval> &qintervals = {},
-    const std::vector<double> &inp_latencies = {},
+    const std::vector<float> &inp_latencies = {},
     int adder_size = -1,
     int carry_size = -1
 );
@@ -19,7 +19,7 @@ CombLogicResult solve_single(
     const xt::xarray<float> &kernel,
     const std::string &method,
     const std::vector<QInterval> &qintervals,
-    const std::vector<double> &latencies,
+    const std::vector<float> &latencies,
     int adder_size,
     int carry_size
 );

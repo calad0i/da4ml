@@ -12,7 +12,7 @@ QInterval qint_add(
     bool sub1 = false
 );
 
-std::pair<double, double> cost_add(
+std::pair<float, float> cost_add(
     const QInterval &q0,
     const QInterval &q1,
     int64_t shift,
@@ -24,7 +24,7 @@ std::pair<double, double> cost_add(
 DAState create_state(
     const xt::xarray<float> &kernel,
     const std::vector<QInterval> &qintervals,
-    const std::vector<double> &inp_latencies,
+    const std::vector<float> &inp_latencies,
     bool no_stat_init = false
 );
 

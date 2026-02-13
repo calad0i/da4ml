@@ -30,14 +30,10 @@ nb::typed<nb::tuple, float, float> cost_add_numpy(
     int carry_size
 ) {
     QInterval q0{
-        nb::cast<double>(q0_obj[0]),
-        nb::cast<double>(q0_obj[1]),
-        nb::cast<double>(q0_obj[2])
+        nb::cast<float>(q0_obj[0]), nb::cast<float>(q0_obj[1]), nb::cast<float>(q0_obj[2])
     };
     QInterval q1{
-        nb::cast<double>(q1_obj[0]),
-        nb::cast<double>(q1_obj[1]),
-        nb::cast<double>(q1_obj[2])
+        nb::cast<float>(q1_obj[0]), nb::cast<float>(q1_obj[1]), nb::cast<float>(q1_obj[2])
     };
     auto [lat, cost] = cost_add(q0, q1, shift, sub, adder_size, carry_size);
     return nb::make_tuple(lat, cost);
@@ -161,22 +157,22 @@ static std::vector<QInterval> extract_qintervals(nb::object obj) {
     auto lst = nb::cast<nb::list>(obj);
     for (size_t i = 0; i < lst.size(); ++i) {
         auto item = lst[i];
-        double mn = nb::cast<double>(item[nb::int_(0)]);
-        double mx = nb::cast<double>(item[nb::int_(1)]);
-        double st = nb::cast<double>(item[nb::int_(2)]);
+        float mn = nb::cast<float>(item[nb::int_(0)]);
+        float mx = nb::cast<float>(item[nb::int_(1)]);
+        float st = nb::cast<float>(item[nb::int_(2)]);
         result.push_back(QInterval{mn, mx, st});
     }
     return result;
 }
 
 // Extract latencies from Python list
-static std::vector<double> extract_latencies(nb::object obj) {
-    std::vector<double> result;
+static std::vector<float> extract_latencies(nb::object obj) {
+    std::vector<float> result;
     if (obj.is_none())
         return result;
     auto lst = nb::cast<nb::list>(obj);
     for (size_t i = 0; i < lst.size(); ++i) {
-        result.push_back(nb::cast<double>(lst[i]));
+        result.push_back(nb::cast<float>(lst[i]));
     }
     return result;
 }

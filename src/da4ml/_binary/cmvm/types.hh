@@ -8,7 +8,7 @@
 #include <xtensor/containers/xarray.hpp>
 
 struct QInterval {
-    double min, max, step;
+    float min, max, step;
 };
 
 struct Op {
@@ -16,8 +16,8 @@ struct Op {
     int64_t opcode;
     int64_t data;
     QInterval qint;
-    double latency;
-    double cost;
+    float latency;
+    float cost;
 };
 
 struct Pair {

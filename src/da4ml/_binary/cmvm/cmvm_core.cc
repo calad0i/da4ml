@@ -11,7 +11,7 @@ DAState cmvm(
     const xt::xarray<float> &kernel,
     const std::string &method,
     const std::vector<QInterval> &qintervals_in,
-    const std::vector<double> &inp_latencies_in,
+    const std::vector<float> &inp_latencies_in,
     int adder_size,
     int carry_size
 ) {
@@ -23,7 +23,7 @@ DAState cmvm(
     else {
         qintervals = qintervals_in;
     }
-    std::vector<double> inp_latencies;
+    std::vector<float> inp_latencies;
     if (inp_latencies_in.empty()) {
         inp_latencies.assign(n_in, 0.0);
     }
@@ -73,10 +73,10 @@ DAState cmvm(
 
 // Heap entry for to_solution — matches Python's tuple comparison order
 struct HeapEntry {
-    double lat;
+    float lat;
     int64_t sub;
     int64_t left_align;
-    double qmin, qmax, qstep; // QInterval fields for comparison
+    float qmin, qmax, qstep; // QInterval fields for comparison
     int64_t id;
     int64_t shift;
 
@@ -133,7 +133,7 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
             heap;
         for (size_t k = 0; k < idx.size(); ++k) {
             auto &qint = ops[idx[k]].qint;
-            double lat = ops[idx[k]].latency;
+            float lat = ops[idx[k]].latency;
             int64_t n_int = static_cast<int64_t>(
                 std::log2(std::max(std::abs(qint.max + qint.step), std::abs(qint.min)))
             );
@@ -151,13 +151,13 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
 
             QInterval qint0 = {e0.qmin, e0.qmax, e0.qstep};
             QInterval qint1 = {e1.qmin, e1.qmax, e1.qstep};
-            double lat0 = e0.lat, lat1 = e1.lat;
+            float lat0 = e0.lat, lat1 = e1.lat;
             int64_t sub0 = e0.sub, sub1 = e1.sub;
             int64_t id0 = e0.id, id1 = e1.id;
             int64_t shift0 = e0.shift, shift1 = e1.shift;
 
             QInterval qint;
-            double dlat, dcost;
+            float dlat, dcost;
             Op op;
             int64_t result_shift;
 
@@ -168,7 +168,7 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
                     cost_add(qint1, qint0, s, (1 ^ sub1) != 0, adder_size, carry_size);
                 dlat = dl;
                 dcost = dc;
-                double lat = std::max(lat0, lat1) + dlat;
+                float lat = std::max(lat0, lat1) + dlat;
                 op = Op{id1, id0, 1 ^ sub1, s, qint, lat, dcost};
                 result_shift = shift1;
             }
@@ -179,7 +179,7 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
                     cost_add(qint0, qint1, s, sub1 != 0, adder_size, carry_size);
                 dlat = dl;
                 dcost = dc;
-                double lat = std::max(lat0, lat1) + dlat;
+                float lat = std::max(lat0, lat1) + dlat;
                 op = Op{id0, id1, sub1, s, qint, lat, dcost};
                 result_shift = shift0;
             }
@@ -188,7 +188,7 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
                              std::max(std::abs(qint.max + qint.step), std::abs(qint.min))
                          )) +
                          result_shift;
-            double lat = op.latency;
+            float lat = op.latency;
             heap.push(
                 {lat,
                  sub0 & sub1,
@@ -228,7 +228,7 @@ CombLogicResult solve_single(
     const xt::xarray<float> &kernel,
     const std::string &method,
     const std::vector<QInterval> &qintervals,
-    const std::vector<double> &latencies,
+    const std::vector<float> &latencies,
     int adder_size,
     int carry_size
 ) {
