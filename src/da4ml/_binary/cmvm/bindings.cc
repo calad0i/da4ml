@@ -91,7 +91,7 @@ static std::vector<double> extract_latencies(nb::object obj) {
 
 // Python-facing solve function
 static nb::object solve_numpy(
-    const nb::ndarray<std::float32_t> &kernel_arr,
+    const nb::ndarray<float> &kernel_arr,
     const std::string &method0,
     const std::string &method1,
     int hard_dc,
@@ -108,7 +108,7 @@ static nb::object solve_numpy(
     for (size_t i = 0; i < ndim; ++i)
         shape[i] = kernel_arr.shape(i);
     auto kernel = xt::adapt(
-        const_cast<std::float32_t *>(kernel_arr.data()),
+        const_cast<float *>(kernel_arr.data()),
         kernel_arr.size(),
         xt::no_ownership(),
         shape
@@ -118,7 +118,7 @@ static nb::object solve_numpy(
     auto latencies = extract_latencies(latencies_obj);
 
     auto result = solve(
-        xt::xarray<std::float32_t>(kernel),
+        xt::xarray<float>(kernel),
         method0,
         method1,
         hard_dc,

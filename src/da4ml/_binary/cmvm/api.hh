@@ -5,7 +5,7 @@
 #include <vector>
 
 double minimal_latency(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     const std::vector<QInterval> &qintervals,
     const std::vector<double> &latencies,
     int carry_size = -1,
@@ -13,7 +13,7 @@ double minimal_latency(
 );
 
 PipelineResult _solve(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     std::string method0 = "wmc",
     std::string method1 = "auto",
     int hard_dc = -1,
@@ -25,7 +25,7 @@ PipelineResult _solve(
 );
 
 PipelineResult solve(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     const std::string &method0 = "wmc",
     const std::string &method1 = "auto",
     int hard_dc = -1,

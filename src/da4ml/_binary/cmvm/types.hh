@@ -7,11 +7,6 @@
 #include <utility>
 #include <xtensor/containers/xarray.hpp>
 
-#ifndef __STDCPP_FLOAT32_T__
-#define __STDCPP_FLOAT32_T__
-#endif
-#include <stdfloat>
-
 struct QInterval {
     double min, max, step;
 };
@@ -153,7 +148,7 @@ struct DAState {
     size_t n_bits; // bit-width of CSD representation
     std::vector<Op> ops;
     FreqMap freq_stat;
-    xt::xarray<std::float32_t> kernel;
+    xt::xarray<float> kernel;
 };
 
 struct CombLogicResult {

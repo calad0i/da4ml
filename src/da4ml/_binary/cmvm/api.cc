@@ -12,7 +12,7 @@
 #endif
 
 double minimal_latency(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     const std::vector<QInterval> &qintervals,
     const std::vector<double> &latencies,
     int carry_size,
@@ -29,7 +29,7 @@ double minimal_latency(
 }
 
 PipelineResult _solve(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     std::string method0,
     std::string method1,
     int hard_dc,
@@ -95,8 +95,7 @@ PipelineResult _solve(
             }
         }
 
-        auto [mat0, mat1] =
-            kernel_decompose(xt::xarray<std::float32_t>(kernel), decompose_dc);
+        auto [mat0, mat1] = kernel_decompose(xt::xarray<float>(kernel), decompose_dc);
         sol0 = solve_single(
             mat0, method0, qintervals, inp_latencies, adder_size, carry_size
         );
@@ -149,7 +148,7 @@ PipelineResult _solve(
 }
 
 PipelineResult solve(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     const std::string &method0,
     const std::string &method1,
     int hard_dc,

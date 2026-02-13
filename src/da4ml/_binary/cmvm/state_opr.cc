@@ -99,7 +99,7 @@ inline Pair _make_pair(int64_t id0, int64_t id1, int8_t v0, int8_t v1) {
 }
 
 DAState create_state(
-    const xt::xarray<std::float32_t> &kernel_in,
+    const xt::xarray<float> &kernel_in,
     const std::vector<QInterval> &qintervals,
     const std::vector<double> &inp_latencies,
     bool no_stat_init
@@ -108,7 +108,7 @@ DAState create_state(
     size_t n_out = kernel_in.shape(1);
     DAState state;
 
-    xt::xarray<std::float32_t> kernel_f32(kernel_in);
+    xt::xarray<float> kernel_f32(kernel_in);
     auto [csd, shift0, shift1] = csd_decompose(kernel_f32);
 
     // Zero out CSD rows for zero-range inputs

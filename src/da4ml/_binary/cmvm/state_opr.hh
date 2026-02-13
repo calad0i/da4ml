@@ -34,7 +34,7 @@ nb::tuple cost_add_numpy(
 );
 
 DAState create_state(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     const std::vector<QInterval> &qintervals,
     const std::vector<double> &inp_latencies,
     bool no_stat_init = false

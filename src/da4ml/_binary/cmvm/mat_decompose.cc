@@ -60,25 +60,23 @@ xt::xarray<int32_t> prim_mst_dc(const xt::xarray<int64_t> &cost_mat, int dc) {
     return mapping;
 }
 
-std::pair<xt::xarray<std::float32_t>, xt::xarray<std::float32_t>>
-kernel_decompose(xt::xarray<std::float32_t> kernel, int dc) {
+std::pair<xt::xarray<float>, xt::xarray<float>>
+kernel_decompose(xt::xarray<float> kernel, int dc) {
     auto [centered, shift0, shift1] = _center(kernel);
-    auto scale0 = xt::pow(2.0f, xt::cast<std::float32_t>(shift0));
-    auto scale1 = xt::pow(2.0f, xt::cast<std::float32_t>(shift1));
+    auto scale0 = xt::pow(2.0f, xt::cast<float>(shift0));
+    auto scale1 = xt::pow(2.0f, xt::cast<float>(shift1));
 
     size_t m = centered.shape(0);
     size_t n = centered.shape(1) + 1;
-    xt::xarray<std::float32_t> mat_aug = xt::zeros<std::float32_t>({m, n});
+    xt::xarray<float> mat_aug = xt::zeros<float>({m, n});
     xt::view(mat_aug, xt::all(), xt::range(1, n)) = centered;
 
     // diff0[i, a, b] = mat_aug[i, a] - mat_aug[i, b]
     // diff1[i, a, b] = mat_aug[i, a] + mat_aug[i, b]
-    xt::xarray<std::float32_t> diff0 =
-        xt::view(mat_aug, xt::all(), xt::all(), xt::newaxis()) -
-        xt::view(mat_aug, xt::all(), xt::newaxis(), xt::all());
-    xt::xarray<std::float32_t> diff1 =
-        xt::view(mat_aug, xt::all(), xt::all(), xt::newaxis()) +
-        xt::view(mat_aug, xt::all(), xt::newaxis(), xt::all());
+    xt::xarray<float> diff0 = xt::view(mat_aug, xt::all(), xt::all(), xt::newaxis()) -
+                              xt::view(mat_aug, xt::all(), xt::newaxis(), xt::all());
+    xt::xarray<float> diff1 = xt::view(mat_aug, xt::all(), xt::all(), xt::newaxis()) +
+                              xt::view(mat_aug, xt::all(), xt::newaxis(), xt::all());
 
     // CSD Hamming weight
     xt::xarray<int32_t> diff0_int = xt::cast<int32_t>(diff0);
@@ -98,12 +96,12 @@ kernel_decompose(xt::xarray<std::float32_t> kernel, int dc) {
     auto mapping_arr = prim_mst_dc(dist, dc);
 
     size_t n_in = centered.shape(0), n_out = centered.shape(1);
-    xt::xarray<std::float32_t> m0 = xt::zeros<std::float32_t>({n_in, n_out});
-    xt::xarray<std::float32_t> m1 = xt::zeros<std::float32_t>({n_out, n_out});
+    xt::xarray<float> m0 = xt::zeros<float>({n_in, n_out});
+    xt::xarray<float> m1 = xt::zeros<float>({n_out, n_out});
 
     if (dc == -1) {
         m0 = centered;
-        m1 = xt::eye<std::float32_t>(n_out);
+        m1 = xt::eye<float>(n_out);
         m0 = m0 * xt::view(scale0, xt::all(), xt::newaxis());
         m1 = m1 * scale1;
         return {m0, m1};
@@ -115,15 +113,15 @@ kernel_decompose(xt::xarray<std::float32_t> kernel, int dc) {
         int32_t _to = mapping_arr(k, 1);
         auto col0 = xt::view(mat_aug, xt::all(), _to) -
                     xt::view(mat_aug, xt::all(), _from) *
-                        static_cast<std::float32_t>(sign_arr(_to, _from));
+                        static_cast<float>(sign_arr(_to, _from));
 
-        xt::xarray<std::float32_t> col1;
+        xt::xarray<float> col1;
         if (_from != 0) {
             col1 = xt::view(m1, xt::all(), _from - 1) *
-                   static_cast<std::float32_t>(sign_arr(_to, _from));
+                   static_cast<float>(sign_arr(_to, _from));
         }
         else {
-            col1 = xt::zeros<std::float32_t>({n_out});
+            col1 = xt::zeros<float>({n_out});
         }
 
         if (xt::any(xt::not_equal(col0, 0.0f))) {
@@ -139,34 +137,33 @@ kernel_decompose(xt::xarray<std::float32_t> kernel, int dc) {
     return {m0, m1};
 }
 
-nb::tuple kernel_decompose_numpy(const nb::ndarray<std::float32_t> &in, int dc) {
+nb::tuple kernel_decompose_numpy(const nb::ndarray<float> &in, int dc) {
     size_t ndim = in.ndim();
     std::vector<size_t> shape(ndim);
     for (size_t i = 0; i < ndim; ++i)
         shape[i] = in.shape(i);
 
-    auto arr = xt::adapt(
-        const_cast<std::float32_t *>(in.data()), in.size(), xt::no_ownership(), shape
-    );
-    auto [m0, m1] = kernel_decompose(xt::xarray<std::float32_t>(arr), dc);
+    auto arr =
+        xt::adapt(const_cast<float *>(in.data()), in.size(), xt::no_ownership(), shape);
+    auto [m0, m1] = kernel_decompose(xt::xarray<float>(arr), dc);
 
-    auto *m0_ptr = new xt::xarray<std::float32_t>(m0);
-    auto *m1_ptr = new xt::xarray<std::float32_t>(m1);
+    auto *m0_ptr = new xt::xarray<float>(m0);
+    auto *m1_ptr = new xt::xarray<float>(m1);
 
     nb::capsule m0_owner(m0_ptr, [](void *p) noexcept {
-        delete static_cast<xt::xarray<std::float32_t> *>(p);
+        delete static_cast<xt::xarray<float> *>(p);
     });
     nb::capsule m1_owner(m1_ptr, [](void *p) noexcept {
-        delete static_cast<xt::xarray<std::float32_t> *>(p);
+        delete static_cast<xt::xarray<float> *>(p);
     });
 
     std::vector<size_t> m0_shape(m0.shape().begin(), m0.shape().end());
     std::vector<size_t> m1_shape(m1.shape().begin(), m1.shape().end());
 
-    nb::ndarray<nb::numpy, std::float32_t> m0_out(
+    nb::ndarray<nb::numpy, float> m0_out(
         m0_ptr->data(), m0_shape.size(), m0_shape.data(), m0_owner
     );
-    nb::ndarray<nb::numpy, std::float32_t> m1_out(
+    nb::ndarray<nb::numpy, float> m1_out(
         m1_ptr->data(), m1_shape.size(), m1_shape.data(), m1_owner
     );
     return nb::make_tuple(m0_out, m1_out);

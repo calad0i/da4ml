@@ -1,7 +1,6 @@
 #include "api.hh"
 #include "xtensor/core/xoperation.hpp"
 #include <xtensor/generators/xrandom.hpp>
-#include <stdfloat>
 #include <time.h>
 
 int main(int argc, char *argv[]) {
@@ -14,7 +13,7 @@ int main(int argc, char *argv[]) {
     int M = (argc >= 3) ? std::atoi(argv[2]) : N;
     xt::random::seed(0);
     auto kernel = xt::random::randint({N, M}, -128, 128);
-    auto kernel_f = xt::cast<std::float32_t>(kernel);
+    auto kernel_f = xt::cast<float>(kernel);
     float t0 = clock();
     volatile auto solution =
         solve(kernel_f, "wmc", "auto", -1, -2, {}, {}, -1, -1, false);

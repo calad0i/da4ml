@@ -8,7 +8,7 @@
 #include <functional>
 
 DAState cmvm(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     const std::string &method,
     const std::vector<QInterval> &qintervals_in,
     const std::vector<double> &inp_latencies_in,
@@ -226,7 +226,7 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
 }
 
 CombLogicResult solve_single(
-    const xt::xarray<std::float32_t> &kernel,
+    const xt::xarray<float> &kernel,
     const std::string &method,
     const std::vector<QInterval> &qintervals,
     const std::vector<double> &latencies,

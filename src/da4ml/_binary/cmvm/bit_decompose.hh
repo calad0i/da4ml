@@ -10,21 +10,16 @@
 #include <xtensor/containers/xtensor.hpp>
 #include <xtensor/io/xio.hpp>
 
-#ifndef __STDCPP_FLOAT32_T__
-#define __STDCPP_FLOAT32_T__
-#endif
-#include <stdfloat>
-
 namespace nb = nanobind;
 using namespace nb::literals;
 
 template <typename T>
-concept fp32_container = std::same_as<typename T::value_type, std::float32_t>;
+concept fp32_container = std::same_as<typename T::value_type, float>;
 
 template <typename T>
 concept int32_container = std::same_as<typename T::value_type, int32_t>;
 
-int8_t get_lsb_loc(std::float32_t x);
+int8_t get_lsb_loc(float x);
 
 // --- Template implementations (in header for cross-TU use) ---
 
@@ -66,7 +61,7 @@ template <fp32_container T> auto _center(T &arr) {
 }
 
 template <fp32_container T> auto csd_decompose(T &arr, bool center = true) {
-    xt::xarray<std::float32_t> arr_cpy(arr);
+    xt::xarray<float> arr_cpy(arr);
     if (arr_cpy.dimension() != 2) {
         throw std::runtime_error("csd_decompose only supports 2D arrays.");
     }
@@ -88,4 +83,4 @@ template <fp32_container T> auto csd_decompose(T &arr, bool center = true) {
 nb::ndarray<nb::numpy, int8_t>
 _volatile_int_arr_to_csd_numpy(const nb::ndarray<int32_t> &in);
 
-nb::tuple csd_decompose_numpy(const nb::ndarray<std::float32_t> &in, bool center = true);
+nb::tuple csd_decompose_numpy(const nb::ndarray<float> &in, bool center = true);
