@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from .cmvm_bin import _volatile_int_arr_to_csd, csd_decompose, get_lsb_loc, kernel_decompose, solve
+from .cmvm_bin import csd_decompose, get_lsb_loc, int_arr_to_csd, kernel_decompose, solve
 from .dais_bin import run_interp
 
 
@@ -16,4 +16,4 @@ def dais_interp_run(bin_logic: NDArray[np.int32], data: NDArray, n_threads: int 
     return run_interp(bin_logic, inputs, n_threads)
 
 
-__all__ = ['dais_interp_run', '_volatile_int_arr_to_csd', 'csd_decompose', 'get_lsb_loc', 'kernel_decompose', 'solve']
+__all__ = ['dais_interp_run', 'int_arr_to_csd', 'csd_decompose', 'get_lsb_loc', 'kernel_decompose', 'solve']

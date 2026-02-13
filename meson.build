@@ -1,7 +1,7 @@
 project('da4ml', 'cpp',
   version: run_command('python3', 'tools/gitversion.py', check: true).stdout().strip(),
   meson_version: '>=1.9.0',
-  default_options: ['buildtype=release', 'cpp_std=c++23'],
+  default_options: ['buildtype=release', 'cpp_std=c++20'],
   license: 'LGPL-3.0-only',
 )
 

@@ -12,62 +12,44 @@ int8_t get_lsb_loc(float x) {
     return static_cast<int8_t>(exp + mtz - 150);
 }
 
-nb::ndarray<nb::numpy, int8_t>
-_volatile_int_arr_to_csd_numpy(const nb::ndarray<int32_t> &in) {
-    size_t ndim = in.ndim();
-    std::vector<size_t> shape(ndim);
-    for (size_t i = 0; i < ndim; ++i) {
-        shape[i] = in.shape(i);
-    }
-    auto arr =
-        xt::adapt(const_cast<int32_t *>(in.data()), in.size(), xt::no_ownership(), shape);
-    auto *result = new xt::xarray(_volatile_int_arr_to_csd(arr));
-    auto *out_ptr = result->data();
-    nb::capsule owner(result, [](void *p) noexcept {
-        delete static_cast<xt::xarray<int8_t> *>(p);
-    });
-    std::vector<size_t> out_shape(result->shape().begin(), result->shape().end());
-    return nb::ndarray<nb::numpy, int8_t>(
-        out_ptr, out_shape.size(), out_shape.data(), owner
+xt::xarray<int8_t> _volatile_int_arr_to_csd(xt::xarray<int32_t> &x) {
+    int32_t max_val = static_cast<int32_t>(xt::amax(xt::abs(x))());
+    size_t N = static_cast<size_t>(
+        std::ceil(std::log2(std::max(static_cast<float>(max_val), 1.0f) * 1.5))
     );
+    N = std::max(N, size_t(1));
+    auto out_shape = x.shape();
+    out_shape.push_back(N);
+
+    x.reshape({x.size()});
+    xt::xarray<int8_t> buf = xt::empty<int8_t>({x.size(), N});
+    for (int n = N - 1; n >= 0; --n) {
+        int32_t _2pn = static_cast<int32_t>(1U << n);
+        int32_t thres = _2pn * 2 / 3;
+        auto slice = xt::view(buf, xt::all(), n);
+        slice = xt::cast<int8_t>(x > thres) - xt::cast<int8_t>(x < -thres);
+        x -= _2pn * xt::cast<int32_t>(slice);
+    }
+    buf.reshape(out_shape);
+    return buf;
 }
 
-nb::tuple csd_decompose_numpy(const nb::ndarray<float> &in, bool center) {
-    size_t ndim = in.ndim();
-    std::vector<size_t> shape(ndim);
-    for (size_t i = 0; i < ndim; ++i) {
-        shape[i] = in.shape(i);
+std::tuple<xt::xarray<int8_t>, xt::xarray<int8_t>, xt::xarray<int8_t>>
+csd_decompose(xt::xarray<float> &arr, bool center) {
+    xt::xarray<float> arr_cpy(arr);
+    if (arr_cpy.dimension() != 2) {
+        throw std::runtime_error("csd_decompose only supports 2D arrays.");
     }
-    auto arr =
-        xt::adapt(const_cast<float *>(in.data()), in.size(), xt::no_ownership(), shape);
-    auto [csd, shift0, shift1] = csd_decompose(arr, center);
-
-    auto *csd_ptr = new xt::xarray(csd);
-    auto *shift0_ptr = new xt::xarray(shift0);
-    auto *shift1_ptr = new xt::xarray(shift1);
-
-    nb::capsule csd_owner(csd_ptr, [](void *p) noexcept {
-        delete static_cast<xt::xarray<std::int8_t> *>(p);
-    });
-    nb::capsule shift0_owner(shift0_ptr, [](void *p) noexcept {
-        delete static_cast<xt::xarray<std::int8_t> *>(p);
-    });
-    nb::capsule shift1_owner(shift1_ptr, [](void *p) noexcept {
-        delete static_cast<xt::xarray<std::int8_t> *>(p);
-    });
-
-    std::vector<size_t> csd_shape(csd.shape().begin(), csd.shape().end());
-    std::vector<size_t> shift0_shape(shift0.shape().begin(), shift0.shape().end());
-    std::vector<size_t> shift1_shape(shift1.shape().begin(), shift1.shape().end());
-
-    nb::ndarray<nb::numpy, std::int8_t> csd_out(
-        csd_ptr->data(), csd_shape.size(), csd_shape.data(), csd_owner
-    );
-    nb::ndarray<nb::numpy, std::int8_t> shift0_out(
-        shift0_ptr->data(), shift0_shape.size(), shift0_shape.data(), shift0_owner
-    );
-    nb::ndarray<nb::numpy, std::int8_t> shift1_out(
-        shift1_ptr->data(), shift1_shape.size(), shift1_shape.data(), shift1_owner
-    );
-    return nb::make_tuple(csd_out, shift0_out, shift1_out);
+    xt::xarray<int8_t> shift0 = xt::empty<int8_t>({arr_cpy.shape(0)});
+    xt::xarray<int8_t> shift1 = xt::empty<int8_t>({arr_cpy.shape(1)});
+    if (center) {
+        std::tie(arr_cpy, shift0, shift1) = _center(arr_cpy);
+    }
+    else {
+        shift0.fill(0);
+        shift1.fill(0);
+    }
+    xt::xarray<int32_t> arr_int = xt::cast<int32_t>(arr_cpy);
+    auto csd = _volatile_int_arr_to_csd(arr_int);
+    return std::make_tuple(csd, shift0, shift1);
 }

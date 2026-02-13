@@ -3,9 +3,6 @@
 #include "types.hh"
 #include <vector>
 #include <tuple>
-#include <nanobind/nanobind.h>
-
-namespace nb = nanobind;
 
 QInterval qint_add(
     const QInterval &q0,
@@ -22,15 +19,6 @@ std::pair<double, double> cost_add(
     bool sub = false,
     int adder_size = -1,
     int carry_size = -1
-);
-
-nb::tuple cost_add_numpy(
-    const nb::tuple &q0_obj,
-    const nb::tuple &q1_obj,
-    int64_t shift,
-    bool sub,
-    int adder_size,
-    int carry_size
 );
 
 DAState create_state(
