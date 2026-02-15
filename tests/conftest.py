@@ -1,3 +1,4 @@
+import fcntl
 import os
 import sys
 import tarfile
@@ -39,13 +40,19 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 def pytest_collection_finish(session):
-    # Skip on xdist worker nodes
-    if hasattr(session.config, 'workerinput'):
-        return
     if not any('test_report' in str(item) for item in session.items):
         return
     root = Path(os.environ.get('DA4ML_TEST_DIR', '/tmp/da4ml_test'))
     root.mkdir(exist_ok=True)
-    kwargs = {'filter': 'data'} if sys.version_info >= (3, 12) else {}
-    with tarfile.open(Path(__file__).parent / 'test_data.tar.xz', 'r:xz') as tar:
-        tar.extractall(root, **kwargs)  # type: ignore
+
+    lock = root / '.extract_lock'
+    with open(lock, 'w') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            if (root / 'test_data').exists():
+                return
+            kwargs = {'filter': 'data'} if sys.version_info >= (3, 12) else {}
+            with tarfile.open(Path(__file__).parent / 'test_data.tar.xz', 'r:xz') as tar:
+                tar.extractall(root, **kwargs)  # type: ignore
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
