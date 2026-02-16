@@ -40,12 +40,12 @@ def kif_to_vitis_type(k: bool | int = 1, i: int = 0, f: int = 0):
 def kif_to_hlslib_type(k: bool | int = 1, i: int = 0, f: int = 0):
     if k == i == f == 0:
         f = 1
-    return f'ac_fixed<{int(k)},{k + i + f},{k + i}>'
+    return f'ac_fixed<{k + i + f},{k + i},{int(k)}>'
 
 
 def kif_to_oneapi_type(k: bool | int = 1, i: int = 0, f: int = 0):
     # OneAPI requires at least 2 bits for all ac_fixed as of 2025.1
-    return f'ac_fixed<{int(k)},{max(k + i + f, 2)},{k + i}>'
+    return f'ac_fixed<{max(k + i + f, 2)},{k + i},{int(k)}>'
 
 
 def get_typestr_fn(flavor: str):
