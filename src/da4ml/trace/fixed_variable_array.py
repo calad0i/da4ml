@@ -263,10 +263,7 @@ class FixedVariableArray:
             if not isinstance(v, FixedVariable):
                 _vars_f[i] = FixedVariable(float(v), float(v), 1.0, hwconf=hwconf)
         self._vars = _vars
-        _solver_options = signature(solve).parameters
-        _solver_options = {k: v.default for k, v in _solver_options.items() if v.default is not v.empty}
-        if solver_options is not None:
-            _solver_options.update(solver_options)
+        _solver_options = solver_options.copy() if solver_options is not None else {}
         _solver_options.pop('qintervals', None)
         _solver_options.pop('latencies', None)
         self.solver_options: solver_options_t = _solver_options  # type: ignore
