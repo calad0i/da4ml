@@ -390,7 +390,7 @@ class FixedVariable:
 
         elif self.opr == 'bit_binary':
             _cost = sum(self.kif) * 0.2
-            _latency = 1.0
+            _latency = 1.0 + max(v.latency for v in self._from)
 
         elif self.opr == 'bit_unary':
             if self._data == 0:
