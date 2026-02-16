@@ -115,7 +115,7 @@ class FixedVariableArray:
     __array_priority__ = 100
 
     def __array_function__(self, func, types, args, kwargs):
-        if func in (np.mean, np.sum, np.amax, np.amin, np.prod, np.max, np.min):
+        if func in (np.mean, np.sum, np.amax, np.amin, np.prod, np.max, np.min, np.all, np.any):
             match func:
                 case np.mean:
                     _x = reduce(lambda x, y: x + y, *args, **kwargs)
@@ -129,6 +129,16 @@ class FixedVariableArray:
                     return reduce(_min_of, *args, **kwargs)
                 case np.prod:
                     return reduce(lambda x, y: x * y, *args, **kwargs)
+                case np.all:
+                    assert len(args) >= 1 and args[0] is self
+                    _vars = np.array([v.unary_bit_op('any') for v in self._vars.ravel()]).reshape(self._vars.shape)
+                    args = (FixedVariableArray(_vars, self.solver_options),) + args[1:]
+                    return reduce(lambda x, y: x & y, *args, **kwargs)
+                case np.any:
+                    assert len(args) >= 1 and args[0] is self
+                    _vars = np.array([v.unary_bit_op('any') for v in self._vars.ravel()]).reshape(self._vars.shape)
+                    args = (FixedVariableArray(_vars, self.solver_options),) + args[1:]
+                    return reduce(lambda x, y: x | y, *args, **kwargs)
                 case _:
                     raise NotImplementedError(f'Unsupported function: {func}')
 

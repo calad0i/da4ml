@@ -48,6 +48,10 @@ functions = {
     'where2': lambda x, w: np.where(x != 0, x, -1),
     'where3': lambda x, w: np.where(x >= 1.375, -1, x),
     'where4': lambda x, w: np.where(x[..., :4] <= x[..., 4:], x[..., 4:] + 1, x[..., 4:] - 1),
+    'any0': lambda x, w: np.any(x, axis=-1, keepdims=True),
+    'any1': lambda x, w: np.any((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
+    'all0': lambda x, w: np.all(x, axis=-1, keepdims=True),
+    'all1': lambda x, w: np.all((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
 }
 
 
