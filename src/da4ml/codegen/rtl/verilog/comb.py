@@ -8,8 +8,6 @@ from ....types import CombLogic, Op, QInterval, minimal_kif
 
 
 def make_neg(lines: list[str], idx: int, qint: QInterval, v0_name: str, neg_repo: dict[int, tuple[int, str]]):
-    if idx == 21568:
-        pass
     if idx in neg_repo:
         return neg_repo[idx]
     _min, _max, step = qint
