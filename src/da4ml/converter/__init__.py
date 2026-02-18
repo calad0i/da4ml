@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from importlib.metadata import EntryPoint, entry_points
-from typing import Literal, overload
+from typing import Any, Literal, overload
 
 from ..cmvm import solver_options_t
 from ..trace import FixedVariableArray, HWConfig
@@ -27,6 +27,7 @@ def trace_model(  # type: ignore
     inputs_kif: tuple[int, int, int] | None = None,
     dump: Literal[False] = False,
     framework: None | str = None,
+    **kwargs: Any,
 ) -> tuple[FixedVariableArray, FixedVariableArray]: ...
 
 
@@ -40,6 +41,7 @@ def trace_model(  # type: ignore
     inputs_kif: tuple[int, int, int] | None = None,
     dump: Literal[True] = False,  # type: ignore
     framework: None | str = None,
+    **kwargs: Any,
 ) -> dict[str, FixedVariableArray]: ...
 
 
@@ -52,6 +54,7 @@ def trace_model(  # type: ignore
     inputs_kif: tuple[int, int, int] | None = None,
     dump=False,
     framework: None | str = None,
+    **kwargs: Any,
 ):
     hwconf = HWConfig(*hwconf) if isinstance(hwconf, tuple) else hwconf
 
@@ -67,7 +70,7 @@ def trace_model(  # type: ignore
         print(f'Loading DAIS tracer plugin from {entry.module}:{entry.attr}.')
 
     _class: type[DAISTracerPluginBase] = entry.load()
-    tracer = _class(model, hwconf, solver_options)
+    tracer = _class(model, hwconf, solver_options, **kwargs)
     return tracer.trace(
         verbose=verbose,
         inputs=inputs,

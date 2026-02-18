@@ -33,10 +33,12 @@ class DAISTracerPluginBase:
         model: Callable,
         hwconf: HWConfig,
         solver_options: solver_options_t | None = None,
+        **kwargs: Any,
     ):
         self.model = model
         self.hwconf = hwconf
         self.solver_options = solver_options
+        assert not kwargs, f'Unexpected keyword arguments: {kwargs}'
 
     def apply_model(
         self,
