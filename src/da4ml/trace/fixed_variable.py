@@ -531,7 +531,7 @@ class FixedVariable:
         if self.high == self.low:
             return self.from_const(float(self.low) * float(other), hwconf=self.hwconf)
 
-        if other == 0:
+        if np.all(other == 0):
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
         if log2(abs(other)) % 1 == 0:
@@ -541,6 +541,7 @@ class FixedVariable:
         while len(variables) > 1:
             v1, p1 = variables.pop()
             v2, p2 = variables.pop()
+
             v, p = v1 + v2, p1 + p2
             if p > 0:
                 high, low = self.high * p, self.low * p
@@ -550,7 +551,7 @@ class FixedVariable:
             step = float(v.step)
 
             k = low < 0
-            i = ceil(log2(max(-low, high + 2.0**step)))
+            i = ceil(log2(max(-low, high + step)))
             v = v.quantize(k, i, -int(log2(step)))
             variables.append((v, p))
         return variables[0][0]
