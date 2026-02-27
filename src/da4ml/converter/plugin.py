@@ -73,20 +73,28 @@ class DAISTracerPluginBase:
         ...
 
     def _get_inputs(
-        self, inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None, inputs_kif: tuple[int, int, int] | None
+        self,
+        inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None,
+        inputs_kif: tuple[int, int, int] | Sequence[tuple[int, int, int]] | None,
     ) -> tuple[FixedVariableArray, ...]:
         if inputs is not None:
             return inputs if isinstance(inputs, tuple) else (inputs,)
 
         shapes = self.get_input_shapes()
-
         assert shapes is not None, 'Inputs must be provided: cannot determine input shapes automatically.'
 
         if inputs_kif is None:
             return tuple(FixedVariableArrayInput(shape, self.hwconf, self.solver_options) for shape in shapes)
 
-        kif = tuple(tuple(np.full(shape, v, dtype=np.int8) for v in inputs_kif) for shape in shapes)
-        return tuple(FixedVariableArray.from_kif(k, i, f, self.hwconf, 0, self.solver_options) for k, i, f in kif)
+        _kifs: Sequence[tuple[int, int, int]] = inputs_kif  # type: ignore
+        if not isinstance(inputs_kif[0], Sequence):
+            _kifs = (inputs_kif,) * len(shapes)  # type: ignore
+        else:
+            _kifs = inputs_kif  # type: ignore
+        assert len(_kifs) == len(shapes), 'Length of inputs_kif must match number of inputs'
+
+        kifs = tuple(tuple(np.full(shape, v, dtype=np.int8) for v in _kif) for _kif, shape in zip(_kifs, shapes))
+        return tuple(FixedVariableArray.from_kif(k, i, f, self.hwconf, 0, self.solver_options) for k, i, f in kifs)
 
     def trace(
         self,
