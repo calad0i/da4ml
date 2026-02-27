@@ -64,6 +64,9 @@ class OperationTestSynth(OperationTest):
     @pytest.mark.parametrize('latency_cutoff', (-1, 0.5, 1))
     def test_rtl_gen(self, comb: CombLogic, flavor: str, latency_cutoff, temp_directory: str, test_data: np.ndarray):
         rtl_model = RTLModel(comb, 'test', temp_directory, flavor=flavor, latency_cutoff=latency_cutoff)
+
+        if np.sum(comb.inp_kifs) == 0 or np.sum(comb.out_kifs) == 0:
+            return  # By chance, the comb logic is trivial/invalid.
         before = rtl_model.__repr__()
         if flavor == 'verilog' and os.system('verilator --version') != 0:
             rtl_model.write()
