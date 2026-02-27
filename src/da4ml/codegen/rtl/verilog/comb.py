@@ -30,7 +30,13 @@ def gen_memfile(sol: CombLogic, op: Op) -> str:
     width = sum(table.spec.out_kif)
     ndigits = ceil(width / 4)
     data = table.padded_table(sol.ops[op.id0].qint)
-    mem_lines = [f'{hex(value)[2:].upper().zfill(ndigits)}' for value in data & ((1 << width) - 1)]
+    mem_lines = []
+    for v in data:
+        if np.isnan(v):
+            line = 'X' * ndigits
+        else:
+            line = f'{hex(int(v) & ((1 << width) - 1))[2:].upper().zfill(ndigits)}'
+        mem_lines.append(line)
     return '\n'.join(mem_lines)
 
 

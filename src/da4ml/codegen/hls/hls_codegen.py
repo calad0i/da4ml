@@ -2,6 +2,8 @@ from collections.abc import Callable, Sequence
 from hashlib import sha256
 from uuid import UUID
 
+import numpy as np
+
 from ...trace.fixed_variable import _const_f, interpret_as
 from ...types import CombLogic, Op, QInterval, minimal_kif
 
@@ -11,6 +13,7 @@ def gen_table_name_defline(sol: CombLogic, op: Op, typestr_fn: Callable[[bool | 
     assert sol.lookup_tables is not None
     table = sol.lookup_tables[op.data]
     data = table.padded_table(sol.ops[op.id0].qint)
+    data = np.nan_to_num(data, nan=0.0).astype(np.int32)
     data = interpret_as(data, *table.spec.out_kif)
     values = ','.join(map(str, data))
     type_str = typestr_fn(*table.spec.out_kif)

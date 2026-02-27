@@ -176,9 +176,9 @@ class LookupTable:
         pad_right = size - len(self.table) - pad_left
         return pad_left, pad_right
 
-    def padded_table(self, key_qint: QInterval) -> NDArray[np.int32]:
+    def padded_table(self, key_qint: QInterval) -> NDArray[np.float64]:
         pad_left, pad_right = self._get_pads(key_qint)
-        data = np.pad(self.table, (pad_left, pad_right), mode='constant', constant_values=0)
+        data = np.pad(self.table.astype(np.float64), (pad_left, pad_right), mode='constant', constant_values=np.nan)
         if key_qint.min < 0:
             size = len(data)
             data = np.roll(data, size // 2)
@@ -420,7 +420,10 @@ class FixedVariable:
         if self.step == 0:
             return False, 0, 0
         f = -int(log2(self.step))
-        i = ceil(log2(max(-self.low, self.high + self.step)))
+        xx = max(-self.low, self.high + self.step)
+        if xx <= 0:
+            pass
+        i = ceil(log2(xx))
         k = self.low < 0
         return k, i, f
 
