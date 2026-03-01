@@ -32,7 +32,7 @@ def gather_variables(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVar
     # Remove variables with 0 refcount
     refcount = {v.id: 0 for v in variables}
     for v in variables:
-        if v in inputs:
+        if v.id in input_ids:
             continue
         for _v in v._from:
             refcount[_v.id] += 1
