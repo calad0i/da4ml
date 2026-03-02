@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 
 from ..cmvm import solve, solver_options_t
 from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, LookupTable, QInterval
-from .ops import _quantize, einsum, reduce
+from .ops import _quantize, einsum, reduce, sort
 
 T = TypeVar('T')
 
@@ -190,6 +190,14 @@ class FixedVariableArray:
             cond, x, y = cond.ravel(), x.ravel(), y.ravel()
             r = [c.msb_mux(xv, yv) for c, xv, yv in zip(cond, x, y)]
             return FixedVariableArray(np.array(r).reshape(shape), self.solver_options, hwconf=self.hwconf)
+
+        if func is np.sort:
+            return sort(*args, **kwargs)
+
+        if func is np.argsort:
+            a = args[0] if len(args) > 0 else kwargs.get('a', None)
+            assert a.ndim == 1, 'Argsort on FixedVariableArray only supports 1D arrays'
+            return _ArgsortDelayedIndex(args, kwargs)
 
         args, kwargs = to_raw_arr(args), to_raw_arr(kwargs)
         return FixedVariableArray(func(*args, **kwargs), self.solver_options, hwconf=self.hwconf)
@@ -380,6 +388,12 @@ class FixedVariableArray:
         return self.rmatmul(other)
 
     def __getitem__(self, item):
+        if isinstance(item, _ArgsortDelayedIndex):
+            ret = sort(*item.args, **item.kwargs, aux_value=self)[1]
+            for s in item._slicing:
+                ret = ret[s]
+            return ret
+
         vars = self._vars[item]
         if isinstance(vars, np.ndarray):
             return FixedVariableArray(vars, self.solver_options, hwconf=self.hwconf)
@@ -700,3 +714,13 @@ class RetardedFixedVariableArray(FixedVariableArray):
     @property
     def kif(self):
         raise RuntimeError('RetardedFixedVariableArray does not have defined kif until quantized.')
+
+
+class _ArgsortDelayedIndex:
+    def __init__(self, args, kwargs, slicing: tuple[slice | int, ...] = ()):
+        self.args = args
+        self.kwargs = kwargs
+        self._slicing: tuple[slice | int, ...] = slicing
+
+    def __getitem__(self, idx):
+        return _ArgsortDelayedIndex(self.args, self.kwargs, self._slicing + (idx,))

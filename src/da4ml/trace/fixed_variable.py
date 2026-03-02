@@ -692,6 +692,7 @@ class FixedVariable:
         f: int,
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
+        _force_factor_clear=False,
     ) -> 'FixedVariable':
         """Quantize the variable to the specified fixed-point format.
 
@@ -707,6 +708,8 @@ class FixedVariable:
             Overflow mode, one of 'WRAP', 'SAT', 'SAT_SYM', by default 'WRAP'
         round_mode : str, optional
             Rounding mode, one of 'TRN' (truncate), 'RND' (round to nearest, half up), by default 'TRN'
+        _force_factor_clear : bool, optional
+            Whether to force clear the scaling factor (set to 1) in the output variable, by default False.
         """
 
         overflow_mode, round_mode = overflow_mode.upper(), round_mode.upper()
@@ -717,7 +720,7 @@ class FixedVariable:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
         _k, _i, _f = self.kif
 
-        if k >= _k and i >= _i and f >= _f:
+        if k >= _k and i >= _i and f >= _f and not _force_factor_clear:
             if overflow_mode != 'SAT_SYM' or i > _i:
                 return self
 
@@ -836,6 +839,7 @@ class FixedVariable:
             qint = (_min, _max, step)
 
         dlat, dcost = cost_add(a.qint, b.qint, 0, False, self.hwconf.adder_size, self.hwconf.carry_size)
+        dcost = dcost / 2
 
         if a.opr == 'const' and a._factor != b._factor:
             _factor = b._factor
@@ -863,7 +867,7 @@ class FixedVariable:
 
     def msb(self) -> 'FixedVariable':
         k, i, f = self.kif
-        return self.quantize(0, i + k, -i - k + 1) >> i + k - 1
+        return self.quantize(0, i + k, -i - k + 1, _force_factor_clear=True) >> i + k - 1
 
     def is_positive(self) -> 'FixedVariable':
         return (-self).is_negative()
@@ -889,11 +893,11 @@ class FixedVariable:
 
     def __ge__(self, other: 'FixedVariable|float|Decimal|int'):
         """Get a variable that is 1 if this variable is greater than or equal to other, else 0."""
-        return ~(self < other)
+        return ~(self - other).is_negative()
 
     def __le__(self, other: 'FixedVariable|float|Decimal|int'):
         """Get a variable that is 1 if this variable is less than or equal to other, else 0."""
-        return ~(self > other)
+        return ~(other - self).is_negative()
 
     def max_of(self, other):
         """Get the maximum of this variable and another variable or constant."""

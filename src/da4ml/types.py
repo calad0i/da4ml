@@ -146,18 +146,18 @@ def _(v, i: int | None = None, f: int | None = None, inv: bool = False, round_mo
 
 
 @singledispatch
-def _quantize(v: 'T', k: int | bool, i: int, f: int, round_mode: str = 'TRN') -> 'T':
+def _quantize(v: 'T', k: int | bool, i: int, f: int, round_mode: str = 'TRN', _force_factor_clear=False) -> 'T':
     from .trace.fixed_variable import FixedVariable
 
     assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic quantization'
-    return v.quantize(k, i, f, round_mode=round_mode)
+    return v.quantize(k, i, f, round_mode=round_mode, _force_factor_clear=_force_factor_clear)
 
 
 @_quantize.register(float)
 @_quantize.register(int)
 @_quantize.register(np.floating)
 @_quantize.register(np.integer)
-def _(v, k: int | bool, i: int, f: int, round_mode: str = 'TRN'):
+def _(v, k: int | bool, i: int, f: int, round_mode: str = 'TRN', _force_factor_clear=False):
     if round_mode.upper() == 'RND':
         v += 2.0 ** (-f - 1)
     b = k + i + f
@@ -263,7 +263,7 @@ class CombLogic(NamedTuple):
                 case 3 | -3:  # quantize(+/-x)
                     v = buf[op.id0] if op.opcode == 3 else -buf[op.id0]
                     _k, _i, _f = minimal_kif(op.qint)
-                    buf[i] = _quantize(v, _k, _i, _f, round_mode='TRN')
+                    buf[i] = _quantize(v, _k, _i, _f, round_mode='TRN', _force_factor_clear=True)
                 case 4:  # const addition
                     bias = op.data * op.qint.step
                     buf[i] = buf[op.id0] + bias

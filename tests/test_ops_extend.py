@@ -3,6 +3,7 @@ import pytest
 
 from da4ml.trace import FixedVariableArrayInput, comb_trace
 from da4ml.trace.ops import quantize, relu
+from da4ml.types import CombLogic
 
 from .test_ops import OperationTest
 
@@ -52,6 +53,8 @@ functions = {
     'any1': lambda x, w: np.any((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
     'all0': lambda x, w: np.all(x, axis=-1, keepdims=True),
     'all1': lambda x, w: np.all((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
+    'sort0': lambda x, w: np.sort(x, axis=-1),
+    'sort1': lambda x, w: np.sort(x.reshape(x.shape[:-1] + (4, 2)), axis=-2),
 }
 
 
@@ -59,6 +62,56 @@ class TestOperations(OperationTest):
     @pytest.fixture(params=list(functions.keys()))
     def op_func(self, request, w8x8: np.ndarray, test_data, inp):
         return lambda x: functions[request.param](x, w8x8)
+
+
+class TestArgsort(OperationTest):
+    @pytest.fixture()
+    def op_func(self):
+        def argsort_fn(x):
+            if not isinstance(x, np.ndarray):
+                return x[..., :4][np.argsort(x[..., 4:])]
+            else:
+                return np.apply_along_axis(lambda v: v[:4][np.argsort(v[4:])], -1, x)
+
+        return argsort_fn
+
+    def test_op(self, op_func, test_data: np.ndarray, comb: CombLogic, n_samples: int):
+        traced_out = comb.predict(test_data, n_threads=1)
+        test_data = quantize(test_data, *comb.inp_kifs)
+        expected_out = quantize(op_func(test_data).reshape(n_samples, -1), 1, 12, 12)
+
+        # bitonic sort is unstable - check with skipping tied keys
+        keys = test_data[:, 4:]
+
+        sorted_keys = np.sort(keys, axis=-1)
+        mask_has_tie = np.any(np.diff(sorted_keys, axis=-1) == 0, axis=-1)
+        np.testing.assert_equal(traced_out[~mask_has_tie], expected_out[~mask_has_tie])
+
+        traced_out_tied = traced_out[mask_has_tie]
+        expected_out_tied = traced_out[mask_has_tie]
+        for i in range(len(traced_out_tied)):
+            hw = traced_out_tied[i]
+            exp = expected_out_tied[i]
+
+            for k in np.unique(keys[i]):
+                pos = np.where(sorted_keys[i] == k)[0]
+                if len(pos) == 1:  # unique
+                    np.testing.assert_equal(hw[pos], exp[pos], err_msg=f'sample {i}, key={k}')
+                else:
+                    # Tied
+                    np.testing.assert_array_equal(
+                        np.sort(hw[pos]),
+                        np.sort(exp[pos]),
+                        err_msg=f'sample {i}: tied-key group key={k} at positions {pos}',
+                    )
+
+        symbolic_out = []
+        for x in test_data[:100]:
+            x = list(map(float, x))
+            r = comb(x, quantize=True)
+            symbolic_out.append(r)
+        symbolic_out = np.array(symbolic_out, dtype=np.float64)
+        np.testing.assert_equal(symbolic_out, traced_out[:100])
 
 
 @pytest.mark.parametrize('thres', [0.0, 0.5, 1.0])
