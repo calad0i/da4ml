@@ -57,11 +57,32 @@ def _pad_to_pow2(a: 'FixedVariableArray') -> 'tuple[FixedVariableArray, int, int
     return np.concatenate([low_pad, a, high_pad], axis=-2), n_pad_low, n_pad_high  # type: ignore
 
 
+def batcher_odd_even_merge_sort(a: 'NDArray', ascending: bool):
+    """##copy-paste from wikipedia https://en.wikipedia.org/wiki/Batcher_odd%E2%80%93even_mergesort; apparently it works
+
+    note: the input sequence is indexed from 0 to (n-1)
+    for p = 1, 2, 4, 8, ... # as long as p < n
+      for k = p, p/2, p/4, p/8, ... # as long as k >= 1
+        for j = mod(k,p) to (n-1-k) with a step size of 2k
+          for i = 0 to min(k-1, n-j-k-1) with a step size of 1
+            if floor((i+j) / (p*2)) == floor((i+j+k) / (p*2))
+              compare and sort elements (i+j) and (i+j+k)"""
+
+    for _p in range(ceil(log2(a.shape[0]))):
+        p = 2**_p
+        for _k in range(_p, -1, -1):
+            k = 2**_k
+            for j in range(k % p, a.shape[0] - k, 2 * k):
+                for i in range(min(k, a.shape[0] - j - k)):
+                    if (i + j) // (2 * p) == (i + j + k) // (2 * p):
+                        a[i + j], a[i + j + k] = cmp_swap(a[i + j], a[i + j + k], ascending)
+
+
 @overload
 def sort(
     a: np.ndarray,
     axis: int | None = None,
-    kind: str = 'bitonic',
+    kind: str = 'batcher',
     aux_value: None = None,
 ) -> np.ndarray: ...
 
@@ -70,7 +91,7 @@ def sort(
 def sort(  # type: ignore
     a: FixedVariableArray,
     axis: int | None = None,
-    kind: str = 'bitonic',
+    kind: str = 'batcher',
     aux_value: None = None,
 ) -> FixedVariableArray: ...
 
@@ -79,7 +100,7 @@ def sort(  # type: ignore
 def sort(
     a: FixedVariableArray,
     axis: int | None = None,
-    kind: str = 'bitonic',
+    kind: str = 'batcher',
     aux_value: FixedVariableArray = ...,
 ) -> tuple[FixedVariableArray, FixedVariableArray]: ...
 
@@ -87,7 +108,7 @@ def sort(
 def sort(  # type: ignore
     a: 'FixedVariableArray | np.ndarray',
     axis: int | None = None,
-    kind: str = 'bitonic',
+    kind: str = 'batcher',
     aux_value: 'FixedVariableArray | None' = None,
 ):
 
@@ -123,7 +144,13 @@ def sort(  # type: ignore
     r, n_pad_low, n_pad_high = _pad_to_pow2(r)  # type: ignore
 
     for i in range(len(r)):
-        _bitonic_sort(r._vars[i], ascending=True)  # type: ignore
+        kind = kind.lower()
+        if kind == 'bitonic':
+            _bitonic_sort(r._vars[i], ascending=True)
+        elif kind == 'batcher':
+            batcher_odd_even_merge_sort(r._vars[i], ascending=True)  # type: ignore
+        else:
+            raise ValueError(f'Unsupported sorting algorithm: {kind}')
 
     r = r[:, n_pad_low : r.shape[1] - n_pad_high, :].reshape(_shape)
     r = np.moveaxis(r, -2, axis)  # type: ignore

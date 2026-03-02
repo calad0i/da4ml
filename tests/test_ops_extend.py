@@ -53,9 +53,6 @@ functions = {
     'any1': lambda x, w: np.any((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
     'all0': lambda x, w: np.all(x, axis=-1, keepdims=True),
     'all1': lambda x, w: np.all((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
-    'sort0': lambda x, w: np.sort(x, axis=-1),
-    'sort1': lambda x, w: np.sort(x.reshape(x.shape[:-1] + (4, 2)), axis=-2),
-    'sort2': lambda x, w: np.sort(x[..., :7], axis=-1),
 }
 
 
@@ -63,6 +60,31 @@ class TestOperations(OperationTest):
     @pytest.fixture(params=list(functions.keys()))
     def op_func(self, request, w8x8: np.ndarray, test_data, inp):
         return lambda x: functions[request.param](x, w8x8)
+
+
+class TestSort(OperationTest):
+    @pytest.fixture(params=['batcher', 'bitonic'])
+    def kind(self, request):
+        return request.param
+
+    @pytest.fixture(params=[8, 7, 4, 3])
+    def size(self, request):
+        return request.param
+
+    @pytest.fixture()
+    def op_func(self, kind, size):
+        def sort_fn(x):
+            _kind = kind
+            if isinstance(x, np.ndarray):
+                _kind = 'quicksort'
+            if size >= 4:
+                return np.sort(x[..., :size], axis=-1, kind=_kind)
+            else:
+                x = x.reshape(x.shape[:-1] + (4, 2))
+                x = np.sort(x, axis=-2, kind=_kind)[..., :size, :]
+                return x
+
+        return sort_fn
 
 
 class TestArgsort(OperationTest):
