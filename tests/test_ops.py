@@ -1,4 +1,4 @@
-import os
+import subprocess
 
 import numpy as np
 import pytest
@@ -68,13 +68,13 @@ class OperationTestSynth(OperationTest):
         if np.sum(comb.inp_kifs) == 0 or np.sum(comb.out_kifs) == 0:
             return  # By chance, the comb logic is trivial/invalid.
         before = rtl_model.__repr__()
-        if flavor == 'verilog' and os.system('verilator --version') != 0:
+        if flavor == 'verilog' and subprocess.run(['verilator', '--version'], capture_output=True).returncode != 0:
             rtl_model.write()
-            os.system(f'rm -rf {temp_directory}')
+            subprocess.run(['rm', '-rf', temp_directory])
             pytest.skip('verilator not found')
-        if flavor == 'vhdl' and os.system('ghdl --version') != 0:
+        if flavor == 'vhdl' and subprocess.run(['ghdl', '--version'], capture_output=True).returncode != 0:
             rtl_model.write()
-            os.system(f'rm -rf {temp_directory}')
+            subprocess.run(['rm', '-rf', temp_directory])
             pytest.skip('ghdl not found')
         rtl_model.compile(nproc=1)
         after = rtl_model.__repr__()
@@ -83,14 +83,14 @@ class OperationTestSynth(OperationTest):
         rtl_pred = rtl_model.predict(test_data, n_threads=1)
         comb_pred = comb.predict(test_data, n_threads=1)
         np.testing.assert_equal(rtl_pred, comb_pred)
-        os.system(f'rm -rf {temp_directory}')
+        subprocess.run(['rm', '-rf', temp_directory])
 
     @pytest.mark.parametrize('flavor', ('vitis',))
     def test_hls_gen(self, comb: CombLogic, flavor: str, temp_directory: str, test_data: np.ndarray):
         hls_model = HLSModel(comb, 'test', temp_directory, flavor=flavor)
         # if flavor != 'vitis':
         #     hls_model.write()
-        #     os.system(f'rm -rf {temp_directory}')
+        #     subprocess.run(['rm', '-rf', temp_directory])
         #     pytest.skip('hlslib and oneapi functional simulation not implemented yet')
 
         before = hls_model.__repr__()
@@ -101,7 +101,7 @@ class OperationTestSynth(OperationTest):
         hls_pred = hls_model.predict(test_data, n_threads=1)
         comb_pred = comb.predict(test_data, n_threads=1)
         np.testing.assert_equal(hls_pred, comb_pred)
-        os.system(f'rm -rf {temp_directory}')
+        subprocess.run(['rm', '-rf', temp_directory])
 
 
 class TestQuantize(OperationTestSynth):

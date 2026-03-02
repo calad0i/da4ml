@@ -1,5 +1,6 @@
 import fcntl
 import os
+import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -30,7 +31,7 @@ def pytest_sessionfinish(session, exitstatus):
     root = Path(os.environ.get('DA4ML_TEST_DIR', '/tmp/da4ml_test'))
     # Purge empty directories
     if exitstatus == 0:
-        os.system(f'rm -rf {root}')
+        subprocess.run(['rm', '-rf', str(root)], check=True)
         return
     for path in root.glob('*'):
         if path.is_dir() and not any(path.iterdir()):
