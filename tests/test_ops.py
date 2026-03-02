@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 
 import numpy as np
@@ -68,11 +69,11 @@ class OperationTestSynth(OperationTest):
         if np.sum(comb.inp_kifs) == 0 or np.sum(comb.out_kifs) == 0:
             return  # By chance, the comb logic is trivial/invalid.
         before = rtl_model.__repr__()
-        if flavor == 'verilog' and subprocess.run(['verilator', '--version'], capture_output=True).returncode != 0:
+        if flavor == 'verilog' and shutil.which('verilator') is None:
             rtl_model.write()
             subprocess.run(['rm', '-rf', temp_directory])
             pytest.skip('verilator not found')
-        if flavor == 'vhdl' and subprocess.run(['ghdl', '--version'], capture_output=True).returncode != 0:
+        if flavor == 'vhdl' and shutil.which('ghdl') is None:
             rtl_model.write()
             subprocess.run(['rm', '-rf', temp_directory])
             pytest.skip('ghdl not found')
