@@ -55,6 +55,7 @@ functions = {
     'all1': lambda x, w: np.all((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
     'sort0': lambda x, w: np.sort(x, axis=-1),
     'sort1': lambda x, w: np.sort(x.reshape(x.shape[:-1] + (4, 2)), axis=-2),
+    'sort2': lambda x, w: np.sort(x[..., :7], axis=-1),
 }
 
 

@@ -42,7 +42,7 @@ def _bitonic_sort(a: 'NDArray', ascending: bool):
     _bitonic_merge(a, ascending)
 
 
-def _pad_to_pow2(a: 'FixedVariableArray') -> 'FixedVariableArray':
+def _pad_to_pow2(a: 'FixedVariableArray') -> 'tuple[FixedVariableArray, int, int]':
     assert a.ndim == 3
     from da4ml.trace import FixedVariable
 
@@ -50,12 +50,11 @@ def _pad_to_pow2(a: 'FixedVariableArray') -> 'FixedVariableArray':
     n_pad = 2 ** ceil(log2(size)) - size
     n_pad_low, n_pad_high = n_pad // 2, n_pad - n_pad // 2
     _low, _high, _ = a.lhs
-    print(np.min(_low), np.min(_high))
-    low_pad = FixedVariable.from_const(np.min(_low), hwconf=a.hwconf)
-    high_pad = FixedVariable.from_const(np.max(_high), hwconf=a.hwconf)
+    low_pad = FixedVariable.from_const(np.min(_low) - 1, hwconf=a.hwconf)
+    high_pad = FixedVariable.from_const(np.max(_high) + 1, hwconf=a.hwconf)
     low_pad = np.full((a.shape[0], n_pad_low, a.shape[-1]), low_pad)
     high_pad = np.full((a.shape[0], n_pad_high, a.shape[-1]), high_pad)
-    return np.concatenate([low_pad, a, high_pad], axis=-2)  # type: ignore
+    return np.concatenate([low_pad, a, high_pad], axis=-2), n_pad_low, n_pad_high  # type: ignore
 
 
 @overload
@@ -91,7 +90,6 @@ def sort(  # type: ignore
     kind: str = 'bitonic',
     aux_value: 'FixedVariableArray | None' = None,
 ):
-    from da4ml.trace import FixedVariableArray
 
     if isinstance(a, np.ndarray):
         return np.sort(a, axis=axis)
@@ -122,13 +120,13 @@ def sort(  # type: ignore
     _shape = r.shape
     r = r.reshape(-1, sort_dim, r.shape[-1])
 
-    r = _pad_to_pow2(r)  # type: ignore
+    r, n_pad_low, n_pad_high = _pad_to_pow2(r)  # type: ignore
+
     for i in range(len(r)):
         _bitonic_sort(r._vars[i], ascending=True)  # type: ignore
-    r = np.array(r).reshape(_shape)
-    r = np.moveaxis(r, -2, axis)
-    if isinstance(a, FixedVariableArray):
-        r = FixedVariableArray(r, hwconf=a.hwconf)
+
+    r = r[:, n_pad_low : r.shape[1] - n_pad_high, :].reshape(_shape)
+    r = np.moveaxis(r, -2, axis)  # type: ignore
     if aux_value is not None:
         return r[..., 0], r[..., 1:]
     assert r.shape[-1] == 1
