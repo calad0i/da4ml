@@ -1,7 +1,7 @@
-from .bitonic_sort import sort
 from .einsum_utils import einsum
 from .quantization import _quantize, quantize, relu
 from .reduce_utils import reduce
+from .sorting import sort
 
 __all__ = [
     'einsum',

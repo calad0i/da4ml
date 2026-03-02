@@ -266,6 +266,7 @@ class FixedVariableArray:
         _vars_f = _vars.ravel()
         if hwconf is None:
             hwconf = next(iter(v for v in _vars_f if isinstance(v, FixedVariable))).hwconf
+        hwconf = HWConfig(*hwconf)
         self.hwconf = hwconf
         for i, v in enumerate(_vars_f):
             if not isinstance(v, FixedVariable):
@@ -621,6 +622,9 @@ class FixedVariableArray:
         shape = self._vars.shape
         _vars = np.array([v._with(_from=(), opr='new', renew_id=True) for v in self._vars.ravel()]).reshape(shape)
         return FixedVariableArray(_vars, self.solver_options, hwconf=self.hwconf)
+
+    def copy(self):
+        return FixedVariableArray(self._vars.copy(), self.solver_options, hwconf=self.hwconf)
 
 
 class FixedVariableArrayInput(FixedVariableArray):
