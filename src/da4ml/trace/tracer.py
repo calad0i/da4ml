@@ -175,29 +175,33 @@ def _index_remap(op: Op, idx_map: dict[int, int]) -> Op:
     return Op(id0, id1, op.opcode, data, op.qint, op.latency, op.cost)
 
 
-def compactify_comb(comb: CombLogic, keep_dead_inputs: bool = False) -> CombLogic:
-    no_ref = comb.ref_count == 0
-    if keep_dead_inputs:
-        no_ref &= np.array([op.opcode != -1 for op in comb.ops], dtype=np.bool_)
-    if not np.any(no_ref):
-        return comb
-
-    idx_map: dict[int, int] = {}
-    new_ops: list[Op] = []
-
-    cnt = 0
-    for i, op in enumerate(comb.ops):
-        if no_ref[i]:
+def dead_statement_elimination(comb: CombLogic, keep_dead_inputs=False) -> CombLogic:
+    dead = np.ones(len(comb.ops), dtype=bool)
+    for idx in comb.out_idxs:
+        if idx == -1:
             continue
-        new_ops.append(_index_remap(op, idx_map))
-        idx_map[i] = cnt
-        cnt += 1
-    out_idxs = [idx_map[i] for i in comb.out_idxs]
+        dead[idx] = False
 
-    comb = CombLogic(
+    for i in range(len(comb.ops) - 1, -1, -1):
+        op = comb.ops[i]
+        if dead[i] and not (keep_dead_inputs and op.opcode == -1):
+            continue
+        if op.id0 >= 0:
+            dead[op.id0] = False
+        if op.id1 >= 0:
+            dead[op.id1] = False
+        if abs(op.opcode) == 6:  # msb_mux
+            id_c = op.data & 0xFFFFFFFF
+            dead[id_c] = False
+
+    new_idxs = np.cumsum(~dead) - 1
+    idx_map = {i: new_idxs[i] for i in range(len(comb.ops))}
+    new_ops = [_index_remap(op, idx_map) for i, op in enumerate(comb.ops) if not dead[i]]
+    new_out_idxs = [idx_map[idx] if idx >= 0 else -1 for idx in comb.out_idxs]
+    return CombLogic(
         comb.shape,
         comb.inp_shifts,
-        out_idxs,
+        new_out_idxs,
         comb.out_shifts,
         comb.out_negs,
         new_ops,
@@ -205,7 +209,6 @@ def compactify_comb(comb: CombLogic, keep_dead_inputs: bool = False) -> CombLogi
         comb.adder_size,
         comb.lookup_tables,
     )
-    return compactify_comb(comb, keep_dead_inputs)
 
 
 def comb_trace(inputs, outputs, keep_dead_inputs: bool = False) -> CombLogic:
@@ -244,4 +247,4 @@ def comb_trace(inputs, outputs, keep_dead_inputs: bool = False) -> CombLogic:
         lookup_tables,
     )
 
-    return compactify_comb(comb, keep_dead_inputs)
+    return dead_statement_elimination(comb, keep_dead_inputs)

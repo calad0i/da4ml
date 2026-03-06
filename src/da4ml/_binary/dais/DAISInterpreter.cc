@@ -122,10 +122,18 @@ namespace dais {
     ) const {
         int32_t actual_shift = shift + dtype0.fractionals - dtype1.fractionals;
         int64_t _v2 = is_minus ? -v2 : v2;
+        int64_t result;
+        int32_t global_shift;
         if (actual_shift > 0)
-            return v1 + (_v2 << actual_shift);
+            result = v1 + (_v2 << actual_shift);
         else
-            return (v1 << -actual_shift) + _v2;
+            result = (v1 << -actual_shift) + _v2;
+        global_shift = std::max(dtype0.fractionals, dtype1.fractionals - shift) -
+                       dtype_out.fractionals;
+        if (global_shift > 0) {
+            result = result >> global_shift;
+        }
+        return result;
     }
 
     int64_t DAISInterpreter::quantize(
