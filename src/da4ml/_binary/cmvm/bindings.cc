@@ -1,6 +1,7 @@
 #include "bit_decompose.hh"
 #include "mat_decompose.hh"
 #include "api.hh"
+#include "indexers.hh"
 #include "types.hh"
 #include "state_opr.hh"
 
@@ -226,6 +227,7 @@ static nb::typed<nb::object, PyPipeline> solve_numpy(
 NB_MODULE(cmvm_bin, m) {
     m.def("int_arr_to_csd", &int_arr_to_csd_numpy, "inp"_a.noconvert());
     m.def("get_lsb_loc", &get_lsb_loc, "x"_a);
+    m.def("iceil_log2", &iceil_log2, "x"_a);
     m.def("csd_decompose", &csd_decompose_numpy, "inp"_a.noconvert(), "center"_a = true);
     m.def(
         "kernel_decompose", &kernel_decompose_numpy, "kernel"_a.noconvert(), "dc"_a = -2

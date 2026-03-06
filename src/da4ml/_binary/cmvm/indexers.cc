@@ -2,15 +2,6 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
-#include <bit>
-
-static inline int8_t iceil_log2(float x) {
-    // s1, m24, e7
-    uint32_t bits = std::bit_cast<uint32_t>(x);
-    uint8_t exp = static_cast<uint8_t>((bits >> 23) & 0xFF);
-    uint32_t mant = bits & 0x7FFFFF;
-    return static_cast<int8_t>(exp - 127 + (mant != 0));
-}
 
 Pair idx_mc(const DAState &state) {
     Pair best_pair = {-1, -1, false, 0};
