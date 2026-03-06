@@ -548,11 +548,6 @@ class FixedVariable:
             else:
                 high, low = self.low * p, self.high * p
             low, high = float(low), float(high)
-            step = float(v.step)
-
-            k = low < 0
-            i = ceil(log2(max(-low, high + step)))
-            v = v.quantize(k, i, -int(log2(step)))
             variables.append((v, p))
         return variables[0][0]
 

@@ -321,7 +321,7 @@ class CombLogic(NamedTuple):
                 op = self.ops[i]
                 match op.opcode:
                     case -1:
-                        op_str = 'inp'
+                        op_str = f'inp[{op.id0}]'
                     case 0 | 1:
                         _sign = '-' if op.opcode == 1 else '+'
                         op_str = f'buf[{op.id0}] {_sign} buf[{op.id1}]<<{op.data}'
