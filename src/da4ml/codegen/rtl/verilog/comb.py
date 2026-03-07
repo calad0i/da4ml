@@ -82,8 +82,9 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
                 shift = op.data + f0 - f1
                 v0, v1 = f'v{op.id0}[{bw0 - 1}:0]', f'v{op.id1}[{bw1 - 1}:0]'
+                dlsbs = max(f0, f1 - op.data) - kifs[i][2]
 
-                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {op.opcode}) op_{i} ({v0}, {v1}, {v});'
+                line = f'{_def} shift_adder #({bw0},{bw1},{s0},{s1},{bw},{dlsbs},{shift},{op.opcode}) op_{i} ({v0},{v1},{v});'
 
             case 2 | -2:  # ReLU
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
@@ -131,8 +132,9 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 v0 = f'v{op.id0}[{bw0 - 1}:0]'
                 v1 = f"{bw1}'{bin(mag)[1:]}"
                 shift = kifs[op.id0][2] - kifs[i][2]
+                dlsbs = max(kifs[op.id0][2], kifs[i][2]) - kifs[i][2]
 
-                line = f'{_def} shift_adder #({bw0}, {bw1}, {s0}, 0, {bw}, {shift}, {sign}) op_{i} ({v0}, {v1}, {v});'
+                line = f'{_def} shift_adder #({bw0},{bw1},{s0},0,{bw},{dlsbs},{shift},{sign}) op_{i} ({v0},{v1},{v});'
 
             case 5:  # constant
                 num = op.data
@@ -159,20 +161,20 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 if bw1 == 0:
                     v1, bw1 = "1'b0", 1
 
-                line = f'{_def} mux #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {inv}) op_{i} ({vk}, {v0}, {v1}, {v});'
+                line = f'{_def} mux #({bw0},{bw1},{s0},{s1},{bw},{shift},{inv}) op_{i} ({vk},{v0},{v1},{v});'
 
             case 7:  # Multiplication
                 bw0, bw1 = widths[op.id0], widths[op.id1]  # width
                 s0, s1 = int(kifs[op.id0][0]), int(kifs[op.id1][0])
                 v0, v1 = f'v{op.id0}[{bw0 - 1}:0]', f'v{op.id1}[{bw1 - 1}:0]'
 
-                line = f'{_def} multiplier #({bw0}, {bw1}, {s0}, {s1}, {bw}) op_{i} ({v0}, {v1}, {v});'
+                line = f'{_def} multiplier #({bw0},{bw1},{s0},{s1},{bw}) op_{i} ({v0},{v1},{v});'
 
             case 8:  # Lookup Table
                 name = get_table_name_memfile(sol, op)[0]
                 bw0 = widths[op.id0]
 
-                line = f'{_def} lookup_table #({bw0}, {bw}, "{name}") op_{i} (v{op.id0}, {v});'
+                line = f'{_def} lookup_table #({bw0},{bw},"{name}") op_{i} (v{op.id0}, {v});'
 
             case 9 | -9:  # Bitwise Unary
                 if op.opcode == -9 and op.data != 1:
@@ -210,7 +212,7 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
 
                 s0, s1 = int(s0), int(s1)
 
-                line = f'{_def} binop #({bw0}, {bw1}, {s0}, {s1}, {bw}, {shift}, {subop}) op_{i} ({v0_name}, {v1_name}, {v});'
+                line = f'{_def} binop #({bw0},{bw1},{s0},{s1},{bw},{shift},{subop}) op_{i} ({v0_name}, {v1_name}, {v});'
 
             case _:
                 raise ValueError(f'Unknown opcode {op.opcode} for operation {i} ({op})')

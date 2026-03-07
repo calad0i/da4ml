@@ -2,9 +2,11 @@ import numpy as np
 import pytest
 
 from da4ml._binary import csd_decompose, kernel_decompose, solve
+from da4ml.trace.passes import optimize
+from da4ml.types import Pipeline
 
 
-@pytest.fixture(params=[2, 4, 8])
+@pytest.fixture(params=[2, 4, 8, 12])
 def n_dim(request) -> int:
     return request.param
 
@@ -41,7 +43,7 @@ def test_kernel_decompose(kernel, dc: int):
 @pytest.mark.parametrize('decompose_dc', [0, -1, -2])
 @pytest.mark.parametrize('search_all_decompose_dc', [False, True])
 def test_solve(kernel, method0, method1, hard_dc, decompose_dc, search_all_decompose_dc):
-    sol = solve(
+    sol: Pipeline = solve(
         kernel,
         hard_dc=hard_dc,
         method0=method0,
@@ -52,4 +54,7 @@ def test_solve(kernel, method0, method1, hard_dc, decompose_dc, search_all_decom
         carry_size=-1,
     )
 
-    assert np.all(sol.kernel == kernel)
+    combs = tuple(optimize(stage, False) for stage in sol.solutions)
+    pipe = Pipeline(combs)
+
+    np.testing.assert_allclose(pipe.kernel, kernel)

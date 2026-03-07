@@ -1,5 +1,5 @@
 from ...types import CombLogic
-from .cse import _index_remap, gen_used_in
+from .cse import _index_remap, is_used_in
 
 
 def null_quant_elimin(comb: CombLogic) -> CombLogic:
@@ -15,7 +15,7 @@ def null_quant_elimin(comb: CombLogic) -> CombLogic:
         return comb
 
     new_ops = comb.ops.copy()
-    used_in = gen_used_in(comb)
+    used_in = is_used_in(comb)
     new_out_idxs = comb.out_idxs.copy()
     for i in _map.keys():
         depends = used_in[i]

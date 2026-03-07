@@ -151,7 +151,12 @@ class RTLModel:
             with open(self._path / path.name, 'w') as f:
                 f.write(tcl)
 
+        if isinstance(self._solution, CombLogic):
+            self._solution.save(self._path / 'model/comb.json')
+
         if self._pipe is not None:  # Pipeline
+            self._pipe.save(self._path / 'model/pipeline.json')
+
             if not self._place_holder:
                 # Main logic
                 codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
@@ -184,8 +189,6 @@ class RTLModel:
 
             # Verilog IO wrapper (non-uniform bw to uniform one, clk passthrough)
             io_wrapper = generate_io_wrapper(self._pipe, self._prj_name, True)
-
-            self._pipe.save(self._path / 'model/pipeline.json')
         else:  # Comb
             assert isinstance(self._solution, CombLogic)
 
@@ -221,8 +224,6 @@ class RTLModel:
         shutil.copy(self.__src_root / 'common_source/build_binder.mk', self._path / 'sim')
         shutil.copy(self.__src_root / 'common_source/ioutil.hh', self._path / 'sim')
         shutil.copy(self.__src_root / 'common_source/binder_util.hh', self._path / 'sim')
-        if isinstance(self._solution, CombLogic):
-            self._solution.save(self._path / 'model/comb.json')
 
         _metadata = {
             'cost': self._solution.cost,

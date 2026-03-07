@@ -7,6 +7,7 @@ module shift_adder #(
     parameter SIGNED0 = 0,
     parameter SIGNED1 = 0,
     parameter BW_OUT = 32,
+    parameter DROP_LSBS = 0,
     parameter SHIFT1 = 0,
     parameter IS_SUB = 0
 ) (
@@ -54,6 +55,6 @@ module shift_adder #(
       assign accum = in0_ext + in1_ext;
     end
   endgenerate
-  assign out = accum[BW_OUT-1:0];
+  assign out = accum[BW_OUT-1+DROP_LSBS:DROP_LSBS];
 
 endmodule

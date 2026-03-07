@@ -1,5 +1,4 @@
 from ...types import CombLogic
-from .affine import affine_range_recomp
 from .cse import common_subexpr_elimin
 from .dce import dead_code_elimin
 from .null_quant import null_quant_elimin
@@ -13,7 +12,7 @@ def optimize(
 ) -> CombLogic:
     comb = common_subexpr_elimin(comb)
     comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)
-    comb = affine_range_recomp(comb)
+    # comb = affine_range_recomp(comb) # Buggy, not ready
     comb = common_subexpr_elimin(comb)
     comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)
     comb = null_quant_elimin(comb)

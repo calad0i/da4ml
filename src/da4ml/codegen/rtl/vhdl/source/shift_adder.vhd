@@ -9,6 +9,7 @@ entity shift_adder is
         SIGNED0   : integer := 0;
         SIGNED1   : integer := 0;
         BW_OUT    : integer := 32;
+        DROP_LSBS : integer := 0;
         SHIFT1    : integer := 0;
         IS_SUB    : integer := 0
     );
@@ -96,6 +97,6 @@ begin
         accum <= std_logic_vector(signed(in0_ext) + signed(in1_ext));
     end generate;
 
-    result <= accum(BW_OUT-1 downto 0);
+    result <= accum(BW_OUT-1+DROP_LSBS downto DROP_LSBS);
 
 end architecture rtl;
