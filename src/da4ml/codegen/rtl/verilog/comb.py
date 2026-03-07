@@ -71,6 +71,11 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
             continue
 
         match op.opcode:
+            case -2:  # Negation
+                bw0, v0 = widths[op.id0], f'v{op.id0}'
+                is_signed = int(ops[op.id0].qint.min < 0)
+                line = f'{_def} negative #({bw0}, {bw}, {is_signed}) op_{i} ({v0}, {v});'
+
             case -1:  # Input marker
                 i0, i1 = inp_idxs[op.id0]
                 line = f'{_def} assign {v} = model_inp[{i0}:{i1}];'
@@ -86,7 +91,7 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
 
                 line = f'{_def} shift_adder #({bw0},{bw1},{s0},{s1},{bw},{dlsbs},{shift},{op.opcode}) op_{i} ({v0},{v1},{v});'
 
-            case 2 | -2:  # ReLU
+            case 2:  # ReLU
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
 
@@ -100,20 +105,14 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 else:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
 
-            case 3 | -3:  # Explicit quantization
+            case 3:  # Explicit quantization
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
                 i0, i1 = bw + lsb_bias - 1, lsb_bias
                 v0_name = f'v{op.id0}'
                 bw0 = widths[op.id0]
 
-                if op.opcode == -3:
-                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, v0_name, neg_repo)
-
                 if i0 >= bw0:
-                    if op.opcode == 3:
-                        assert ops[op.id0].qint.min < 0, f'{i}, {op.id0}'
-                    else:
-                        assert ops[op.id0].qint.max > 0, f'{i}, {op.id0}'
+                    assert ops[op.id0].qint.min < 0, f'{i}, {op.id0}'
 
                     if i1 >= bw0:
                         v0_name = f'{{{i0 - i1 + 1}{{{v0_name}[{bw0 - 1}]}}}}'
@@ -142,10 +141,10 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                     num = 2**bw + num
                 line = f"{_def} assign {v} = '{bin(num)[1:]};"
 
-            case 6 | -6:  # MSB Muxing
+            case 6:  # MSB Muxing
                 k, a, b = op.data & 0xFFFFFFFF, op.id0, op.id1
                 p0, p1 = kifs[a], kifs[b]
-                inv = '1' if op.opcode == -6 else '0'
+                inv = '0'
                 bwk, bw0, bw1 = widths[k], widths[a], widths[b]
                 s0, f0, s1, f1 = int(p0[0]), p0[2], int(p1[0]), p1[2]
                 fo = kifs[i][2]
@@ -176,11 +175,8 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
 
                 line = f'{_def} lookup_table #({bw0},{bw},"{name}") op_{i} (v{op.id0}, {v});'
 
-            case 9 | -9:  # Bitwise Unary
-                if op.opcode == -9 and op.data != 1:
-                    _, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, f'v{op.id0}', neg_repo)
-                else:
-                    v0_name = f'v{op.id0}'
+            case 9:  # Bitwise Unary
+                v0_name = f'v{op.id0}'
                 match op.data:
                     case 0:  # NOT
                         line = f'{_def} assign {v} = ~{v0_name};'
@@ -196,19 +192,12 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                 data = op.data
                 subop, _shift = (data >> 56) & 0xFF, data & 0xFFFFFFFF
                 shift = (_shift + 0x80000000) % 0x100000000 - 0x80000000 + kifs[op.id0][2] - kifs[op.id1][2]
-                v0_neg, v1_neg = (data >> 32) & 1, (data >> 33) & 1
-                if v0_neg:
-                    bw0, v0_name = make_neg(lines, op.id0, ops[op.id0].qint, f'v{op.id0}', neg_repo)
-                    s0 = ops[op.id0].qint.max > 0
-                else:
-                    bw0, v0_name = widths[op.id0], f'v{op.id0}'
-                    s0 = ops[op.id0].qint.min < 0
-                if v1_neg:
-                    bw1, v1_name = make_neg(lines, op.id1, ops[op.id1].qint, f'v{op.id1}', neg_repo)
-                    s1 = ops[op.id1].qint.max > 0
-                else:
-                    bw1, v1_name = widths[op.id1], f'v{op.id1}'
-                    s1 = ops[op.id1].qint.min < 0
+
+                bw0, v0_name = widths[op.id0], f'v{op.id0}'
+                s0 = ops[op.id0].qint.min < 0
+
+                bw1, v1_name = widths[op.id1], f'v{op.id1}'
+                s1 = ops[op.id1].qint.min < 0
 
                 s0, s1 = int(s0), int(s1)
 

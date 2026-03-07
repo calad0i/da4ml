@@ -63,6 +63,7 @@ line-length = 130
 indent-width = 4
 
 include = [ "src/**/*.py" ]
+exclude = [ "src/da4ml/codegen/hls/source/ac_types", "src/da4ml/codegen/hls/source/ap_types" ]
 
 format.indent-style = "space"
 format.quote-style = "single"

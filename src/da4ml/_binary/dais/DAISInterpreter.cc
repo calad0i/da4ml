@@ -260,12 +260,6 @@ namespace dais {
     int64_t DAISInterpreter::bit_binary(int64_t v1, int64_t v2, const Op &op) const {
         int32_t actual_shift =
             op.data_low + ops[op.id0].dtype.fractionals - ops[op.id1].dtype.fractionals;
-        if (op.data_high & 1) {
-            v1 = -v1;
-        }
-        if (op.data_high & 2) {
-            v2 = -v2;
-        }
         if (actual_shift > 0) {
             v2 = v2 << actual_shift;
         }
@@ -302,6 +296,7 @@ namespace dais {
         for (size_t i = 0; i < n_ops; ++i) {
             const Op &op = ops[i];
             switch (op.opcode) {
+            case -2: buffer[i] = -buffer[op.id0]; break;
             case -1: {
                 int64_t input_value = static_cast<int64_t>(std::floor(
                     inputs[op.id0] *
@@ -323,20 +318,10 @@ namespace dais {
                 );
                 break;
             case 2:
-            case -2:
-                buffer[i] = relu(
-                    op.opcode == -2 ? -buffer[op.id0] : buffer[op.id0],
-                    ops[op.id0].dtype,
-                    ops[i].dtype
-                );
+                buffer[i] = relu(buffer[op.id0], ops[op.id0].dtype, ops[i].dtype);
                 break;
             case 3:
-            case -3:
-                buffer[i] = quantize(
-                    op.opcode == -3 ? -buffer[op.id0] : buffer[op.id0],
-                    ops[op.id0].dtype,
-                    ops[i].dtype
-                );
+                buffer[i] = quantize(buffer[op.id0], ops[op.id0].dtype, ops[i].dtype);
                 break;
             case 4:
                 buffer[i] = const_add(
@@ -352,10 +337,9 @@ namespace dais {
                             static_cast<uint32_t>(op.data_low);
                 break;
             case 6:
-            case -6:
                 buffer[i] = msb_mux(
                     buffer[op.id0],
-                    op.opcode == -6 ? -buffer[op.id1] : buffer[op.id1],
+                    buffer[op.id1],
                     buffer[op.data_low],
                     op.data_high,
                     ops[op.id0].dtype,
@@ -368,11 +352,7 @@ namespace dais {
             case 8:
                 buffer[i] = logic_lookup(buffer[op.id0], op, ops[op.id0].dtype);
                 break;
-            case 9:
-            case -9:
-                buffer[i] =
-                    bit_unary(op.opcode == -9 ? -buffer[op.id0] : buffer[op.id0], op);
-                break;
+            case 9: buffer[i] = bit_unary(buffer[op.id0], op); break;
             case 10: buffer[i] = bit_binary(buffer[op.id0], buffer[op.id1], op); break;
 
             default:

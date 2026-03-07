@@ -251,16 +251,18 @@ class CombLogic(NamedTuple):
         inp = inp * (2.0 ** np.array(self.inp_shifts))
         for i, op in enumerate(self.ops):
             match op.opcode:
+                case -2:  # neg
+                    buf[i] = -buf[op.id0]
                 case -1:  # copy form external buffer
                     buf[i] = inp[op.id0]
                 case 0 | 1:  # addition
                     v0, v1 = buf[op.id0], 2.0**op.data * buf[op.id1]
                     buf[i] = v0 + v1 if op.opcode == 0 else v0 - v1
-                case 2 | -2:  # relu(+/-x)
+                case 2:  # relu(+/-x)
                     v = buf[op.id0]
                     _, _i, _f = minimal_kif(op.qint)
                     buf[i] = _relu(v, _i, _f, inv=op.opcode == -2, round_mode='TRN')
-                case 3 | -3:  # quantize(+/-x)
+                case 3:  # quantize(+/-x)
                     v = buf[op.id0] if op.opcode == 3 else -buf[op.id0]
                     _k, _i, _f = minimal_kif(op.qint)
                     buf[i] = _quantize(v, _k, _i, _f, round_mode='TRN', _force_factor_clear=True)
@@ -269,13 +271,11 @@ class CombLogic(NamedTuple):
                     buf[i] = buf[op.id0] + bias
                 case 5:  # const definition
                     buf[i] = op.data * op.qint.step  # const definition
-                case 6 | -6:  # MSB Mux
+                case 6:  # MSB Mux
                     id_c = op.data & 0xFFFFFFFF
                     k, v0, v1 = buf[id_c], buf[op.id0], buf[op.id1]
                     shift = (op.data >> 32) & 0xFFFFFFFF
                     shift = shift if shift < 0x80000000 else shift - 0x100000000
-                    if op.opcode == -6:
-                        v1 = -v1
 
                     if isinstance(k, FixedVariable):
                         buf[i] = k.msb_mux(v0, v1 * 2**shift, op.qint)  # type: ignore
@@ -295,7 +295,7 @@ class CombLogic(NamedTuple):
                     assert tables is not None, 'No lookup table provided for lookup operation'
                     table = tables[op.data]
                     buf[i] = table.lookup(v0, self.ops[op.id0].qint)
-                case 9 | -9:  # Unary bitwise operation
+                case 9:  # Unary bitwise operation
                     v0 = buf[op.id0]
                     buf[i] = unary_bit_op(v0 if op.opcode == 9 else -v0, op.data, self.ops[op.id0].qint, op.qint)
                 case 10:  # Binary bitwise operation
@@ -320,40 +320,36 @@ class CombLogic(NamedTuple):
             for i, v in enumerate(buf):
                 op = self.ops[i]
                 match op.opcode:
+                    case -2:
+                        op_str = f'-buf[{op.id0}]'
                     case -1:
                         op_str = f'inp[{op.id0}]'
                     case 0 | 1:
                         _sign = '-' if op.opcode == 1 else '+'
                         op_str = f'buf[{op.id0}] {_sign} buf[{op.id1}]<<{op.data}'
-                    case 2 | -2:
-                        _sign = '' if op.opcode == 2 else '-'
-                        op_str = f'relu({_sign}buf[{op.id0}])'
-                    case 3 | -3:
-                        _sign = '' if op.opcode == 3 else '-'
-                        op_str = f'quantize({_sign}buf[{op.id0}])'
+                    case 2:
+                        op_str = f'relu(buf[{op.id0}])'
+                    case 3:
+                        op_str = f'quantize(buf[{op.id0}])'
                     case 4:
                         op_str = f'buf[{op.id0}] + {op.data * op.qint.step}'
                     case 5:
                         op_str = f'const {op.data * op.qint.step}'
-                    case 6 | -6:
-                        _sign = '-' if op.opcode == -6 else ''
+                    case 6:
                         shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
-                        op_str = f'msb(buf[{op.data & 0xFFFFFFFF}]) ? buf[{op.id0}] : {_sign}buf[{op.id1}] << {shift}'
+                        op_str = f'msb(buf[{op.data & 0xFFFFFFFF}]) ? buf[{op.id0}] : buf[{op.id1}] << {shift}'
                     case 7:
                         op_str = f'buf[{op.id0}] * buf[{op.id1}]'
                     case 8:
                         op_str = f'tables[{int(op.data)}].lookup(buf[{op.id0}])'
-                    case 9 | -9:
-                        _sign = '' if op.opcode == 9 else '-'
+                    case 9:
                         op_symbol = {0: '~', 1: 'any*', 2: 'all*'}[op.data]
-                        op_str = f'{op_symbol}({_sign}buf[{op.id0}])'
+                        op_str = f'{op_symbol}(buf[{op.id0}])'
                     case 10:
-                        _sign0, _sign1 = bool((op.data >> 32) & 1), bool((op.data >> 33) & 1)
-                        _sign0, _sign1 = '-' if _sign0 else '', '-' if _sign1 else ''
                         _opcode = (op.data >> 56) & 0xFF
                         op_symbol = {0: '&', 1: '|', 2: '^'}[_opcode]
                         shift = ((int(op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
-                        op_str = f'{_sign0}buf[{op.id0}] {op_symbol} {_sign1}buf[{op.id1}] << {shift}'
+                        op_str = f'buf[{op.id0}] {op_symbol} buf[{op.id1}] << {shift}'
                     case _:
                         raise ValueError(f'Unknown opcode {op.opcode} in {op}')
 
@@ -498,7 +494,7 @@ class CombLogic(NamedTuple):
         return ref_count
 
     def to_binary(self, version: int = 0) -> NDArray[np.int32]:
-        DAIS_SPEC_VERSION = 1
+        DAIS_SPEC_VERSION = 2
         n_in, n_out = self.shape
         header_size_i32 = 6 + n_in + n_out * 3
         n_tables = len(self.lookup_tables) if self.lookup_tables is not None else 0

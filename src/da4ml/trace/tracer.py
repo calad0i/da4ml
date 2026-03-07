@@ -41,13 +41,26 @@ def gather_variables(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVar
         refcount[v.id] += 1
 
     variables = [v for v in variables if refcount[v.id] > 0 or v.id in input_ids]
-    index = {variables[i].id: i for i in range(len(variables))}
 
-    return variables, index
+    return variables
+
+
+def needs_negative(variables: Sequence[FixedVariable], outputs: Sequence[FixedVariable]) -> set[UUID]:
+    needs_neg = set()
+    for v in variables:
+        if v.opr == 'vadd' or v.opr == 'vmul':
+            continue
+        for _v in v._from:
+            if _v._factor < 0:
+                needs_neg.add(_v.id)
+    for v in outputs:
+        if v._factor < 0:
+            needs_neg.add(v.id)
+    return needs_neg
 
 
 def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable]):
-    variables, index = gather_variables(inputs, outputs)
+    variables = gather_variables(inputs, outputs)
     ops: list[Op] = []
     inp_uuids = {v.id: i for i, v in enumerate(inputs)}
     lookup_tables = []
@@ -63,10 +76,19 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
         table_map[idx] = len(lookup_tables)
         lookup_tables.append(table_context.get_table_from_index(idx))
 
-    for i, v in enumerate(variables):
+    index: dict[UUID, int] = {}
+    needs_neg = needs_negative(variables, outputs)
+    ii = -1
+    for v in variables:
+        ii += 1
+        index[v.id] = ii
         if v.id in inp_uuids and v.opr != 'const':
             id0 = inp_uuids[v.id]
             ops.append(Op(id0, -1, -1, 0, v.unscaled.qint, v.latency, 0.0))
+            if v.id in needs_neg:
+                op_neg = Op(ii, -1, -2, 0, (-v.unscaled).qint, v.latency, 0.0)
+                ops.append(op_neg)
+                ii += 1
             continue
         if v.opr == 'new':
             raise NotImplementedError('Operation "new" is only expected in the input list')
@@ -77,7 +99,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 id0, id1 = index[v0.id], index[v1.id]
                 sub = int(f1 < 0)
                 data = int(log2(abs(f1 / f0)))
-                assert id0 < i and id1 < i, f'{id0} {id1} {i} {v.id}'
+                assert id0 < ii and id1 < ii, f'{id0} {id1} {ii} {v.id}'
                 op = Op(id0, id1, sub, data, v.unscaled.qint, v.latency, v.cost)
             case 'cadd':
                 v0 = v._from[0]
@@ -86,19 +108,19 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 assert v._data is not None, 'cadd must have data'
                 qint = v.unscaled.qint
                 data = int(v._data / Decimal(qint.step))
-                assert id0 < i, f'{id0} {i} {v.id}'
+                assert id0 < ii, f'{id0} {ii} {v.id}'
                 op = Op(id0, -1, 4, data, qint, v.latency, v.cost)
             case 'wrap':
                 v0 = v._from[0]
-                id0 = index[v0.id]
-                assert id0 < i, f'{id0} {i} {v.id}'
-                opcode = -3 if v._from[0]._factor < 0 else 3
+                id0 = index[v0.id] + (v0._factor < 0)
+                assert id0 < ii, f'{id0} {ii} {v.id}'
+                opcode = 3
                 op = Op(id0, -1, opcode, 0, v.unscaled.qint, v.latency, v.cost)
             case 'relu':
                 v0 = v._from[0]
-                id0 = index[v0.id]
-                assert id0 < i, f'{id0} {i} {v.id}'
-                opcode = -2 if v._from[0]._factor < 0 else 2
+                id0 = index[v0.id] + (v0._factor < 0)
+                assert id0 < ii, f'{id0} {ii} {v.id}'
+                opcode = 2
                 op = Op(id0, -1, opcode, 0, v.unscaled.qint, v.latency, v.cost)
             case 'const':
                 qint = v.unscaled.qint
@@ -111,19 +133,19 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
             case 'msb_mux':
                 qint = v.unscaled.qint
                 key, in0, in1 = v._from
-                opcode = 6 if in1._factor > 0 else -6
-                idk, id0, id1 = index[key.id], index[in0.id], index[in1.id]
+                opcode = 6
+                idk, id0, id1 = index[key.id], index[in0.id], index[in1.id] + (in1._factor < 0)
                 f0, f1 = in0._factor, in1._factor
                 shift = int(log2(abs(f1 / f0)))
                 data = idk + (shift << 32)
-                assert idk < i and id0 < i and id1 < i, f'{idk} {id0} {id1} {i} {v.id}'
+                assert idk < ii and id0 < ii and id1 < ii, f'{idk} {id0} {id1} {ii} {v.id}'
                 assert key._factor > 0, f'Cannot mux on v{key.id} with negative factor {key._factor}'
                 op = Op(id0, id1, opcode, data, qint, v.latency, v.cost)
             case 'vmul':
                 v0, v1 = v._from
                 opcode = 7
                 id0, id1 = index[v0.id], index[v1.id]
-                assert id0 < i and id1 < i, f'{id0} {id1} {i} {v.id}'
+                assert id0 < ii and id1 < ii, f'{id0} {id1} {ii} {v.id}'
                 op = Op(id0, id1, opcode, 0, v.unscaled.qint, v.latency, v.cost)
             case 'lookup':
                 opcode = 8
@@ -131,29 +153,35 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 id0 = index[v0.id]
                 data = v._data
                 assert data is not None, 'lookup must have data'
-                assert id0 < i, f'{id0} {i} {v.id}'
+                assert id0 < ii, f'{id0} {ii} {v.id}'
                 op = Op(id0, -1, opcode, table_map[int(data)], v.unscaled.qint, v.latency, v.cost)
             case 'bit_unary':
                 v0 = v._from[0]
-                id0 = index[v0.id]
-                assert id0 < i, f'{id0} {i} {v.id}'
+                id0 = index[v0.id] + (v._factor < 0)
+                assert id0 < ii, f'{id0} {ii} {v.id}'
                 assert v._data is not None, 'bit_unary must have data'
-                opcode = 9 if v._factor > 0 else -9
+                opcode = 9
                 op = Op(id0, -1, opcode, int(v._data), v.unscaled.qint, v.latency, v.cost)
             case 'bit_binary':
-                id0, id1 = index[v._from[0].id], index[v._from[1].id]
-                assert id0 < i and id1 < i, f'{id0} {id1} {i} {v.id}'
-                assert v._data is not None, 'bit_binary must have data'
                 v0, v1 = v._from
+                id0, id1 = index[v0.id], index[v1.id]
                 f0, f1 = v0._factor, v1._factor
+                id0, id1 = id0 + (f0 < 0), id1 + (f1 < 0)
+                assert id0 < ii and id1 < ii, f'{id0} {id1} {ii} {v.id}'
+                assert v._data is not None, 'bit_binary must have data'
                 # data: {subopcode[63:56], pad0, v1_neg[33], v0_neg[32], shift[31:0]}
                 _data = int(log2(abs(f1 / f0))) & 0xFFFFFFFF
-                _data += (int(v._data) << 56) + (int(f0 < 0) << 32) + (int(f1 < 0) << 33)
+                _data += int(v._data) << 56
                 op = Op(id0, id1, 10, _data, v.unscaled.qint, v.latency, v.cost)
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
 
         ops.append(op)
+        if v.id in needs_neg:
+            op_neg = Op(ii, -1, -2, 0, (-v.unscaled).qint, v.latency, 0)
+            ops.append(op_neg)
+            ii += 1
+
     out_index = [index[v.id] for v in outputs]
     lookup_tables = None if not lookup_tables else tuple(lookup_tables)
     return ops, out_index, lookup_tables
