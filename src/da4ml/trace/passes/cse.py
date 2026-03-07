@@ -51,10 +51,10 @@ def common_subexpr_elimin(comb: CombLogic) -> CombLogic:
     )
 
 
-def redirect_all(used_in, new_ops, new_out_idxs, i, idx):
-    _map = {i: idx}
-    for j in used_in[i]:
+def redirect_all(used_in, new_ops, new_out_idxs, i_from, i_to):
+    _map = {i_from: i_to}
+    for j in used_in[i_from]:
         if j >= 0:
             new_ops[j] = _index_remap(new_ops[j], _map)
         else:
-            new_out_idxs[-1 - j] = idx
+            new_out_idxs[-1 - j] = i_to

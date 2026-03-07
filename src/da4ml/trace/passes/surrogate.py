@@ -9,7 +9,7 @@ def overlap_counts(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool
     r0, r1 = -get_lsb_loc(qint0.step), -get_lsb_loc(qint1.step) - shift1
     _min0, _max0 = min(qint0.min, 0), max(qint0.max, 0)
     _min1, _max1 = min(qint1.min, 0), max(qint1.max, 0)
-    b0, b1 = iceil_log2((_max0 - _min0) / qint0.step), iceil_log2((_max1 - _min1) / qint1.step)
+    b0, b1 = iceil_log2((_max0 - _min0) / qint0.step + 1), iceil_log2((_max1 - _min1) / qint1.step + 1)
     l0, l1 = r0 - b0, r1 - b1
     if is_sub:
         l0 = l1 = min(l0, l1)
@@ -158,12 +158,12 @@ def add_surrogate(comb: CombLogic) -> CombLogic:
     for i, op in enumerate(comb.ops):
         cost, lat = cost_lat_op(new_ops, op, hwconf)
         if op.opcode == 5:
-            assert len(used_in[i]) == 1, f'Const op at idx {i} should be used exactly once, but got {len(used_in[i])}'
-            idx = list(used_in[i])[0]
-            if idx >= 0:
-                lat = comb.ops[idx].latency
-            else:
-                lat = 0
+            # assert len(used_in[i]) == 1, f'Const op at idx {i} should be used exactly once, but got {len(used_in[i])}'
+            for idx in used_in[i]:
+                if idx >= 0:
+                    lat = comb.ops[idx].latency
+                else:
+                    lat = 0
         new_ops.append(_with_cost_lat(op, cost, lat))
     return CombLogic(
         comb.shape,

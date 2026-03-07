@@ -1163,6 +1163,7 @@ class FixedVariableInput(FixedVariable):
         f: int,
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
+        _force_factor_clear=False,
     ):
         assert overflow_mode == 'WRAP'
 

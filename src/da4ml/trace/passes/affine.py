@@ -3,7 +3,8 @@ from uuid import uuid4
 
 from ..._binary import get_lsb_loc, iceil_log2
 from ...trace.fixed_variable import LookupTable
-from ...types import CombLogic, Op, QInterval, minimal_kif
+from ...types import CombLogic, Op, QInterval
+from .cse import is_used_in, redirect_all
 
 
 def step_gcd(step0: float, step1: float) -> float:
@@ -12,10 +13,10 @@ def step_gcd(step0: float, step1: float) -> float:
     return gcd(s0_int, s1_int) / sf
 
 
-class PrimitiveInterval:
-    def __init__(self, qint: QInterval):
+class AtomicInterval:
+    def __init__(self, qint: QInterval, uuid=None):
         self.qint = qint
-        self.uuid = uuid4()
+        self.uuid = uuid or uuid4()
 
     def __hash__(self):
         return hash(self.uuid)
@@ -25,28 +26,28 @@ class PrimitiveInterval:
 
 
 class AffineInterval:
-    def __init__(self, coeffs: dict[PrimitiveInterval, float], bias: float):
+    def __init__(self, coeffs: dict[AtomicInterval, float], bias: float):
         self.coeffs = coeffs
         self.bias = bias
 
     @classmethod
     def new(cls, qint: QInterval):
-        return cls({PrimitiveInterval(qint): 1.0}, 0.0)
+        return cls({AtomicInterval(qint): 1.0}, 0.0)
 
     def eval(self, canon=True) -> QInterval:
         min_val = self.bias
         max_val = self.bias
         step = 2 ** get_lsb_loc(self.bias)
-        for prim, coeff in self.coeffs.items():
+        for atom, coeff in self.coeffs.items():
             if coeff == 0:
                 continue
             if coeff > 0:
-                min_val += coeff * prim.qint.min
-                max_val += coeff * prim.qint.max
+                min_val += coeff * atom.qint.min
+                max_val += coeff * atom.qint.max
             else:
-                min_val += coeff * prim.qint.max
-                max_val += coeff * prim.qint.min
-            step = min(step, 2 ** get_lsb_loc(coeff * prim.qint.step))
+                min_val += coeff * atom.qint.max
+                max_val += coeff * atom.qint.min
+            step = min(step, 2 ** get_lsb_loc(coeff * atom.qint.step))
         if canon:
             step = 2 ** get_lsb_loc(step)
         return QInterval(min_val, max_val, step)
@@ -95,7 +96,7 @@ class AffineInterval:
     def quantize_to(self, qint: QInterval):
         k = qint.min < 0
         step = qint.step
-        f = iceil_log2(step)
+        f = -iceil_log2(step)
         i = max(iceil_log2(qint.min), iceil_log2(qint.step + qint.max))
         _min, _max = -k * 2**i, 2**i - 2**-f
         qint0 = self.eval()
@@ -104,13 +105,14 @@ class AffineInterval:
                 return self  # trivial
             _min = (qint0.min // step) * step
             _max = (qint0.max // step) * step
+            qint = QInterval(_min, _max, step)
         return AffineInterval.new(qint)
 
     def relu(self, qint: QInterval):
         _qint = self.eval()
         if _qint.max <= 0:
             return AffineInterval({}, 0.0)
-        elif _qint.min >= 0 and _qint.step <= qint.step and _qint.max <= qint.max:
+        elif _qint.min >= 0 and _qint.step >= qint.step and _qint.max <= qint.max:
             return self
         else:
             _qint = QInterval(0, min(_qint.max, qint.max), max(_qint.step, qint.step))
@@ -138,7 +140,7 @@ class AffineInterval:
     def bit_shuffle(self):
         qint = self.eval()
         step = qint.step
-        f = iceil_log2(step)
+        f = -iceil_log2(step)
         i = max(iceil_log2(qint.min), iceil_log2(qint.step + qint.max))
         k = qint.min < 0
         new_min, new_max = -k * 2**i, 2**i - 2**-f
@@ -173,16 +175,19 @@ def affine_range_recomp(comb: CombLogic) -> CombLogic:
                 r = als[op.id0] + bias
             case 5:  # const
                 r = AffineInterval({}, op.data * op.qint.step)
-            case 6 | -6:  # mux
+            case 6:  # mux
                 v0, v1 = als[op.id0], als[op.id1]
-                if op.opcode == -6:
-                    v1 = -v1
                 shift = (op.data >> 32) & 0xFFFFFFFF
                 shift = shift if shift < 0x80000000 else shift - 0x100000000
-                r = v0 | (v1 << shift)
-                r = r.quantize_to(op.qint)
+                qint = (v0 | (v1 << shift)).eval()
+                _min = max(qint.min, op.qint.min) // qint.step * qint.step
+                _max = min(qint.max, op.qint.max) // qint.step * qint.step
+                r = AffineInterval.new(QInterval(_min, _max, qint.step))
             case 7:  # mul
-                r = als[op.id0] * als[op.id1]
+                qint = (als[op.id0] * als[op.id1]).eval()
+                _min = max(qint.min, op.qint.min) // qint.step * qint.step
+                _max = min(qint.max, op.qint.max) // qint.step * qint.step
+                r = AffineInterval.new(QInterval(_min, _max, qint.step))
             case 8:  # lut
                 assert comb.lookup_tables is not None
                 table = comb.lookup_tables[op.data]
@@ -194,36 +199,29 @@ def affine_range_recomp(comb: CombLogic) -> CombLogic:
                     b0 = (qint_in_new.min - qint_in_old.min) // qint_in_old.step
                     b1 = (qint_in_new.max - qint_in_old.min) // qint_in_old.step
                     stride = qint_in_new.step // qint_in_old.step
-                    new_table = table[b0:b1:stride]
+                    new_table = table[int(b0) : int(b1) + 1 : int(stride)]
                     new_luts[new_table.spec.hash] = new_table
                     data = list(new_luts.keys()).index(new_table.spec.hash)
                 else:
                     new_luts[table.spec.hash] = table
                     data = list(new_luts.keys()).index(table.spec.hash)
-            case 9 | -9:  # unary bitops
+            case 9:  # unary bitops
                 v = als[op.id0]
-                if op.opcode == -9:
-                    v = -v
                 subop = op.data
                 if subop == 0:  # NOT
                     r = v.bit_shuffle()
                 else:
                     r = AffineInterval.new(QInterval(0, 1, 1))
             case 10:  # binary bitops
-                inv0, inv1 = (op.data >> 32) & 1, (op.data >> 33) & 1
                 shift = ((int(op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
                 v0, v1 = als[op.id0], als[op.id1]
-                if inv0:
-                    v0 = -v0
-                if inv1:
-                    v1 = -v1
-                qint0, qint1 = v0.eval(), (v1 << shift).eval()
-                k0, i0, f0 = minimal_kif(qint0)
-                k1, i1, f1 = minimal_kif(qint1)
-                _k, _i, _f = max(k0, k1), max(i0, i1), max(f0, f1)
-                qint = QInterval(-_k * 2.0**_i, 2.0**_i - 2.0**-_f, 2.0**-_f)
-                r = AffineInterval.new(qint)
-                # print(i, op.qint, '->', qint)
+                r = v0.bit_shuffle() | (v1 << shift).bit_shuffle()
+                # qint0, qint1 = v0.eval(), (v1 << shift).eval()
+                # k0, i0, f0 = minimal_kif(qint0)
+                # k1, i1, f1 = minimal_kif(qint1)
+                # _k, _i, _f = max(k0, k1), max(i0, i1), max(f0, f1)
+                # qint = QInterval(-_k * 2.0**_i, 2.0**_i - 2.0**-_f, 2.0**-_f)
+                # r = AffineInterval.new(qint)
             case _:
                 raise NotImplementedError(f'Unsupported opcode: {op.opcode}')
         als.append(r)
@@ -235,8 +233,15 @@ def affine_range_recomp(comb: CombLogic) -> CombLogic:
             # Collapsed into const
             data = qint.min / qint.step
             new_op = Op(-1, -1, 5, int(data), qint, op.latency, 0)
-        print(ii, op.qint, '->', new_op.qint)
+        assert op.qint.min <= qint.min and op.qint.max >= qint.max and op.qint.step <= qint.step, (
+            f'Range mismatch at op {ii}: {qint} not in {op.qint} (op: {op})'
+        )
+
+        if op.qint != new_op.qint:
+            print(ii, op.qint, '->', new_op.qint)
         new_ops.append(new_op)
+
+    # out_idxs, new_ops = fix_collapsed_indices(comb, new_ops)
 
     new_tables = tuple(new_luts.values())
     new_tables = new_tables if new_tables else None
@@ -252,3 +257,36 @@ def affine_range_recomp(comb: CombLogic) -> CombLogic:
         comb.adder_size,
         new_tables,
     )
+
+
+def used_as_cond(comb: CombLogic) -> list[int]:
+    used_in = set()
+    for op in comb.ops:
+        if not abs(op.opcode) == 6:  # msb_mux
+            continue
+        id_c = op.data & 0xFFFFFFFF
+        used_in.add(id_c)
+    return sorted(used_in)
+
+
+def fix_collapsed_indices(comb: CombLogic, new_ops: list[Op]) -> tuple[list[int], list[Op]]:
+    is_cond = used_as_cond(comb)
+    used_in = is_used_in(comb)
+    out_idxs = comb.out_idxs.copy()
+    new_ops = new_ops.copy()
+
+    for i in is_cond:
+        qint_old, qint_new = comb.ops[i].qint, new_ops[i].qint
+        if qint_old.min < 0:
+            if qint_new.min >= 0:  # const 0
+                redirect_all(used_in, new_ops, out_idxs, i, new_ops[i].id1)
+            elif qint_new.max < 0:  # const 1
+                redirect_all(used_in, new_ops, out_idxs, i, new_ops[i].id0)
+        else:
+            thres = 2 ** (iceil_log2(qint_old.max) - 1)
+            if qint_new.max < thres:  # const 0
+                redirect_all(used_in, new_ops, out_idxs, i, new_ops[i].id1)
+            elif qint_new.min >= thres:  # const 1
+                redirect_all(used_in, new_ops, out_idxs, i, new_ops[i].id0)
+
+    return out_idxs, new_ops
