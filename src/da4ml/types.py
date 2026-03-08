@@ -1,9 +1,8 @@
 import json
 import os
 from collections.abc import Sequence
-from decimal import Decimal
 from functools import reduce, singledispatch
-from math import ceil, floor, log2
+from math import floor
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, TypeVar
 
@@ -11,7 +10,7 @@ import numpy as np
 from numpy import float32, int8
 from numpy.typing import NDArray
 
-from ._binary import dais_interp_run
+from ._binary import dais_interp_run, iceil_log2
 
 if TYPE_CHECKING:
     from .trace import FixedVariable, FixedVariableArray
@@ -104,17 +103,17 @@ def minimal_kif(qi: QInterval, symmetric: bool = False) -> Precision:
     if qi.min == qi.max == 0:
         return Precision(keep_negative=False, integers=0, fractional=0)
     keep_negative = qi.min < 0
-    fractional = int(-log2(qi.step))
+    fractional = -iceil_log2(qi.step)
     int_min, int_max = round(qi.min / qi.step), round(qi.max / qi.step)
     if symmetric:
-        bits = int(ceil(log2(max(abs(int_min), int_max) + 1)))
+        bits = iceil_log2(max(abs(int_min), int_max) + 1)
     else:
-        bits = int(ceil(log2(max(abs(int_min), int_max + 1))))
+        bits = iceil_log2(max(abs(int_min), int_max + 1))
     integers = bits - fractional
     return Precision(keep_negative=keep_negative, integers=integers, fractional=fractional)
 
 
-T = TypeVar('T', 'FixedVariable', float, int, np.float32, np.float64, Decimal)
+T = TypeVar('T', 'FixedVariable', float, int, np.float32, np.float64)
 
 
 @singledispatch

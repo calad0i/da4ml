@@ -3,7 +3,6 @@ import typing
 from collections.abc import Callable, Generator
 from copy import copy
 from dataclasses import dataclass
-from decimal import Decimal
 from hashlib import sha256
 from math import ceil, floor, log2
 from typing import Any, NamedTuple, overload
@@ -12,8 +11,9 @@ from uuid import UUID
 import numpy as np
 from numpy.typing import NDArray
 
-from .._binary.cmvm_bin import cost_add, get_lsb_loc
+from .._binary.cmvm_bin import cost_add, get_lsb_loc, iceil_log2
 from ..types import QInterval, minimal_kif
+from .affine_interval import AffineInterval
 
 rd = random.Random()
 
@@ -198,30 +198,14 @@ class LookupTable:
         return LookupTable(_spec, _table)
 
 
-def _const_f(const: float | Decimal):
-    """Get the minimum f such that const * 2^f is an integer."""
-    const = float(const)
-    if const == 0:
-        return -32
-    _low, _high = -32, 32
-    while _high - _low > 1:
-        _mid = (_high + _low) // 2
-        _value = const * (2.0**_mid)
-        if _value == int(_value):
-            _high = _mid
-        else:
-            _low = _mid
-    return _high
-
-
 def to_csd_powers(x: float) -> Generator[float, None, None]:
     """Convert a float to a list of +/- powers of two in CSD representation."""
     if x == 0:
         return
-    f = _const_f(abs(x))
+    f = -get_lsb_loc(x)
     x = x * 2**f
     s = 2**-f
-    N = ceil(log2(abs(x) * 1.5 + 1e-19))
+    N = iceil_log2(x * 1.5)
     for n in range(N - 1, -1, -1):
         _2pn = 2**n
         thres = _2pn / 1.5
@@ -266,43 +250,52 @@ class FixedVariable:
 
     def __init__(
         self,
-        low: float | Decimal,
-        high: float | Decimal,
-        step: float | Decimal,
+        low: float | None = None,
+        high: float | None = None,
+        step: float | None = None,
+        *,
         latency: float | None = None,
         hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, -1, -1),
         opr: str = 'new',
         cost: float | None = None,
         _from: tuple['FixedVariable', ...] = (),
-        _factor: float | Decimal = 1.0,
-        _data: Decimal | None = None,
+        _factor: float = 1.0,
+        _data: int | None = None,
         _id: UUID | None = None,
+        _affine: AffineInterval | None = None,
     ) -> None:
-        if self.__normal__variable__:
-            assert low <= high, f'low {low} must be less than high {high}'
-
-        if low != high and opr == 'const':
-            raise ValueError('Constant variable must have low == high')
-
-        if low == high:
-            opr = 'const'
-            _from = ()
-            step = 2.0 ** -_const_f(low)
-
-        low, high, step = Decimal(low), Decimal(high), Decimal(step)
-        self.low = low
-        self.high = high
-        self.step = step
-        self._factor = Decimal(_factor)
+        self._factor = float(_factor)
         self._from: tuple[FixedVariable, ...] = _from
-        opr = opr
         self.opr = opr
         self._data = _data
         self.id = _id or UUID(int=rd.getrandbits(128), version=4)
         self.hwconf = HWConfig(*hwconf)
 
-        if opr == 'cadd':
-            assert _data is not None, 'cadd must have data'
+        if _affine is not None:
+            assert low is None and high is None and step is None, 'Cannot specify both affine and low/high/step'
+            self._affine = _affine
+            q = _affine.qint
+            if q.min == q.max:
+                self.opr = 'const'
+                self._from = ()
+        else:
+            assert low is not None and high is not None and step is not None, (
+                'Must specify low, high, and step if affine is not provided'
+            )
+            low, high, step = float(low), float(high), float(step)
+            if self.__normal__variable__:
+                assert low <= high, f'low {low} must be less than high {high}'
+            if low != high and opr == 'const':
+                raise ValueError('Constant variable must have low == high')
+            if low == high:
+                self.opr = 'const'
+                self._from = ()
+                self._affine = AffineInterval({}, low)
+            else:
+                self._affine = AffineInterval.new(QInterval(low, high, step))
+
+        if self.opr == 'cadd':
+            assert self._data is not None, 'cadd must have data'
 
         if cost is None or latency is None:
             _cost, _latency = self.get_cost_and_latency()
@@ -313,6 +306,18 @@ class FixedVariable:
         self.cost = _cost
 
         self._from = tuple(v if v.opr != 'const' else v._with(latency=self.latency) for v in self._from)
+
+    @property
+    def low(self) -> float:
+        return self._affine.qint.min
+
+    @property
+    def high(self) -> float:
+        return self._affine.qint.max
+
+    @property
+    def step(self) -> float:
+        return self._affine.qint.step
 
     def _with(self, renew_id=True, **kwargs):
         if not kwargs:
@@ -336,7 +341,6 @@ class FixedVariable:
             _cost = 2 ** max(b_in - 5, 0) * ceil(b_out / 2)
             if b_in < 5:
                 _cost *= b_in / 5
-            # Assume LUT6 with extra o5 output
             return _cost, _latency
 
         if self.opr in ('vadd', 'cadd', 'min', 'max', 'vmul'):
@@ -353,8 +357,11 @@ class FixedVariable:
             elif self.opr == 'cadd':
                 assert len(self._from) == 1
                 assert self._data is not None, 'cadd must have data'
-                _f = _const_f(self._data)
-                _cost = float(ceil(log2(abs(self._data) + Decimal(2) ** -_f))) + _f
+                # Reconstruct float bias for cost estimation
+                unscaled_step = self.step / abs(self._factor)
+                float_data = self._data * unscaled_step
+                _f = -get_lsb_loc(float_data)
+                _cost = float(ceil(log2(abs(float_data) + 2.0**-_f))) + _f
                 base_latency = self._from[0].latency
                 dlat = 0.0
             elif self.opr == 'vmul':
@@ -372,7 +379,6 @@ class FixedVariable:
 
             _latency = dlat + base_latency
             if latency_cutoff > 0 and ceil(_latency / latency_cutoff) > ceil(base_latency / latency_cutoff):
-                # Crossed the latency cutoff boundry
                 assert dlat <= latency_cutoff, (
                     f'Latency of an atomic operation {dlat} is larger than the pipelining latency cutoff {latency_cutoff}'
                 )
@@ -382,7 +388,6 @@ class FixedVariable:
             assert len(self._from) == 1
             _latency = self._from[0].latency
             _cost = 0.0
-            # Assume LUT5 used here (2 fan-out per LUT6, thus *1/2)
             if self._from[0]._factor < 0:
                 _cost += sum(self.kif) / 2
             if self.opr == 'relu':
@@ -400,7 +405,6 @@ class FixedVariable:
                 _cost = sum(self._from[0].kif) / 6
                 _latency = 1.0 + max(v.latency for v in self._from)
         elif self.opr == 'new':
-            # new variable, no cost
             _latency = 0.0
             _cost = 0.0
         else:
@@ -413,7 +417,7 @@ class FixedVariable:
 
     @property
     def qint(self) -> QInterval:
-        return QInterval(float(self.low), float(self.high), float(self.step))
+        return self._affine.qint
 
     @property
     def kif(self) -> tuple[bool, int, int]:
@@ -428,9 +432,8 @@ class FixedVariable:
         return k, i, f
 
     @classmethod
-    def from_const(cls, const: float | Decimal, hwconf: HWConfig, _factor: float | Decimal = 1):
-        if const.__class__ is not Decimal:
-            const = float(const)
+    def from_const(cls, const: float, hwconf: HWConfig, _factor: float = 1):
+        const = float(const)
         return cls(const, const, -1, hwconf=hwconf, opr='const', _factor=_factor)
 
     def __repr__(self) -> str:
@@ -439,22 +442,19 @@ class FixedVariable:
         return f'({self._factor}) FixedVariable({self.low}, {self.high}, {self.step})'
 
     def __neg__(self):
-        opr = self.opr if self.low != self.high else 'const'
         return FixedVariable(
-            -self.high,
-            -self.low,
-            self.step,
+            _affine=-self._affine,
             _from=self._from,
             _factor=-self._factor,
             latency=self.latency,
             cost=self.cost,
-            opr=opr,
+            opr=self.opr,
             _id=self.id,
             _data=self._data,
             hwconf=self.hwconf,
         )
 
-    def __add__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __add__(self, other: 'FixedVariable|float|int'):
         if not isinstance(other, FixedVariable):
             return self._const_add(other)
         if other.high == other.low:
@@ -471,55 +471,54 @@ class FixedVariable:
             else:
                 return -((-self) + (-other))
 
+        _affine = self._affine + other._affine
+
         return FixedVariable(
-            self.low + other.low,
-            self.high + other.high,
-            min(self.step, other.step),
+            _affine=_affine,
             _from=(self, other),
             _factor=f0,
             opr='vadd',
             hwconf=self.hwconf,
         )
 
-    def _const_add(self, other: float | Decimal | None) -> 'FixedVariable':
+    def _const_add(self, other: float | None) -> 'FixedVariable':
         if other is None:
             return self
-        if not isinstance(other, (int, float, Decimal)):
-            other = float(other)  # direct numpy to decimal raises error
-        other = Decimal(other)
+        other = float(other)
         if other == 0:
             return self
 
         if self.opr != 'cadd':
-            cstep = Decimal(2.0 ** -_const_f(other))
+            _affine = self._affine + other
+            q = _affine.qint
+            unscaled_step = q.step / abs(self._factor)
+            _data = round(other / self._factor / unscaled_step)
 
             return FixedVariable(
-                self.low + other,
-                self.high + other,
-                min(self.step, cstep),
+                _affine=_affine,
                 _from=(self,),
                 _factor=self._factor,
-                _data=other / self._factor,
+                _data=_data,
                 opr='cadd',
                 hwconf=self.hwconf,
             )
 
-        # cadd, combine the constant
         assert len(self._from) == 1
         parent = self._from[0]
         assert self._data is not None, 'cadd must have data'
+        unscaled_bias = self._data * self.step / abs(self._factor)
         sf = self._factor / parent._factor
-        other1 = (self._data * parent._factor) + other / sf
+        other1 = (unscaled_bias * parent._factor) + other / sf
         return (parent + other1) * sf
 
-    def __sub__(self, other: 'FixedVariable|int|float|Decimal'):
+    def __sub__(self, other: 'FixedVariable|int|float'):
         return self + (-other)
 
-    def __truediv__(self, other: 'int|float|Decimal'):
+    def __truediv__(self, other: 'int|float'):
         assert not isinstance(other, FixedVariable), 'Division by variable is not supported'
         return self * (1 / other)
 
-    def __mul__(self, other: 'FixedVariable|int|float|Decimal') -> 'FixedVariable':
+    def __mul__(self, other: 'FixedVariable|int|float') -> 'FixedVariable':
         if isinstance(other, FixedVariable):
             if self.high == self.low:
                 return other * self.low
@@ -537,17 +536,11 @@ class FixedVariable:
         if log2(abs(other)) % 1 == 0:
             return self._pow2_mul(other)
 
-        variables = [(self._pow2_mul(v), Decimal(v)) for v in to_csd_powers(float(other))]
+        variables = [(self._pow2_mul(v), v) for v in to_csd_powers(float(other))]
         while len(variables) > 1:
             v1, p1 = variables.pop()
             v2, p2 = variables.pop()
-
             v, p = v1 + v2, p1 + p2
-            if p > 0:
-                high, low = self.high * p, self.low * p
-            else:
-                high, low = self.low * p, self.high * p
-            low, high = float(low), float(high)
             variables.append((v, p))
         return variables[0][0]
 
@@ -568,6 +561,7 @@ class FixedVariable:
         step = self.step * other.step
         _factor = self._factor * other._factor
         opr = 'vmul'
+        # Non-linear: new noise primitive
         return FixedVariable(
             low,
             high,
@@ -580,22 +574,16 @@ class FixedVariable:
 
     def _pow2_mul(
         self,
-        other: float | Decimal,
+        other: float,
     ):
-        other = Decimal(other)
-
-        low = min(self.low * other, self.high * other)
-        high = max(self.low * other, self.high * other)
-        step = abs(self.step * other)
-        _factor = self._factor * other
-        opr = self.opr
+        other = float(other)
+        # Linear: propagate affine
+        _affine = self._affine * other
         return FixedVariable(
-            low,
-            high,
-            step,
+            _affine=_affine,
             _from=self._from,
-            _factor=_factor,
-            opr=opr,
+            _factor=self._factor * other,
+            opr=self.opr,
             latency=self.latency,
             cost=self.cost,
             _id=self.id,
@@ -613,13 +601,13 @@ class FixedVariable:
         shift_amount = 2.0**-other
         return self * shift_amount
 
-    def __radd__(self, other: 'float|Decimal|int|FixedVariable'):
+    def __radd__(self, other: 'float|int|FixedVariable'):
         return self + other
 
-    def __rsub__(self, other: 'float|Decimal|int|FixedVariable'):
+    def __rsub__(self, other: 'float|int|FixedVariable'):
         return (-self) + other
 
-    def __rmul__(self, other: 'float|Decimal|int|FixedVariable'):
+    def __rmul__(self, other: 'float|int|FixedVariable'):
         return self * other
 
     def __pow__(self, other):
@@ -634,7 +622,9 @@ class FixedVariable:
         pow0 = _power // 2
         ret = (self**pow0) * (self ** (_power - pow0))
         if other % 2 == 0:
-            ret.low = max(ret.low, 0)
+            # Even power: result is non-negative. Tighten via new affine.
+            new_low = max(ret.low, 0)
+            ret._affine = AffineInterval.new(QInterval(new_low, ret.high, ret.step))
         return ret
 
     def relu(self, i: int | None = None, f: int | None = None, round_mode: str = 'TRN'):
@@ -643,32 +633,32 @@ class FixedVariable:
 
         if self.opr == 'const':
             val = self.low * (self.low > 0)
-            f = _const_f(val) if not f else f
-            step = Decimal(2) ** -f
+            f = -get_lsb_loc(val) if not f else f
+            step = 2.0**-f
             i = ceil(log2(val + step)) if not i else i
             eps = step / 2 if round_mode == 'RND' else 0
-            val = (floor(val / step + eps) * step) % (Decimal(2) ** i)
+            val = (floor(val / step + eps) * step) % (2.0**i)
             return self.from_const(val, hwconf=self.hwconf)
 
-        step = max(Decimal(2) ** -f, self.step) if f is not None else self.step
+        step = max(2.0**-f, self.step) if f is not None else self.step
         if step > self.step and round_mode == 'RND':
             return (self + step / 2).relu(i, f, 'TRN')
-        low = max(Decimal(0), self.low)
+        low = max(0.0, self.low)
         high = self.high
         high, low = floor(high / step) * step, floor(low / step) * step
 
         if i is not None:
-            _high = Decimal(2) ** i - step
+            _high = 2.0**i - step
             if _high < high:
-                # overflows
-                low = Decimal(0)
+                low = 0.0
                 high = _high
         _factor = self._factor
-        high = max(Decimal(0), high)
+        high = max(0.0, high)
 
         if self.low == low and self.high == high and self.step == step:
             return self
 
+        # Non-linear: new noise primitive
         return FixedVariable(
             low,
             high,
@@ -723,8 +713,8 @@ class FixedVariable:
             return (self + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
 
         if overflow_mode in ('SAT', 'SAT_SYM'):
-            step = Decimal(2) ** -f
-            _high = Decimal(2) ** i
+            step = 2.0**-f
+            _high = 2.0**i
             high = _high - step
             low = -_high * k if overflow_mode == 'SAT' else -high * k
             ff = f + 1 if round_mode == 'RND' else f
@@ -733,8 +723,8 @@ class FixedVariable:
 
         if self.low == self.high:
             val = self.low
-            step = Decimal(2) ** -f
-            _high = Decimal(2) ** i
+            step = 2.0**-f
+            _high = 2.0**i
             high, low = _high - step, -_high * k
             val = (floor(val / step) * step - low) % (2 * _high) + low
             return FixedVariable.from_const(val, hwconf=self.hwconf, _factor=1)
@@ -742,7 +732,7 @@ class FixedVariable:
         f = min(f, _f)
         k = min(k, _k) if i >= _i else k
 
-        step = Decimal(2) ** -f
+        step = 2.0**-f
 
         if self.low < 0:
             _low = floor(self.low / step) * step
@@ -753,15 +743,16 @@ class FixedVariable:
         if i + k + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
 
-        low = -int(k) * Decimal(2) ** i
+        low = -int(k) * 2.0**i
 
-        high = Decimal(2) ** i - step
+        high = 2.0**i - step
         _low, _high = self.low, self.high
 
         if _low >= low and _high <= high:
             low = floor(_low / step) * step
             high = floor(_high / step) * step
 
+        # Non-linear: new noise primitive
         return FixedVariable(
             low,
             high,
@@ -775,15 +766,15 @@ class FixedVariable:
 
     @classmethod
     def from_kif(cls, k: int | bool, i: int, f: int, **kwargs):
-        step = Decimal(2) ** -f
-        _high = Decimal(2) ** i
+        step = 2.0**-f
+        _high = 2.0**i
         low, high = -k * _high, _high - step
         return cls(low, high, step, **kwargs)
 
     def msb_mux(
         self,
-        a: 'FixedVariable|float|Decimal',
-        b: 'FixedVariable|float|Decimal',
+        a: 'FixedVariable|float',
+        b: 'FixedVariable|float',
         qint: tuple[float, float, float] | None = None,
         zt_sensitive: bool = True,
     ):
@@ -843,6 +834,7 @@ class FixedVariable:
             _factor = a._factor
             b = b._with(_factor=a._factor, renew_id=True)
 
+        # Non-linear: new noise primitive
         return FixedVariable(
             *qint,
             _from=(self, a, b),
@@ -878,19 +870,19 @@ class FixedVariable:
         """Get the absolute value of this variable."""
         return abs(self)
 
-    def __gt__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __gt__(self, other: 'FixedVariable|float|int'):
         """Get a variable that is 1 if this variable is greater than other, else 0."""
         return (self - other).is_positive()
 
-    def __lt__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __lt__(self, other: 'FixedVariable|float|int'):
         """Get a variable that is 1 if this variable is less than other, else 0."""
         return (other - self).is_positive()
 
-    def __ge__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __ge__(self, other: 'FixedVariable|float|int'):
         """Get a variable that is 1 if this variable is greater than or equal to other, else 0."""
         return ~(self - other).is_negative()
 
-    def __le__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __le__(self, other: 'FixedVariable|float|int'):
         """Get a variable that is 1 if this variable is less than or equal to other, else 0."""
         return ~(other - self).is_negative()
 
@@ -937,15 +929,13 @@ class FixedVariable:
 
     def lookup(self, table: LookupTable | np.ndarray, original_qint: tuple[float, float, float] | None = None) -> 'FixedVariable':
         """Use a lookup table to map the variable.
-        When the table is a numpy array, the table starts at the lowest possible value of the variable
-        When the table is in LookupTable format, the table starts at the normalized lowest value of the variable. (i.e., if the variable has negative _factor, the table is reversed)
 
         Parameters
         ----------
         table : LookupTable | np.ndarray
             Lookup table to use
         original_qint : tuple[float, float, float] | None
-            The original quantization interval of the variable where the original table is applied to. The table will be remapped to fit the variable's quantization interval if provided. If not provided, the table is assumed, and must match the variable's quantization interval.
+            The original quantization interval of the variable where the original table is applied to.
 
         Returns
         -------
@@ -977,19 +967,21 @@ class FixedVariable:
             if len(table) == 1:
                 return self.from_const(float(table[0]), hwconf=self.hwconf)
             if self._factor < 0:
-                table = table[::-1]  # Reverse the table for negative factor
+                table = table[::-1]
 
         _table, table_id = table_context.register_table(table)
+        table_id = int(table_id)
 
+        # Non-linear: new noise primitive
         return FixedVariable(
             _table.spec.out_qint.min,
             _table.spec.out_qint.max,
             _table.spec.out_qint.step,
             _from=(self,),
-            _factor=Decimal(1),
+            _factor=1.0,
             opr='lookup',
             hwconf=self.hwconf,
-            _data=Decimal(table_id),
+            _data=table_id,
         )
 
     def unary_bit_op(self, _type: str):
@@ -1008,7 +1000,7 @@ class FixedVariable:
         if sum(self.kif) == 1 and _type in ('any', 'all'):
             return self.msb()
 
-        _data = Decimal(ops[_type])
+        _data = ops[_type]
         if _type == 'not':
             k, i, f = self.kif
             return FixedVariable.from_kif(
@@ -1021,9 +1013,12 @@ class FixedVariable:
                 return self.from_const(0, hwconf=self.hwconf)
             if self.low == 0:
                 _max = log2(self.high + self.step)
-                if _max % 1 != 0:  # max number unreachable for uint
+                if _max % 1 != 0:
                     return self.from_const(0, hwconf=self.hwconf)
-        return FixedVariable(0, 1, 1, hwconf=self.hwconf, opr='bit_unary', _data=_data, _from=(self,), _factor=abs(self._factor))
+        # Non-linear: new noise primitive
+        return FixedVariable(
+            0, 1, 1, hwconf=self.hwconf, opr='bit_unary', _data=int(_data), _from=(self,), _factor=abs(self._factor)
+        )
 
     def binary_bit_op(self, other: 'FixedVariable', _type: str):
         ops = {
@@ -1047,38 +1042,39 @@ class FixedVariable:
                 return other
         if other.opr == 'const' and other.low == 0:
             return other.binary_bit_op(self, _type)
-        _data = Decimal(ops[_type])
+        _data = ops[_type]
         if other.opr == 'const' and other.low == 0:
             if _type == 'and':
                 return self.from_const(0, hwconf=self.hwconf)
             if _type == 'or' or _type == 'xor':
                 return self
+        # Non-linear: new noise primitive
         return FixedVariable(
             *qint, hwconf=self.hwconf, opr='bit_binary', _data=_data, _from=(self, other), _factor=abs(self._factor)
         )
 
-    def __and__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __and__(self, other: 'FixedVariable|float|int'):
         if not isinstance(other, FixedVariable):
             other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
         return self.binary_bit_op(other, 'and')
 
-    def __or__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __or__(self, other: 'FixedVariable|float|int'):
         if not isinstance(other, FixedVariable):
             other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
         return self.binary_bit_op(other, 'or')
 
-    def __xor__(self, other: 'FixedVariable|float|Decimal|int'):
+    def __xor__(self, other: 'FixedVariable|float|int'):
         if not isinstance(other, FixedVariable):
             other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
         return self.binary_bit_op(other, 'xor')
 
-    def __rand__(self, other: 'float|Decimal|int|FixedVariable'):
+    def __rand__(self, other: 'float|int|FixedVariable'):
         return self.__and__(other)
 
-    def __ror__(self, other: 'float|Decimal|int|FixedVariable'):
+    def __ror__(self, other: 'float|int|FixedVariable'):
         return self.__or__(other)
 
-    def __rxor__(self, other: 'float|Decimal|int|FixedVariable'):
+    def __rxor__(self, other: 'float|int|FixedVariable'):
         return self.__xor__(other)
 
     def __invert__(self):
@@ -1102,19 +1098,35 @@ class FixedVariableInput(FixedVariable):
         hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, -1, -1),
         opr: str = 'new',
     ) -> None:
+        # Accumulators for tracking widest quantization range seen
+        self._bounds_low = 1e10
+        self._bounds_high = -1e10
+        self._bounds_step = 1e10
         super().__init__(
-            low=Decimal(1e10),
-            high=Decimal(-1e10),
-            step=Decimal(1e10),
+            low=self._bounds_low,
+            high=self._bounds_high,
+            step=self._bounds_step,
             latency=latency if latency is not None else 0.0,
             hwconf=HWConfig(*hwconf),
             opr=opr,
             cost=0.0,
-            _factor=Decimal(1),
+            _factor=1.0,
             _from=(),
             _data=None,
             _id=None,
         )
+
+    @property
+    def low(self) -> float:
+        return self._bounds_low
+
+    @property
+    def high(self) -> float:
+        return self._bounds_high
+
+    @property
+    def step(self) -> float:
+        return self._bounds_step
 
     def __add__(self, other):
         if other == 0:
@@ -1166,6 +1178,7 @@ class FixedVariableInput(FixedVariable):
         _force_factor_clear=False,
     ):
         assert overflow_mode == 'WRAP'
+        k, i, f = int(k), int(i), int(f)
 
         if k + i + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
@@ -1175,12 +1188,16 @@ class FixedVariableInput(FixedVariable):
         else:
             round_mode = 'TRN'
 
-        step = Decimal(2) ** -f
-        _high = Decimal(2) ** i
+        step = 2.0**-f
+        _high = 2.0**i
         low, high = -_high * k, _high - step
-        self.high = max(self.high, high)
-        self.low = min(self.low, low)
-        self.step = min(self.step, step)
+
+        # Update accumulators
+        self._bounds_high = max(self._bounds_high, high)
+        self._bounds_low = min(self._bounds_low, low)
+        self._bounds_step = min(self._bounds_step, step)
+        # Rebuild affine from accumulated bounds
+        self._affine = AffineInterval.new(QInterval(self._bounds_low, self._bounds_high, self._bounds_step))
 
         return FixedVariable(
             low,

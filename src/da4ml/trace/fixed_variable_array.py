@@ -423,6 +423,9 @@ class FixedVariableArray:
             return FixedVariableArray(self._vars * other._vars, self.solver_options, hwconf=self.hwconf)
         return FixedVariableArray(self._vars * other, self.solver_options, hwconf=self.hwconf)
 
+    def __rmul__(self, other):
+        return self * other
+
     def __truediv__(self, other):
         return FixedVariableArray(self._vars * (1 / other), self.solver_options, hwconf=self.hwconf)
 

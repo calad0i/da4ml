@@ -1,12 +1,12 @@
 from collections.abc import Sequence
-from decimal import Decimal
 from math import log2
 from uuid import UUID
 
 import numpy as np
 
+from .._binary import get_lsb_loc
 from ..types import CombLogic, Op, QInterval
-from .fixed_variable import FixedVariable, _const_f, table_context
+from .fixed_variable import FixedVariable, table_context
 from .passes import optimize as _optimize
 
 
@@ -107,7 +107,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 id0 = index[v0.id]
                 assert v._data is not None, 'cadd must have data'
                 qint = v.unscaled.qint
-                data = int(v._data / Decimal(qint.step))
+                data = v._data
                 assert id0 < ii, f'{id0} {ii} {v.id}'
                 op = Op(id0, -1, 4, data, qint, v.latency, v.cost)
             case 'wrap':
@@ -125,7 +125,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
             case 'const':
                 qint = v.unscaled.qint
                 assert qint.min == qint.max, f'const {v.id} {qint.min} {qint.max}'
-                f = _const_f(qint.min)
+                f = -get_lsb_loc(qint.min)
                 step = 2.0**-f
                 qint = QInterval(qint.min, qint.min, step)
                 data = qint.min / step

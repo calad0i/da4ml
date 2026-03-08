@@ -4,7 +4,8 @@ from uuid import UUID
 
 import numpy as np
 
-from ...trace.fixed_variable import _const_f, interpret_as
+from ..._binary import get_lsb_loc
+from ...trace.fixed_variable import interpret_as
 from ...types import CombLogic, Op, QInterval, minimal_kif
 
 
@@ -103,7 +104,7 @@ def ssa_gen(comb: CombLogic, print_latency: bool, typestr_fn: Callable[[bool | i
                 # Constant addition
                 _number = op.data * op.qint.step
                 sign, mag = ('-' if _number < 0 else '+'), abs(_number)
-                f = _const_f(mag)
+                f = -get_lsb_loc(mag)
                 const_type_str = typestr_fn(*minimal_kif(QInterval(mag, mag, 2.0**-f)))
                 val = f'{ref0} {sign} {const_type_str}({mag})'
             case 5:
