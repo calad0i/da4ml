@@ -62,6 +62,21 @@ class Op(NamedTuple):
     latency: float
     cost: float
 
+    @property
+    def input_ids(self) -> tuple[int, ...]:
+        if self.opcode == -1:
+            return ()
+        if self.opcode == 6:
+            k = self.data & 0xFFFFFFFF
+            return (self.id0, self.id1, k)
+        if self.opcode in (0, 1, 7, 10):  # add, sub, mul, bin bitops
+            return (self.id0, self.id1)
+        if self.opcode in (-2, 2, 3, 4, 6, 8, 9):  # neg, relu, quantize, const add, mux, lookup, unary bitops
+            return (self.id0,)
+        if self.opcode == 5:  # const definition
+            return ()
+        raise ValueError(f'Unknown opcode {self.opcode} in {self}')
+
 
 class Pair(NamedTuple):
     """An operation representing data[id0] +/- data[id1] * 2**shift."""

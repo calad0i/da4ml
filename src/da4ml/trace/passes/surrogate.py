@@ -6,13 +6,13 @@ from .cse import is_used_in
 
 
 def overlap_counts(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool):
+    if is_sub:
+        qint1 = QInterval(-qint1.max, -qint1.min, qint1.step)
     r0, r1 = -get_lsb_loc(qint0.step), -get_lsb_loc(qint1.step) - shift1
     _min0, _max0 = min(qint0.min, 0), max(qint0.max, 0)
     _min1, _max1 = min(qint1.min, 0), max(qint1.max, 0)
     b0, b1 = iceil_log2((_max0 - _min0) / qint0.step + 1), iceil_log2((_max1 - _min1) / qint1.step + 1)
     l0, l1 = r0 - b0, r1 - b1
-    if is_sub:
-        l0 = l1 = min(l0, l1)
     a, b, c, d = sorted([l0, r0, l1, r1])
     if r0 < l0 or r1 < l0:  # no overlap
         b, c = c, b
@@ -77,6 +77,8 @@ def cost_lat_op(ops: list[Op], op: Op, hwconf: HWConfig) -> tuple[float, float]:
     LUT_X, LUT_Y = 6, 5
     n_add, n_carry = hwconf.adder_size % 65535, hwconf.carry_size % 65535
     match op.opcode:
+        case -2:  # neg
+            return cost_neg(ops[op.id0].qint, LUT_X, LUT_Y)
         case -1:  # READ
             return 0, 0
         case 0 | 1:  # +/-
@@ -84,64 +86,45 @@ def cost_lat_op(ops: list[Op], op: Op, hwconf: HWConfig) -> tuple[float, float]:
             qint0, qint1 = op0.qint, op1.qint
             shift1 = op.data
             is_sub = op.opcode == 1
-
             c, l = cost_lat_add(qint0, qint1, shift1, is_sub, n_add, n_carry)
-            return c, l + max(op0.latency, op1.latency)
-
-        case 2 | -2:  # relu(-)
+            return c, l
+        case 2:  # relu(-)
             qint = ops[op.id0].qint
-            if op.opcode == 2:
-                c, l = cost_relu(qint, LUT_X, LUT_Y)
-            else:
-                c0, l0 = cost_neg(qint, LUT_X, LUT_Y)
-                c1, l1 = cost_relu(qint, LUT_X, LUT_Y)
-                c, l = c0 + c1, l0 + l1
-            return c, l + ops[op.id0].latency
-        case 3 | -3:  # WRAP
-            if op.opcode == 3:
-                c, l = cost_neg(ops[op.id0].qint, LUT_X, LUT_Y)
-            else:
-                c, l = 0, 0
-            return c, l + ops[op.id0].latency
+            c, l = cost_relu(qint, LUT_X, LUT_Y)
+            return c, l
+        case 3:  # WRAP
+            c, l = cost_neg(ops[op.id0].qint, LUT_X, LUT_Y)
+            return c, l
         case 4:  # cadd
             f = -get_lsb_loc(op.data)
             c = iceil_log2(abs(op.data) + 2**-f) + f
             l = 0
-            return c, l + ops[op.id0].latency
+            return c, l
         case 5:  # const
             return 0, 0
-        case 6 | -6:  # msb_mux
+        case 6:  # msb_mux
             qint0, qint1 = ops[op.id0].qint, ops[op.id1].qint
             shift = (op.data >> 32) & 0xFFFFFFFF
             shift = shift if shift < 0x80000000 else shift - 0x100000000
-            k = op.data & 0xFFFFFFFF
             c0, l0 = cost_lat_mux(qint0, qint1, shift, LUT_X, LUT_Y)
-            _l0 = max(ops[op.id0].latency, ops[op.id1].latency, ops[k].latency)
-            if op.opcode == 6:
-                return c0, l0 + _l0
-            else:
-                c1, l1 = cost_neg(qint1, LUT_X, LUT_Y)
-                return c0 + c1, l0 + l1 + _l0
+            return c0, l0
         case 7:  # mul
             qint0, qint1 = ops[op.id0].qint, ops[op.id1].qint
             c, l = cost_lat_mul(qint0, qint1, n_add, n_carry)
-            return c, l + max(ops[op.id0].latency, ops[op.id1].latency)
+            return c, l
         case 8:  # lut
             qint_in = ops[op.id0].qint
             qint_out = op.qint
             c, l = cost_lat_lut(qint_in, qint_out, LUT_X, LUT_Y)
-            return c, l + ops[op.id0].latency
-        case 9 | -9:
-            if op.opcode == 9:
-                c, l = cost_neg(ops[op.id0].qint, LUT_X, LUT_Y)
-            else:
-                c, l = 0, 0
-            return c, l + ops[op.id0].latency
+            return c, l
+        case 9:
+            c, l = cost_neg(ops[op.id0].qint, LUT_X, LUT_Y)
+            return c, l
         case 10:  # bin bitops
             qint0, qint1 = ops[op.id0].qint, ops[op.id1].qint
             shift = ((int(op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
             c, l = cost_lat_bin_bitops(qint0, qint1, shift, LUT_X, LUT_Y)
-            return c, l + max(ops[op.id0].latency, ops[op.id1].latency)
+            return c, l
         case _:
             raise NotImplementedError(f'Unsupported opcode: {op.opcode}')
 
@@ -157,6 +140,7 @@ def add_surrogate(comb: CombLogic) -> CombLogic:
     used_in = is_used_in(comb)
     for i, op in enumerate(comb.ops):
         cost, lat = cost_lat_op(new_ops, op, hwconf)
+        lat = lat + max(tuple(new_ops[j].latency for j in op.input_ids) + (0,))
         if op.opcode == 5:
             # assert len(used_in[i]) == 1, f'Const op at idx {i} should be used exactly once, but got {len(used_in[i])}'
             for idx in used_in[i]:
