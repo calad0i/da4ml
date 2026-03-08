@@ -2,8 +2,6 @@ from da4ml._binary import get_lsb_loc, iceil_log2
 from da4ml.trace import HWConfig
 from da4ml.types import CombLogic, Op, QInterval
 
-from .cse import is_used_in
-
 
 def overlap_counts(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool):
     if is_sub:
@@ -137,17 +135,9 @@ def add_surrogate(comb: CombLogic) -> CombLogic:
     "Add surrogate cost and latency"
     new_ops = []
     hwconf = HWConfig(comb.adder_size, comb.carry_size, -1.0)
-    used_in = is_used_in(comb)
-    for i, op in enumerate(comb.ops):
+    for op in comb.ops:
         cost, lat = cost_lat_op(new_ops, op, hwconf)
         lat = lat + max(tuple(new_ops[j].latency for j in op.input_ids) + (0,))
-        if op.opcode == 5:
-            # assert len(used_in[i]) == 1, f'Const op at idx {i} should be used exactly once, but got {len(used_in[i])}'
-            for idx in used_in[i]:
-                if idx >= 0:
-                    lat = comb.ops[idx].latency
-                else:
-                    lat = 0
         new_ops.append(_with_cost_lat(op, cost, lat))
     return CombLogic(
         comb.shape,

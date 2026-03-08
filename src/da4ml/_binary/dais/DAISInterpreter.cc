@@ -420,7 +420,7 @@ namespace dais {
                     "Operation " + std::to_string(i) +
                     " has id1=" + std::to_string(op.id1) + " violating causality"
                 );
-            if (abs(op.opcode) == 6 && (size_t)op.data_low >= i)
+            if (op.opcode == 6 && (size_t)op.data_low >= i)
                 throw std::runtime_error(
                     "Operation " + std::to_string(i) + " has cond_idx=" +
                     std::to_string(op.data_low) + " violating causality"

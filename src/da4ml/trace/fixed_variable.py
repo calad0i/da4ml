@@ -555,7 +555,7 @@ class FixedVariable:
         step = self.step * other.step
         _factor = self._factor * other._factor
         opr = 'vmul'
-        # Non-linear: new noise primitive
+
         return FixedVariable(
             low,
             high,
@@ -571,7 +571,7 @@ class FixedVariable:
         other: float,
     ):
         other = float(other)
-        # Linear: propagate affine
+
         _affine = self._affine * other
         return FixedVariable(
             _affine=_affine,
@@ -652,7 +652,6 @@ class FixedVariable:
         if self.low == low and self.high == high and self.step == step:
             return self
 
-        # Non-linear: new noise primitive
         return FixedVariable(
             low,
             high,
@@ -746,7 +745,6 @@ class FixedVariable:
             low = floor(_low / step) * step
             high = floor(_high / step) * step
 
-        # Non-linear: new noise primitive
         return FixedVariable(
             low,
             high,
@@ -828,7 +826,6 @@ class FixedVariable:
             _factor = a._factor
             b = b._with(_factor=a._factor, renew_id=True)
 
-        # Non-linear: new noise primitive
         return FixedVariable(
             *qint,
             _from=(self, a, b),
@@ -966,11 +963,8 @@ class FixedVariable:
         _table, table_id = table_context.register_table(table)
         table_id = int(table_id)
 
-        # Non-linear: new noise primitive
         return FixedVariable(
-            _table.spec.out_qint.min,
-            _table.spec.out_qint.max,
-            _table.spec.out_qint.step,
+            *_table.spec.out_qint,
             _from=(self,),
             _factor=1.0,
             opr='lookup',
@@ -1007,7 +1001,7 @@ class FixedVariable:
                 _max = log2(self.high + self.step)
                 if _max % 1 != 0:
                     return self.from_const(0, hwconf=self.hwconf)
-        # Non-linear: new noise primitive
+
         return FixedVariable(
             0, 1, 1, hwconf=self.hwconf, opr='bit_unary', _data=int(_data), _from=(self,), _factor=abs(self._factor)
         )
@@ -1040,7 +1034,7 @@ class FixedVariable:
                 return self.from_const(0, hwconf=self.hwconf)
             if _type == 'or' or _type == 'xor':
                 return self
-        # Non-linear: new noise primitive
+
         return FixedVariable(
             *qint, hwconf=self.hwconf, opr='bit_binary', _data=_data, _from=(self, other), _factor=abs(self._factor)
         )

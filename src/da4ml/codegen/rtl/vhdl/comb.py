@@ -213,9 +213,9 @@ def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, ti
     blk = '\n    '
 
     extra_lib = ''
-    if any(abs(op.opcode) == 9 and op.data == 1 for op in sol.ops):
+    if any(op.opcode == 9 and op.data == 1 for op in sol.ops):
         extra_lib += 'use ieee.std_logic_misc.or_reduce;\n'
-    if any(abs(op.opcode) == 9 and op.data == 2 for op in sol.ops):
+    if any(op.opcode == 9 and op.data == 2 for op in sol.ops):
         extra_lib += 'use ieee.std_logic_misc.and_reduce;\n'
 
     code = f"""library ieee;
