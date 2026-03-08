@@ -1,5 +1,4 @@
 import random
-import typing
 from collections.abc import Callable, Generator
 from copy import copy
 from dataclasses import dataclass
@@ -16,9 +15,6 @@ from ..types import QInterval, minimal_kif
 from .affine_interval import AffineInterval
 
 rd = random.Random()
-
-if typing.TYPE_CHECKING:
-    pass
 
 
 class HWConfig(NamedTuple):
@@ -425,8 +421,6 @@ class FixedVariable:
             return False, 0, 0
         f = -int(log2(self.step))
         xx = max(-self.low, self.high + self.step)
-        if xx <= 0:
-            pass
         i = ceil(log2(xx))
         k = self.low < 0
         return k, i, f
@@ -985,8 +979,6 @@ class FixedVariable:
         )
 
     def unary_bit_op(self, _type: str):
-        if self.id == UUID('17e0aa3c-0398-4ca8-aa7e-9d498c778ea6'):
-            pass
         ops = {
             'not': 0,
             'any': 1,

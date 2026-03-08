@@ -13,9 +13,6 @@ class AtomicInterval:
     def __hash__(self):
         return hash(self.uuid)
 
-    def __repr__(self):
-        return str(self.qint)
-
 
 class AffineInterval:
     def __init__(self, coeffs: dict[AtomicInterval, float], bias: float):
@@ -41,8 +38,7 @@ class AffineInterval:
 
         step = 2.0 ** get_lsb_loc(self.bias)
         for atom, coeff in self.coeffs.items():
-            if coeff == 0:
-                continue
+            assert coeff != 0
             if coeff > 0:
                 min_val += coeff * atom.qint.min
                 max_val += coeff * atom.qint.max
@@ -63,7 +59,11 @@ class AffineInterval:
             return AffineInterval(self.coeffs.copy(), self.bias + other)
         new_coeffs = self.coeffs.copy()
         for k, v in other.coeffs.items():
-            new_coeffs[k] = new_coeffs.get(k, 0.0) + v
+            v += new_coeffs.get(k, 0.0)
+            if v == 0.0:
+                del new_coeffs[k]
+            else:
+                new_coeffs[k] = v
         return AffineInterval(new_coeffs, self.bias + other.bias)
 
     def __neg__(self):
@@ -71,32 +71,29 @@ class AffineInterval:
         return AffineInterval(new_coeffs, -self.bias)
 
     def __mul__(self, other):
-        if isinstance(other, AffineInterval):
-            raise TypeError('AffineInterval * AffineInterval is non-linear; use AffineInterval.new()')
-        if other == 0:
-            return AffineInterval({}, 0.0)
-        new_coeffs = {k: v * other for k, v in self.coeffs.items()}
+        assert isinstance(other, (int, float)), 'AffineInterval can only be multiplied by a scalar'
+        new_coeffs = {k: v * other for k, v in self.coeffs.items() if v * other != 0}
         return AffineInterval(new_coeffs, self.bias * other)
 
-    def __lshift__(self, other: int):
-        if not isinstance(other, int):
-            raise TypeError('Shift amount must be an integer')
-        return self * (2**other)
+    # def __lshift__(self, other: int):
+    #     if not isinstance(other, int):
+    #         raise TypeError('Shift amount must be an integer')
+    #     return self * (2**other)
 
-    def __rshift__(self, other: int):
-        return self.__lshift__(-other)
+    # def __rshift__(self, other: int):
+    #     return self.__lshift__(-other)
 
-    def __radd__(self, other):
-        return self.__add__(other)
+    # def __radd__(self, other):
+    #     return self.__add__(other)
 
-    def __sub__(self, other):
-        return self.__add__(-other)
+    # def __sub__(self, other):
+    #     return self.__add__(-other)
 
-    def __rmul__(self, other):
-        return self.__mul__(other)
+    # def __rmul__(self, other):
+    #     return self.__mul__(other)
 
-    def __repr__(self):
-        terms = [f'{v}*{k}' for k, v in self.coeffs.items()]
-        if self.bias:
-            terms.append(str(self.bias))
-        return f'AA({" + ".join(terms) if terms else "0"})'
+    # def __repr__(self):
+    #     terms = [f'{v}*{k}' for k, v in self.coeffs.items()]
+    #     if self.bias:
+    #         terms.append(str(self.bias))
+    #     return f'AA({" + ".join(terms) if terms else "0"})'
