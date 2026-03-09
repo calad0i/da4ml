@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from da4ml.codegen import HLSModel, RTLModel
-from da4ml.trace import FixedVariableArray, FixedVariableArrayInput, comb_trace
+from da4ml.trace import FixedVariableArray, comb_trace
 from da4ml.trace.ops import quantize, relu
 from da4ml.types import CombLogic
 
@@ -48,8 +48,8 @@ class OperationTest:
         data = np.random.randn(n_samples, *shape) * 32
         return data
 
-    def test_retrace(self, comb: CombLogic, inp: FixedVariableArray, test_data: np.ndarray):
-        inp2 = FixedVariableArrayInput(inp.shape).quantize(*inp.kif).as_new()
+    def test_retrace(self, comb: CombLogic):
+        inp2 = FixedVariableArray.from_kif(*comb.inp_kifs).as_new()
         out2 = comb(inp2, debug=True, quantize=True)  # type: ignore
         comb2 = comb_trace(inp2, out2)
         assert comb == comb2

@@ -1,4 +1,4 @@
-from ...types import CombLogic, Op
+from ...types import CombLogic, Op, QInterval
 from .dce import _index_remap
 
 
@@ -21,22 +21,31 @@ def is_used_in(comb: CombLogic) -> dict[int, set[int]]:
     return used_in
 
 
+def to_key(op: Op):
+    if op.opcode in (3, 4, 5):
+        return tuple(op)
+    else:
+        return op[:4]
+
+
 def common_subexpr_elimin(comb: CombLogic) -> CombLogic:
     if len(set(comb.ops)) == len(comb.ops):
         return comb
     new_ops = comb.ops.copy()
     used_in = is_used_in(comb)
     new_out_idxs = comb.out_idxs.copy()
-    seen: dict[Op, int] = {}
+    seen: dict[tuple, int] = {}
     for i, op in enumerate(new_ops):
-        if op not in seen:
-            seen[op] = i
+        k = to_key(op)
+        if k not in seen:
+            seen[k] = i
             continue
-        if op.opcode == 5:
-            continue
-
-        idx = seen[op]
-        redirect_all(used_in, new_ops, new_out_idxs, i, idx)
+        j = seen[k]
+        qint0, qint1 = new_ops[i].qint, new_ops[j].qint
+        qint = QInterval(max(qint0.min, qint1.min), min(qint0.max, qint1.max), max(qint0.step, qint1.step))
+        op = Op(op.id0, op.id1, op.opcode, op.data, qint, op.latency, op.cost)
+        new_ops[j] = op
+        redirect_all(used_in, new_ops, new_out_idxs, i, j)
 
     return CombLogic(
         comb.shape,

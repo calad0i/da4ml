@@ -10,7 +10,6 @@ def optimize(
     comb: CombLogic,
     keep_dead_inputs: bool = False,
 ) -> CombLogic:
-    comb = common_subexpr_elimin(comb)
     comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)
     comb = common_subexpr_elimin(comb)
     comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)

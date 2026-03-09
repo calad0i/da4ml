@@ -1,11 +1,19 @@
 import numpy as np
 
-from ...types import CombLogic
+from ...types import CombLogic, Op
 from .dce import _index_remap
 
 
+def to_index(op: Op) -> float:
+    if op.opcode == -1:
+        return -10.0
+    if op.opcode == 5:
+        return -5.0
+    return op.latency
+
+
 def order_by_latency(comb: CombLogic) -> CombLogic:
-    new_ops = np.argsort([op.latency for op in comb.ops], stable=True)
+    new_ops = np.argsort([to_index(op) for op in comb.ops], kind='stable')
     idx_map = {int(old_idx): int(new_idx) for new_idx, old_idx in enumerate(new_ops)}
     remapped_ops = [_index_remap(comb.ops[old_idx], idx_map) for old_idx in new_ops]
     new_out_idxs = [idx_map[idx] if idx >= 0 else -1 for idx in comb.out_idxs]

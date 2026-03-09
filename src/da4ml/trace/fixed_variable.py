@@ -301,7 +301,7 @@ class FixedVariable:
         self.latency = _latency
         self.cost = _cost
 
-        self._from = tuple(v if v.opr != 'const' else v._with(latency=self.latency) for v in self._from)
+        # self._from = tuple(v if v.opr != 'const' else v._with(latency=self.latency) for v in self._from)
 
     @property
     def low(self) -> float:
