@@ -1,6 +1,6 @@
-from da4ml._binary import get_lsb_loc, iceil_log2
-from da4ml.trace import HWConfig
-from da4ml.types import CombLogic, Op, QInterval
+from ..._binary import get_lsb_loc, iceil_log2
+from ...trace import HWConfig
+from ...types import CombLogic, Op, QInterval
 
 
 def overlap_counts(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool):

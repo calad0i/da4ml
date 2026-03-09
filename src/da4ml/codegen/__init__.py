@@ -1,9 +1,7 @@
 from .hls import HLSModel
-from .rtl import RTLModel, VerilogModel, VHDLModel
+from .rtl import RTLModel
 
 __all__ = [
     'HLSModel',
-    'VerilogModel',
-    'VHDLModel',
     'RTLModel',
 ]

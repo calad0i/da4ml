@@ -327,8 +327,6 @@ class CombLogic(NamedTuple):
 
         sf = 2.0 ** np.array(self.out_shifts, dtype=np.float64)  # type: ignore
         sign = np.where(self.out_negs, -1, 1)
-        out_idx = np.array(self.out_idxs, dtype=np.int32)
-        mask = np.where(out_idx < 0, 0, 1)
         if debug:
             operands = []
             for i, v in enumerate(buf):
@@ -377,7 +375,8 @@ class CombLogic(NamedTuple):
 
         if dump:
             return buf
-        return buf[out_idx] * sf * sign * mask
+        out_buf = np.array([buf[i] if i >= 0 else 0 for i in self.out_idxs])
+        return out_buf * sf * sign
 
     @property
     def kernel(self):

@@ -48,8 +48,8 @@ def to_da4ml(
     if flavor in ('verilog', 'vhdl'):
         da_model = RTLModel(
             comb,
-            'model',
             path,
+            'model',
             flavor=flavor,
             latency_cutoff=latency_cutoff,
             print_latency=True,
@@ -60,8 +60,8 @@ def to_da4ml(
     else:
         da_model = HLSModel(
             comb,
-            'model',
             path,
+            'model',
             flavor=flavor,
             print_latency=True,
             clock_uncertainty=unc / 100,
@@ -223,6 +223,13 @@ def _add_convert_args(parser: argparse.ArgumentParser):
         nargs=3,
         default=None,
         help='Input precision in KIF format (keep_neg, int bits, frac bits), if known.',
+    )
+    parser.add_argument(
+        '--n-stages',
+        '-ns',
+        type=int,
+        default=-1,
+        help='Number of pipeline stages for pipelining. If set to positive, it will override latency cutoff and pipeline into exactly this many stages.',
     )
 
 

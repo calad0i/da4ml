@@ -24,7 +24,7 @@ def get_io_kifs(sol: CombLogic | Pipeline):
     return np.array(inp_kifs, np.int8), np.array(out_kifs, np.int8)
 
 
-def binder_gen(csol: Pipeline | CombLogic, module_name: str, II: int = 1, latency_multiplier: int = 1):
+def binder_gen(csol: Pipeline | CombLogic, module_name: str, II: int = 1):
     k_in, i_in, f_in = zip(*map(minimal_kif, csol.inp_qint))
     k_out, i_out, f_out = zip(*map(minimal_kif, csol.out_qint))
     max_inp_bw = max(k_in) + max(i_in) + max(f_in)
@@ -32,7 +32,7 @@ def binder_gen(csol: Pipeline | CombLogic, module_name: str, II: int = 1, latenc
     if isinstance(csol, CombLogic):
         II = latency = 0
     else:
-        latency = len(csol.solutions) * latency_multiplier
+        latency = len(csol.solutions)
 
     n_in, n_out = csol.shape
     return f"""#include <cstddef>
@@ -74,25 +74,58 @@ class at_path:
         os.chdir(self._orig_cwd)  # type: ignore
 
 
+def canon_name(name: str) -> str:
+    return re.sub(r'\W|^(?=\d)', '_', name)
+
+
 class RTLModel:
     def __init__(
         self,
-        solution: CombLogic | Pipeline,
-        prj_name: str,
+        logic: CombLogic | Pipeline,
         path: str | Path,
+        prj_name: str | None = None,
         flavor: str = 'verilog',
+        n_stages: int = -1,
         latency_cutoff: float = -1,
         print_latency: bool = True,
         part_name: str = 'xcvu13p-flga2577-2-e',
         clock_period: float = 5,
         clock_uncertainty: float = 0.1,
         io_delay_minmax: tuple[float, float] = (0.2, 0.4),
-        register_layers: int = 1,
     ):
+        """Class for generating RTL code and emulator from a CombLogic or Pipeline solution.
+
+        Parameters
+        ----------
+        solution : CombLogic | Pipeline
+            The logic object represented in DAIS to be converted to RTL.
+        path : str | Path
+            The path to save the generated RTL project. The directory will be created if it does not exist.
+        prj_name : str | None, optional
+            Top module name of the generated RTL. If None, canonicalized name of the directory will be used. Default is None.
+        flavor : str, optional
+            Either 'verilog' or 'vhdl'. Default is 'verilog'.
+        n_stages : int, optional
+            Number of pipeline stages of the generated RTL. If negative, it will be determined by latency_cutoff.
+            If both n_stages and latency_cutoff are not specified, the generated RTL will be purely combinational. Default is -1.
+        latency_cutoff : float, optional
+            Latency cutoff for determining the number of stages. Only used if n_stages is -1. Default is -1.
+        print_latency : bool, optional
+            Whether to print the latency of each stage in the generated RTL. Default is True.
+        part_name : str, optional
+            Device part name used in default OOC scripts. Default is 'xcvu13p-flga2577-2-e'.
+        clock_period : float, optional
+            Clock period in ns used in default OOC scripts. Default is 5.
+        clock_uncertainty : float, optional
+            Clock uncertainty in ns used in default OOC scripts. Default is 0.1.
+        io_delay_minmax : tuple[float, float], optional
+            Minimum and maximum IO delay in ns used in default OOC scripts. Default is (0.2, 0.4).
+        """
         self._flavor = flavor.lower()
-        self._solution = solution
+        self._solution = logic
         self._path = Path(path).resolve()
-        self._prj_name = prj_name
+        self._prj_name = prj_name or canon_name(self._path.stem)
+        self._n_stages = n_stages
         self._latency_cutoff = latency_cutoff
         self._print_latency = print_latency
         self.__src_root = Path(rtl.__file__).parent
@@ -100,15 +133,17 @@ class RTLModel:
         self._clock_period = clock_period
         self._clock_uncertainty = clock_uncertainty
         self._io_delay_minmax = io_delay_minmax
-        self._register_layers = register_layers
         self._place_holder = False
 
         assert self._flavor in ('vhdl', 'verilog'), f'Unsupported flavor {flavor}, only vhdl and verilog are supported.'
 
-        self._pipe = solution if isinstance(solution, Pipeline) else None
-        if latency_cutoff > 0 and self._pipe is None:
-            assert isinstance(solution, CombLogic)
-            self._pipe = to_pipeline(solution, latency_cutoff, verbose=False)
+        self._pipe = logic if isinstance(logic, Pipeline) else None
+
+        if (latency_cutoff > 0 or n_stages > 0) and self._pipe is None:
+            _latency_cutoff = latency_cutoff if latency_cutoff > 0 else None
+            _n_stages = n_stages if n_stages > 0 else None
+            assert isinstance(logic, CombLogic)
+            self._pipe = to_pipeline(logic, _n_stages, _latency_cutoff, verbose=False)
 
         if self._pipe is not None:
             # get actual latency cutoff
@@ -159,7 +194,7 @@ class RTLModel:
 
             if not self._place_holder:
                 # Main logic
-                codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
+                codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency)
 
                 # Table memory files
                 memfiles: dict[str, str] = {}
@@ -185,7 +220,7 @@ class RTLModel:
                     f.write(constraint)
 
             # C++ binder w/ HDL wrapper for uniform bw
-            binder = binder_gen(self._pipe, f'{self._prj_name}_wrapper', 1, self._register_layers)
+            binder = binder_gen(self._pipe, f'{self._prj_name}_wrapper', 1)
 
             # Verilog IO wrapper (non-uniform bw to uniform one, clk passthrough)
             io_wrapper = generate_io_wrapper(self._pipe, self._prj_name, True)
@@ -426,12 +461,11 @@ class RTLModel:
         in_bits, out_bits = np.sum(kifs_in), np.sum(kifs_out)
         if self._pipe is not None:
             n_stage = len(self._pipe[0])
-            delay_suffix = '' if self._register_layers == 1 else f'x {self._register_layers} '
             lat_cutoff = self._latency_cutoff
             reg_bits = self._pipe.reg_bits
             spec = f"""Top Module: {self._prj_name}\n====================
 {inp_size} ({in_bits} bits) -> {out_size} ({out_bits} bits)
-{n_stage} {delay_suffix}stages @ max_delay={lat_cutoff}
+{n_stage} stages @ max_delay={lat_cutoff}
 Estimated cost: {cost} LUTs, {reg_bits} FFs"""
 
         else:
@@ -448,61 +482,3 @@ Estimated cost: {cost} LUTs"""
         else:
             spec += '\nEmulator is **not compiled**'
         return spec
-
-
-class VerilogModel(RTLModel):
-    def __init__(
-        self,
-        solution: CombLogic | Pipeline,
-        prj_name: str,
-        path: str | Path,
-        latency_cutoff: float = -1,
-        print_latency: bool = True,
-        part_name: str = 'xcvu13p-flga2577-2-e',
-        clock_period: float = 5,
-        clock_uncertainty: float = 0.1,
-        io_delay_minmax: tuple[float, float] = (0.2, 0.4),
-        register_layers: int = 1,
-    ):
-        self._hdl_model = super().__init__(
-            solution,
-            prj_name,
-            path,
-            'verilog',
-            latency_cutoff,
-            print_latency,
-            part_name,
-            clock_period,
-            clock_uncertainty,
-            io_delay_minmax,
-            register_layers,
-        )
-
-
-class VHDLModel(RTLModel):
-    def __init__(
-        self,
-        solution: CombLogic | Pipeline,
-        prj_name: str,
-        path: str | Path,
-        latency_cutoff: float = -1,
-        print_latency: bool = True,
-        part_name: str = 'xcvu13p-flga2577-2-e',
-        clock_period: float = 5,
-        clock_uncertainty: float = 0.1,
-        io_delay_minmax: tuple[float, float] = (0.2, 0.4),
-        register_layers: int = 1,
-    ):
-        self._hdl_model = super().__init__(
-            solution,
-            prj_name,
-            path,
-            'vhdl',
-            latency_cutoff,
-            print_latency,
-            part_name,
-            clock_period,
-            clock_uncertainty,
-            io_delay_minmax,
-            register_layers,
-        )

@@ -1,181 +1,137 @@
-from math import floor
+from math import ceil
 
-from ..types import CombLogic, Op, Pipeline
-from .fixed_variable import FixedVariable, HWConfig
-from .tracer import comb_trace
+import numpy as np
 
+from da4ml.types import CombLogic, Op, Pipeline
 
-def retime_pipeline(csol: Pipeline, verbose=True):
-    n_stages = len(csol[0])
-    cutoff_high = max(max(sol.out_latency) / (i + 1) for i, sol in enumerate(csol[0]))
-    cutoff_low = max(csol.out_latencies) / n_stages
-    adder_size, carry_size = csol[0][0].adder_size, csol[0][0].carry_size
-    best = csol
-    while cutoff_high - cutoff_low > 1:
-        cutoff = (cutoff_high + cutoff_low) // 2
-        _hwconf = HWConfig(adder_size, carry_size, cutoff)
-        inp = [FixedVariable(*qint, hwconf=_hwconf) for qint in csol.inp_qint]
-        try:
-            out = list(csol(inp))
-        except AssertionError:
-            cutoff_low = cutoff
-            continue
-        _sol = to_pipeline(comb_trace(inp, out), cutoff, retiming=False)
-        if len(_sol[0]) > n_stages:
-            cutoff_low = cutoff
-        else:
-            cutoff_high = cutoff
-            best = _sol
-    if verbose:
-        print(f'actual cutoff: {cutoff_high}')
-    return best
+from .passes import dead_code_elimin
 
 
-def _get_new_idx(
-    idx: int,
-    locator: list[dict[int, int]],
-    opd: dict[int, list[Op]],
-    out_idxd: dict[int, list[int]],
-    ops: list[Op],
-    stage: int,
-    latency_cutoff: float,
-):
-    if idx < 0:
-        return idx
-    p0_stages = locator[idx].keys()
-    if stage not in p0_stages:
-        # Need to copy parent to later states
-        p0_stage = max(p0_stages)
-        p0_idx = locator[idx][p0_stage]
-        for j in range(p0_stage, stage):
-            op0 = ops[idx]
-            latency = float(latency_cutoff * (j + 1))
-            out_idxd.setdefault(j, []).append(locator[idx][j])
-            _copy_op = Op(len(out_idxd[j]) - 1, -1, -1, 0, op0.qint, latency, 0.0)
-            opd.setdefault(j + 1, []).append(_copy_op)
-            p0_idx = len(opd[j + 1]) - 1
-            locator[idx][j + 1] = p0_idx
+def _index_remap(op: Op, idx_map: dict[int, int]) -> Op:
+    if op.opcode == -1:
+        return op
+    id0 = op.id0
+    id1 = op.id1
+    id0 = idx_map.get(id0, id0)
+    id1 = idx_map.get(id1, id1)
+    if op.opcode == 6:  # msb_mux
+        id_c = op.data & 0xFFFFFFFF
+        shift = (op.data >> 32) & 0xFFFFFFFF
+        id_c = idx_map.get(id_c, id_c)
+        data = id_c + (shift << 32)
     else:
-        p0_idx = locator[idx][stage]
-    return p0_idx
+        data = op.data
+    return Op(id0, id1, op.opcode, data, op.qint, op.latency, op.cost)
 
 
-def to_pipeline(comb: CombLogic, latency_cutoff: float, retiming=True, verbose=True) -> Pipeline:
+def to_pipeline(comb: CombLogic, n_stages: int | None = None, latency_cutoff: float | None = None, verbose=True) -> Pipeline:
     """Split the record into multiple stages based on the latency of the operations.
     Only useful for HDL generation.
+    Exactly one of n_stages and latency_cutoff must be specified.
 
     Parameters
     ----------
     sol : CombLogic
         The combinational logic to be pipelined into multiple stages.
+    n_stages : int|None
+        The number of stages to split the operations into. If None, it will be determined by the latency_cutoff. Default is None.
     latency_cutoff : float
-        The latency cutoff for splitting the operations.
-    retiming : bool
-        Whether to retime the solution after splitting. Default is True.
-        If False, new stages are created when the propagation latency exceeds the cutoff.
-        If True, after the first round of splitting, the solution is retimed balance the delay within each stage.
+        The latency cutoff for splitting the operations. If None, it will be determined by the n_stages. Default is None.
     verbose : bool
         Whether to print the actual cutoff used for splitting. Only used if rebalance is True.
         Default is True.
 
     Returns
     -------
-    CascadedSolution
+    Pipeline
         The cascaded solution with multiple stages.
     """
-    assert len(comb.ops) > 0, 'No operations in the record'
-    for i, op in enumerate(comb.ops):
-        if op.id1 != -1:
-            break
 
-    def get_stage(op: Op):
-        return floor(op.latency / (latency_cutoff + 1e-9)) if latency_cutoff > 0 else 0
+    assert (n_stages is not None) + (latency_cutoff is not None) == 1, (
+        'Exactly one of n_stages and latency_cutoff must be specified.'
+    )
+    latencies = [op.latency for op in comb.ops]
+    assert np.all(np.diff(latencies) >= 0), 'Operations must be sorted by latency in descending order.'
+    _latency = latencies[-1]
+    n_stages = n_stages if n_stages is not None else max(ceil(_latency / latency_cutoff), 1)  # type: ignore
+    assert n_stages > 0, 'Number of stages must be greater than 0.'
+    lat_cutoffs = np.linspace(0, _latency, n_stages + 1)[1:]
+    split_idxs = [0] + np.searchsorted(latencies, lat_cutoffs, side='right').tolist()
+    if verbose:
+        print(f'Latency cutoffs for splitting: {lat_cutoffs.tolist()}')
 
-    opd: dict[int, list[Op]] = {}
-    out_idxd: dict[int, list[int]] = {}
+    staged_ops = [comb.ops[i:j] for i, j in zip(split_idxs[:-1], split_idxs[1:])]
 
-    locator: list[dict[int, int]] = []
+    ext_req_idx: list[list[int]] = []
+    'all idxs required by this or later stages from earlier stages'
+    last_req = set(comb.out_idxs) - {-1}
+    for ii in range(len(staged_ops) - 1, -1, -1):
+        _req = {i for op in staged_ops[ii] for i in op.input_ids}
+        _all_req = last_req.union(_req)
+        _ext_req = {i for i in _all_req if i < split_idxs[ii]}
+        last_req = _ext_req
+        ext_req_idx.append(sorted(_ext_req))
+    ext_req_idx = ext_req_idx[::-1] + [comb.out_idxs]
 
-    ops = comb.ops.copy()
-    lat = max(ops[i].latency for i in comb.out_idxs)
-    for i in comb.out_idxs:
-        op_out = ops[i]
-        ops.append(Op(i, -1001, -1001, 0, op_out.qint, lat, 0.0))
+    index_maps: list[dict[int, int]] = []
+    staged_ops_remap: list[list[Op]] = []
+    for ii, _ops in enumerate(staged_ops):
+        index_map: dict[int, int] = {}
+        'global idx -> local idx'
+        ops: list[Op] = []
+        inp_idx = 0
+        for i, gi in enumerate(ext_req_idx[ii]):
+            _op = comb.ops[gi]
+            index_map[gi] = i
+            if _op.opcode != 5:
+                ops.append(Op(inp_idx, -1, -1, 0, _op.qint, _op.latency, 0))
+                inp_idx += 1
+            else:
+                ops.append(_op)  # const copy
+        index_maps.append(index_map)
 
-    for i, op in enumerate(ops):
-        stage = get_stage(op)
-        if op.opcode == -1:
-            # Copy from external buffer
-            opd.setdefault(stage, []).append(op)
-            locator.append({stage: len(opd[stage]) - 1})
-            continue
+        global_base_idx = split_idxs[ii]
+        local_base_idx = len(ext_req_idx[ii])
+        for i, op in enumerate(_ops):
+            ops.append(_index_remap(op, index_map))
+            index_map[global_base_idx + i] = local_base_idx + i
+        staged_ops_remap.append(ops)
 
-        p0_idx = _get_new_idx(op.id0, locator, opd, out_idxd, ops, stage, latency_cutoff)
-        p1_idx = _get_new_idx(op.id1, locator, opd, out_idxd, ops, stage, latency_cutoff)
-        if op.opcode in (6, -6):
-            k = op.data & 0xFFFFFFFF
-            _shift = (op.data >> 32) & 0xFFFFFFFF
-            k = _get_new_idx(k, locator, opd, out_idxd, ops, stage, latency_cutoff)
-            data = _shift << 32 | k
+    ext_req_idx = [[i for i in req if i < 0 or comb.ops[i].opcode != 5] for req in ext_req_idx]
+    # const vars copied to individual stages
+
+    combs: list[CombLogic] = []
+    for ii, ops in enumerate(staged_ops_remap):
+        if ii == 0:
+            inp_shifts = comb.inp_shifts
+            n_in = comb.shape[0]
         else:
-            data = op.data
-
-        if p1_idx == -1001:
-            # Output to external buffer
-            out_idxd.setdefault(stage, []).append(p0_idx)
-        else:
-            _Op = Op(p0_idx, p1_idx, op.opcode, data, op.qint, op.latency, op.cost)
-            opd.setdefault(stage, []).append(_Op)
-            locator.append({stage: len(opd[stage]) - 1})
-    sols = []
-    max_stage = max(opd.keys())
-    n_in = comb.shape[0]
-    for stage in range(len(opd.keys())):
-        _ops = opd[stage]
-        _out_idx = out_idxd[stage]
-        n_out = len(_out_idx)
-
-        if stage == max_stage:
+            n_in = len(ext_req_idx[ii])
+            inp_shifts = [0] * n_in
+        index_map = index_maps[ii]
+        if ii == n_stages - 1:
+            out_idxs = [index_map[i] for i in comb.out_idxs]
+            n_out = len(out_idxs)
             out_shifts = comb.out_shifts
             out_negs = comb.out_negs
         else:
-            out_shifts = [0] * len(_out_idx)
-            out_negs = [False] * len(_out_idx)
+            out_idxs = [index_map[i] for i in ext_req_idx[ii + 1]]
+            print(ii, ext_req_idx[ii + 1])
+            n_out = len(out_idxs)
+            out_shifts = [0] * n_out
+            out_negs = [False] * n_out
 
-        if comb.lookup_tables is not None:
-            _ops, lookup_tables = remap_table_idxs(comb, _ops)
-        else:
-            lookup_tables = None
-        _sol = CombLogic(
+        _comb = CombLogic(
             shape=(n_in, n_out),
-            inp_shifts=[0] * n_in,
-            out_idxs=_out_idx,
+            inp_shifts=inp_shifts,
+            out_idxs=out_idxs,
             out_shifts=out_shifts,
             out_negs=out_negs,
-            ops=_ops,
+            ops=ops,
             carry_size=comb.carry_size,
             adder_size=comb.adder_size,
-            lookup_tables=lookup_tables,
+            lookup_tables=comb.lookup_tables,
         )
-        sols.append(_sol)
+        combs.append(dead_code_elimin(_comb))
 
-        n_in = n_out
-    csol = Pipeline(tuple(sols))
-
-    if retiming:
-        csol = retime_pipeline(csol, verbose=verbose)
-    return csol
-
-
-def remap_table_idxs(comb: CombLogic, _ops):
-    assert comb.lookup_tables is not None
-    table_idxs = sorted(list({op.data for op in _ops if op.opcode == 8}))
-    remap = {j: i for i, j in enumerate(table_idxs)}
-    _ops_remap = []
-    for op in _ops:
-        if op.opcode == 8:
-            op = Op(op.id0, op.id1, op.opcode, remap[op.data], op.qint, op.latency, op.cost)
-        _ops_remap.append(op)
-    _ops = _ops_remap
-    lookup_tables = tuple(comb.lookup_tables[i] for i in table_idxs)
-    return _ops, lookup_tables
+    return Pipeline(tuple(combs))

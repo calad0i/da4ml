@@ -5,6 +5,7 @@ from typing import TypeVar
 import numpy as np
 from numpy.typing import NDArray
 
+from .._binary import get_lsb_loc
 from ..cmvm import solve, solver_options_t
 from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, LookupTable, QInterval
 from .ops import _quantize, einsum, reduce, sort
@@ -262,7 +263,7 @@ class FixedVariableArray:
         solver_options: solver_options_t | None = None,
         hwconf: HWConfig | tuple[int, int, int] | None = None,
     ):
-        _vars = np.array(vars)
+        _vars = np.array(vars, dtype=object)
         _vars_f = _vars.ravel()
         if hwconf is None:
             hwconf = next(iter(v for v in _vars_f if isinstance(v, FixedVariable))).hwconf
@@ -270,7 +271,8 @@ class FixedVariableArray:
         self.hwconf = hwconf
         for i, v in enumerate(_vars_f):
             if not isinstance(v, FixedVariable):
-                _vars_f[i] = FixedVariable(float(v), float(v), 1.0, hwconf=hwconf)
+                v = float(v)
+                _vars_f[i] = FixedVariable(v, v, 2 ** get_lsb_loc(v), hwconf=hwconf)
         self._vars = _vars
         _solver_options = solver_options.copy() if solver_options is not None else {}
         _solver_options.pop('qintervals', None)

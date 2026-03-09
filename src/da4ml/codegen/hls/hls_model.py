@@ -18,6 +18,7 @@ from da4ml.types import CombLogic
 
 from ...types import minimal_kif
 from .. import hls
+from ..rtl.rtl_model import canon_name
 
 T = TypeVar('T', bound=np.floating)
 
@@ -26,8 +27,8 @@ class HLSModel:
     def __init__(
         self,
         solution: CombLogic,
-        prj_name: str,
         path: str | Path,
+        prj_name: str | None = None,
         flavor: str = 'vitis',
         print_latency: bool = True,
         part_name: str = 'xcvu13p-flga2577-2-e',
@@ -39,8 +40,8 @@ class HLSModel:
         inline_header: bool = True,
     ):
         self._solution = solution
-        self._prj_name = prj_name
         self._path = Path(path).resolve()
+        self._prj_name = prj_name or canon_name(self._path.stem)
         self._flavor = flavor.lower()
         assert self._flavor in ('vitis', 'hlslib', 'oneapi'), f'Unsupported HLS flavor: {self._flavor}'
         self._print_latency = print_latency
@@ -53,6 +54,10 @@ class HLSModel:
         self._uuid = None
         self._namespace = namespace
         self._inline_static_header = inline_header
+
+        print('===========================')
+        print(self._path.stem)
+        print(canon_name(self._path.stem))
 
         if pragma is None:
             if self._flavor == 'vitis':

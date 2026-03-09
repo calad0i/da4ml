@@ -7,34 +7,20 @@ def pipeline_logic_gen(
     name: str,
     print_latency=False,
     timescale: str | None = None,
-    register_layers: int = 1,
 ):
     N = len(csol.solutions)
     inp_bits = [sum(map(sum, map(minimal_kif, sol.inp_qint))) for sol in csol.solutions]
     out_bits = inp_bits[1:] + [sum(map(sum, map(minimal_kif, csol.out_qint)))]
 
     registers = [f'signal stage{i}_inp:std_logic_vector({width - 1} downto 0);' for i, width in enumerate(inp_bits)]
-    for i in range(0, register_layers - 1):
-        registers += [f'signal stage{j}_inp_copy{i}:std_logic_vector({width - 1} downto 0);' for j, width in enumerate(inp_bits)]
     wires = [f'signal stage{i}_out:std_logic_vector({width - 1} downto 0);' for i, width in enumerate(out_bits)]
 
     comb_logic = [
         f'stage{i}:entity work.{name}_stage{i} port map(model_inp=>stage{i}_inp,model_out=>stage{i}_out);' for i in range(N)
     ]
 
-    if register_layers == 1:
-        serial_logic = ['stage0_inp <= model_inp;']
-        serial_logic += [f'stage{i}_inp <= stage{i - 1}_out;' for i in range(1, N)]
-    else:
-        serial_logic = ['stage0_inp_copy0 <= model_inp;']
-        for j in range(1, register_layers - 1):
-            serial_logic.append(f'stage0_inp_copy{j} <= stage0_inp_copy{j - 1};')
-        serial_logic.append(f'stage0_inp <= stage0_inp_copy{register_layers - 2};')
-        for i in range(1, N):
-            serial_logic.append(f'stage{i}_inp_copy0 <= stage{i - 1}_out;')
-            for j in range(1, register_layers - 1):
-                serial_logic.append(f'stage{i}_inp_copy{j} <= stage{i}_inp_copy{j - 1};')
-            serial_logic.append(f'stage{i}_inp <= stage{i}_inp_copy{register_layers - 2};')
+    serial_logic = ['stage0_inp <= model_inp;']
+    serial_logic += [f'stage{i}_inp <= stage{i - 1}_out;' for i in range(1, N)]
 
     serial_logic += [f'model_out <= stage{N - 1}_out;']
 

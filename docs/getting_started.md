@@ -37,7 +37,7 @@ out = operation(inp)
 # Generate pipelined Verilog code form the traced operation
 # flavor can be 'verilog' or 'vhdl'. VHDL code generated will be in 2008 standard.
 comb_logic = comb_trace(inp, out)
-rtl_model = RTLModel(comb_logic, 'vmodel', '/tmp/rtl', flavor='verilog', latency_cutoff=5) # can also be HLSModel
+rtl_model = RTLModel(comb_logic, '/tmp/rtl', flavor='verilog', latency_cutoff=5) # can also be HLSModel
 rtl_model.write()
 # rtl_model.compile() # compile the generated Verilog code with verilator (with GHDL, if using vhdl)
 # rtl_model.predict(data_inp) # run inference with the compiled model; bit-accurate
@@ -56,7 +56,7 @@ For models defined in [HGQ2](https://github.com/calad0i/HGQ2) (Keras3 based), da
 import numpy as np
 import keras
 from hgq.layers import QEinsumDenseBatchnorm, QMaxPool1D
-from da4ml.codegen import HLSModel, VerilogModel
+from da4ml.codegen import HLSModel, RTLModel
 from da4ml.converter import trace_model
 from da4ml.trace import comb_trace
 
