@@ -827,10 +827,18 @@ class FixedVariable:
 
     def __gt__(self, other: 'FixedVariable|float|int'):
         """Get a variable that is 1 if this variable is greater than other, else 0."""
+        if not isinstance(other, FixedVariable) or other.opr == 'const':
+            _other = float(other) if not isinstance(other, FixedVariable) else other.low
+            if self.low == _other:
+                return self._ne(other)
         return (self - other).is_positive()
 
     def __lt__(self, other: 'FixedVariable|float|int'):
         """Get a variable that is 1 if this variable is less than other, else 0."""
+        if not isinstance(other, FixedVariable) or other.opr == 'const':
+            _other = float(other) if not isinstance(other, FixedVariable) else other.low
+            if self.high == _other:
+                return self._ne(other)
         return (other - self).is_positive()
 
     def __ge__(self, other: 'FixedVariable|float|int'):
@@ -981,20 +989,26 @@ class FixedVariable:
             qint1 = QInterval(float(other.low), float(other.high), float(other.step))
             v = _binary_bit_op(float(self.low), float(other.low), ops[_type], qint0, qint1, qint)
             return self.from_const(v, hwconf=self.hwconf)
-        if self.opr == 'const' and self.low == 0:
-            if _type == 'and':
-                return self
-            if _type == 'or' or _type == 'xor':
-                return other
-        if other.opr == 'const' and other.low == 0:
+        if self.opr == 'const' and other.opr != 'const':
             return other.binary_bit_op(self, _type)
-        _data = ops[_type]
-        if other.opr == 'const' and other.low == 0:
-            if _type == 'and':
-                return self.from_const(0, hwconf=self.hwconf)
-            if _type == 'or' or _type == 'xor':
-                return self
 
+        if other.opr == 'const':
+            if other.low == 0:  # 0
+                if _type == 'and':
+                    return other
+                if _type == 'or' or _type == 'xor':
+                    return self
+            _ones_neg = -self.step
+            _ones_pos = (2.0**i) - self.step
+            if (k == 0 and other.low == _ones_pos) or (k == 1 and other.low == _ones_neg):
+                if _type == 'and':
+                    return self
+                if _type == 'or':
+                    return other
+                if _type == 'xor':
+                    return self.unary_bit_op('not')
+
+        _data = ops[_type]
         return FixedVariable(
             *qint, hwconf=self.hwconf, opr='bit_binary', _data=_data, _from=(self, other), _factor=abs(self._factor)
         )
@@ -1029,7 +1043,7 @@ class FixedVariable:
     def _ne(self, other):
         if not isinstance(other, FixedVariable):
             other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
-        return (self - other).unary_bit_op('any')
+        return (self ^ other).unary_bit_op('any')
 
     def _eq(self, other):
         return ~(self._ne(other))
