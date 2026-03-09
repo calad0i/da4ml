@@ -6,7 +6,7 @@ import numpy as np
 
 from .._binary import get_lsb_loc
 from ..types import CombLogic, Op, QInterval
-from .fixed_variable import FixedVariable, table_context
+from .fixed_variable import FixedVariable
 from .passes import optimize as _optimize
 
 
@@ -63,18 +63,8 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
     variables = gather_variables(inputs, outputs)
     ops: list[Op] = []
     inp_uuids = {v.id: i for i, v in enumerate(inputs)}
+    table_id_map: dict[str, int] = {}
     lookup_tables = []
-
-    table_map: dict[int, int] = {}
-    for v in variables:
-        if not v.opr == 'lookup':
-            continue
-        assert v._data is not None
-        idx = int(v._data)
-        if idx in table_map:
-            continue
-        table_map[idx] = len(lookup_tables)
-        lookup_tables.append(table_context.get_table_from_index(idx))
 
     index: dict[UUID, int] = {}
     needs_neg = needs_negative(variables, outputs)
@@ -152,9 +142,16 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 v0 = v._from[0]
                 id0 = index[v0.id]
                 data = v._data
-                assert data is not None, 'lookup must have data'
                 assert id0 < ii, f'{id0} {ii} {v.id}'
-                op = Op(id0, -1, opcode, table_map[int(data)], v.unscaled.qint, v.latency, v.cost)
+                assert v._table is not None, 'lookup must have a table'
+                tb_bash = v._table.spec.hash
+                if tb_bash in table_id_map:
+                    data = table_id_map[tb_bash]
+                else:
+                    data = len(table_id_map)
+                    table_id_map[tb_bash] = data
+                    lookup_tables.append(v._table)
+                op = Op(id0, -1, opcode, data, v.unscaled.qint, v.latency, v.cost)
             case 'bit_unary':
                 v0 = v._from[0]
                 id0 = index[v0.id] + (v._factor < 0)

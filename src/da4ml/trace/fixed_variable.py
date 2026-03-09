@@ -26,34 +26,6 @@ class HWConfig(NamedTuple):
 ufunc_t = Callable[[NDArray[np.floating]], NDArray[np.floating]]
 
 
-class TraceContext:
-    _tables: 'dict[str, tuple[LookupTable, int]]' = {}
-    hwconf: HWConfig = HWConfig(1, -1, -1)
-    _table_counter = 0
-
-    def register_table(self, table: 'LookupTable|np.ndarray'):
-        if isinstance(table, np.ndarray):
-            table = LookupTable(table)
-        if table.spec.hash in self._tables:
-            return self._tables[table.spec.hash]
-        self._tables[table.spec.hash] = (table, self._table_counter)
-
-        self._table_counter += 1
-        return self._tables[table.spec.hash]
-
-    def index_table(self, hash: str) -> int:
-        return self._tables[hash][1]
-
-    def get_table_from_index(self, index: int) -> 'LookupTable':
-        for table, idx in self._tables.values():
-            if idx == index:
-                return table
-        raise KeyError(f'No table found with index {index}')
-
-
-table_context = TraceContext()
-
-
 @dataclass
 class TableSpec:
     hash: str
@@ -259,6 +231,7 @@ class FixedVariable:
         _data: int | None = None,
         _id: UUID | None = None,
         _affine: AffineInterval | None = None,
+        _table: LookupTable | None = None,
     ) -> None:
         self._factor = float(_factor)
         self._from: tuple[FixedVariable, ...] = _from
@@ -266,6 +239,7 @@ class FixedVariable:
         self._data = _data
         self.id = _id or UUID(int=rd.getrandbits(128), version=4)
         self.hwconf = HWConfig(*hwconf)
+        self._table = _table
 
         if _affine is not None:
             assert low is None and high is None and step is None, 'Cannot specify both affine and low/high/step'
@@ -535,7 +509,7 @@ class FixedVariable:
             v1, p1 = variables.pop()
             v2, p2 = variables.pop()
             v, p = v1 + v2, p1 + p2
-            variables.append((v, p))
+            variables.append((v, p))  # type: ignore
         return variables[0][0]
 
     def _var_mul(self, other: 'FixedVariable') -> 'FixedVariable':
@@ -573,17 +547,7 @@ class FixedVariable:
         other = float(other)
 
         _affine = self._affine * other
-        return FixedVariable(
-            _affine=_affine,
-            _from=self._from,
-            _factor=self._factor * other,
-            opr=self.opr,
-            latency=self.latency,
-            cost=self.cost,
-            _id=self.id,
-            _data=self._data,
-            hwconf=self.hwconf,
-        )
+        return self._with(_affine=_affine, _factor=self._factor * other, renew_id=False)
 
     def __lshift__(self, other: int):
         assert isinstance(other, int), 'Shift amount must be an integer'
@@ -960,16 +924,12 @@ class FixedVariable:
             if self._factor < 0:
                 table = table[::-1]
 
-        _table, table_id = table_context.register_table(table)
-        table_id = int(table_id)
+        if isinstance(table, np.ndarray):
+            spec, table = to_spec(table)
+            table = LookupTable(table, spec)
 
         return FixedVariable(
-            *_table.spec.out_qint,
-            _from=(self,),
-            _factor=1.0,
-            opr='lookup',
-            hwconf=self.hwconf,
-            _data=table_id,
+            *table.spec.out_qint, _from=(self,), _factor=1.0, opr='lookup', hwconf=self.hwconf, _data=None, _table=table
         )
 
     def unary_bit_op(self, _type: str):
