@@ -12,6 +12,9 @@ from numpy.typing import NDArray
 
 from ._binary import dais_interp_run, iceil_log2
 
+DAIS_SPEC_VERSION = 2
+
+
 if TYPE_CHECKING:
     from .trace import FixedVariable, FixedVariableArray
     from .trace.fixed_variable import LookupTable
@@ -450,12 +453,20 @@ class CombLogic(NamedTuple):
 
     def save(self, path: str | Path):
         """Save the solution to a file."""
+        dump = {'model': self, 'meta': 'DAISModel', 'spec_version': DAIS_SPEC_VERSION}
         with open(path, 'w') as f:
-            json.dump(self, f, cls=JSONEncoder, separators=(',', ':'))
+            json.dump(dump, f, cls=JSONEncoder, separators=(',', ':'))
 
     @classmethod
-    def deserialize(cls, data: list):
-        """Load the solution from a file."""
+    def deserialize(cls, dump: dict):
+        """Load DAIS from a serialized dictionary."""
+
+        assert dump['meta'] == 'DAISModel', f'Unknown model type {dump["meta"]}'
+        assert dump['spec_version'] == DAIS_SPEC_VERSION, (
+            f'Unsupported spec version {dump["spec_version"]}: expected {DAIS_SPEC_VERSION}'
+        )
+        data = dump['model']
+
         ops = []
         for _op in data[5]:
             op = Op(*_op[:4], QInterval(*_op[4]), *_op[5:])  # type: ignore
@@ -507,7 +518,6 @@ class CombLogic(NamedTuple):
         return ref_count
 
     def to_binary(self, version: int = 0) -> NDArray[np.int32]:
-        DAIS_SPEC_VERSION = 2
         n_in, n_out = self.shape
         header_size_i32 = 6 + n_in + n_out * 3
         n_tables = len(self.lookup_tables) if self.lookup_tables is not None else 0

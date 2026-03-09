@@ -39,7 +39,11 @@ def to_da4ml(
         comb = comb_trace(inp, out)
 
     elif model_path.suffix == '.json':
-        comb = CombLogic.load(model_path)
+        with open(model_path) as f:
+            data = json.load(f)
+        if data.get('meta', None) != 'DAISModel':
+            raise ValueError('Unknown model type in JSON file.')
+        comb = CombLogic.deserialize(data)
         model = None  # type: ignore
 
     else:
