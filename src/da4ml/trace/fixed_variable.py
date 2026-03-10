@@ -37,14 +37,20 @@ class TableSpec:
         return minimal_kif(self.out_qint)
 
 
-def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32]]:
-    f_out = max(-get_lsb_loc(float(x)) for x in table.ravel())
-    int_table = (table * 2**f_out).astype(np.int32)
+def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32], NDArray[np.bool_] | None]:
+    mask = np.isnan(table)
+    f_out = max(-get_lsb_loc(float(x)) for x in table.ravel() if not np.isnan(x))
+    int_table = np.where(mask, 0, table * 2**f_out).astype(np.int32)
     h = sha256(int_table.data)
+    if mask.any():
+        h.update(b'mask')
+        h.update(mask.data)
+    else:
+        mask = None
     h.update(f'{f_out}'.encode())
     inp_width = ceil(log2(table.size))
     out_qint = QInterval(float(np.min(table)), float(np.max(table)), float(2**-f_out))
-    return TableSpec(hash=h.hexdigest(), inp_width=inp_width, out_qint=out_qint), int_table
+    return TableSpec(hash=h.hexdigest(), inp_width=inp_width, out_qint=out_qint), int_table, mask
 
 
 @overload
@@ -79,14 +85,15 @@ def interpret_as(
 
 
 class LookupTable:
-    def __init__(self, values: NDArray, spec: TableSpec | None = None):
+    def __init__(self, values: NDArray, spec: TableSpec | None = None, mask: NDArray[np.bool_] | None = None):
         assert values.ndim == 1, 'Lookup table values must be 1-dimensional'
         if spec is not None:
             assert values.dtype == np.int32, f'{values.dtype}'
             self.spec = spec
             self.table = values
+            self.mask = mask
         else:
-            self.spec, self.table = to_spec(values)
+            self.spec, self.table, self.mask = to_spec(values)
 
     @overload
     def lookup(self, var: 'FixedVariable', qint_in: QInterval) -> 'FixedVariable': ...
@@ -146,7 +153,9 @@ class LookupTable:
 
     def padded_table(self, key_qint: QInterval) -> NDArray[np.float64]:
         pad_left, pad_right = self._get_pads(key_qint)
-        data = np.pad(self.table.astype(np.float64), (pad_left, pad_right), mode='constant', constant_values=np.nan)
+        _table = self.table.astype(np.float64)
+        _table = np.where(self.mask, np.nan, _table) if self.mask is not None else _table
+        data = np.pad(_table, (pad_left, pad_right), mode='constant', constant_values=np.nan)
         if key_qint.min < 0:
             size = len(data)
             data = np.roll(data, size // 2)
@@ -162,8 +171,9 @@ class LookupTable:
 
     def __getitem__(self, item) -> 'LookupTable':
         table = self.float_table[item]
-        _table, _spec = to_spec(table)
-        return LookupTable(_spec, _table)
+        _mask = self.mask[item] if self.mask is not None else None
+        _table, _spec, _ = to_spec(table)
+        return LookupTable(_spec, _table, _mask)
 
 
 def to_csd_powers(x: float) -> Generator[float, None, None]:
@@ -933,8 +943,7 @@ class FixedVariable:
                 table = table[::-1]
 
         if isinstance(table, np.ndarray):
-            spec, table = to_spec(table)
-            table = LookupTable(table, spec)
+            table = LookupTable(table)
 
         return FixedVariable(
             *table.spec.out_qint, _from=(self,), _factor=1.0, opr='lookup', hwconf=self.hwconf, _data=None, _table=table
