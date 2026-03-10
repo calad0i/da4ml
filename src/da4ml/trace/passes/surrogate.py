@@ -43,7 +43,7 @@ def cost_lat_mul(qint0: QInterval, qint1: QInterval, n_add: int, n_accum: int):
 def cost_lat_lut(qint_in: QInterval, qint_out: QInterval, LUT_X: int, LUT_Y: int):
     _min_in, _max_in = min(qint_in.min, 0), max(qint_in.max, 0)
     _min_out, _max_out = min(qint_out.min, 0), max(qint_out.max, 0)
-    b_in, b_out = iceil_log2((_max_in - _min_in) / qint_in.step), iceil_log2((_max_out - _min_out) / qint_out.step)
+    b_in, b_out = iceil_log2((_max_in - _min_in) / qint_in.step + 1), iceil_log2((_max_out - _min_out) / qint_out.step + 1)
     cost = 2 ** (b_in - LUT_X) * b_out if b_in > LUT_Y else b_in / LUT_Y * 2 ** (LUT_Y - LUT_X)
     lat = 1
     lat = max(1, b_in - LUT_X)

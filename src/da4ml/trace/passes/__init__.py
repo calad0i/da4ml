@@ -1,7 +1,7 @@
 from ...types import CombLogic
 from .cse import common_subexpr_elimin
 from .dce import dead_code_elimin
-from .null_quant import null_quant_elimin
+from .null_op import null_quant_elimin
 from .order import order_by_latency
 from .surrogate import add_surrogate
 
