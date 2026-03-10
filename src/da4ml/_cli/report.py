@@ -56,6 +56,10 @@ def parse_utilization_vivado(utilization: str):
     dd = {}
     for name, m in zip(track, matchers):
         found = m.findall(utilization)
+        if not found:
+            print('Warning: regexp matching failed:')
+            print(m.pattern)
+            continue
         used, fixed, prohibited, available = map(int, found[0])
         dd[name] = used
         dd[f'{name}_fixed'] = fixed
