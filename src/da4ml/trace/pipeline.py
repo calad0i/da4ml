@@ -116,7 +116,6 @@ def to_pipeline(comb: CombLogic, n_stages: int | None = None, latency_cutoff: fl
             out_negs = comb.out_negs
         else:
             out_idxs = [index_map[i] for i in ext_req_idx[ii + 1]]
-            print(ii, ext_req_idx[ii + 1])
             n_out = len(out_idxs)
             out_shifts = [0] * n_out
             out_negs = [False] * n_out
