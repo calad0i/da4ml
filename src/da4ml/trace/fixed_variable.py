@@ -45,11 +45,10 @@ def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32], 
     if mask.any():
         h.update(b'mask')
         h.update(mask.data)
-    else:
-        mask = None
     h.update(f'{f_out}'.encode())
     inp_width = ceil(log2(table.size))
-    out_qint = QInterval(float(np.min(table)), float(np.max(table)), float(2**-f_out))
+    out_qint = QInterval(float(np.min(table[~mask])), float(np.max(table[~mask])), float(2**-f_out))
+    mask = mask if mask.any() else None
     return TableSpec(hash=h.hexdigest(), inp_width=inp_width, out_qint=out_qint), int_table, mask
 
 
@@ -108,6 +107,7 @@ class LookupTable:
             _min, _max, _step = qint_in
             assert _min <= var <= _max, f'Value {var} out of range [{_min}, {_max}]'
             index = round((var - _min) / _step)
+            assert self.mask is None or not self.mask[index], f'Value {var} is masked out in the lookup table'
             return interpret_as(int(self.table[index]), *self.spec.out_kif)
 
     @property
@@ -839,6 +839,9 @@ class FixedVariable:
         """Get a variable that is 1 if this variable is greater than other, else 0."""
         if not isinstance(other, FixedVariable) or other.opr == 'const':
             _other = float(other) if not isinstance(other, FixedVariable) else other.low
+            _other_align = ceil(_other / self.step) * self.step
+            if _other != _other_align:
+                return self >= _other_align
             if self.low == _other:
                 return self._ne(other)
         return (self - other).is_positive()
@@ -847,17 +850,20 @@ class FixedVariable:
         """Get a variable that is 1 if this variable is less than other, else 0."""
         if not isinstance(other, FixedVariable) or other.opr == 'const':
             _other = float(other) if not isinstance(other, FixedVariable) else other.low
+            _other_align = ceil(_other / self.step) * self.step
+            if _other != _other_align:
+                return self < _other_align
             if self.high == _other:
                 return self._ne(other)
         return (other - self).is_positive()
 
     def __ge__(self, other: 'FixedVariable|float|int'):
         """Get a variable that is 1 if this variable is greater than or equal to other, else 0."""
-        return ~(self - other).is_negative()
+        return ~(self < other)
 
     def __le__(self, other: 'FixedVariable|float|int'):
         """Get a variable that is 1 if this variable is less than or equal to other, else 0."""
-        return ~(other - self).is_negative()
+        return ~(self > other)
 
     def max_of(self, other):
         """Get the maximum of this variable and another variable or constant."""
@@ -965,6 +971,8 @@ class FixedVariable:
 
         _data = ops[_type]
         if _type == 'not':
+            if self.opr == 'bit_unary' and self._data == 0:
+                return self._from[0]
             k, i, f = self.kif
             return FixedVariable.from_kif(
                 k, i, f, hwconf=self.hwconf, opr='bit_unary', _data=_data, _from=(self,), _factor=abs(self._factor)
