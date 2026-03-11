@@ -10,7 +10,7 @@ from uuid import UUID
 import numpy as np
 from numpy.typing import NDArray
 
-from .._binary.cmvm_bin import cost_add, get_lsb_loc, iceil_log2
+from .._binary.cmvm_bin import cost_add, get_lsb_loc, iceil_log2, solve
 from ..types import QInterval, minimal_kif
 from .affine_interval import AffineInterval
 
@@ -514,13 +514,16 @@ class FixedVariable:
         if log2(abs(other)) % 1 == 0:
             return self._pow2_mul(other)
 
-        variables = [(self._pow2_mul(v), v) for v in to_csd_powers(float(other))]
-        while len(variables) > 1:
-            v1, p1 = variables.pop()
-            v2, p2 = variables.pop()
-            v, p = v1 + v2, p1 + p2
-            variables.append((v, p))  # type: ignore
-        return variables[0][0]
+        ker = np.array([[other]], dtype=np.float32)
+        sol = solve(
+            ker,
+            decompose_dc=-1,
+            qintervals=[self._affine.qint],
+            latencies=[self.latency],
+            adder_size=self.hwconf.adder_size,
+            carry_size=self.hwconf.carry_size,
+        )
+        return sol([self])[0]
 
     def _var_mul(self, other: 'FixedVariable') -> 'FixedVariable':
         if other is not self:
