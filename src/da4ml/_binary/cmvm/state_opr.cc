@@ -80,7 +80,8 @@ DAState create_state(
     const xt::xarray<float> &kernel_in,
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &inp_latencies,
-    bool no_stat_init
+    bool no_stat_init,
+    bool partial
 ) {
     size_t n_in = kernel_in.shape(0);
     size_t n_out = kernel_in.shape(1);
@@ -122,6 +123,9 @@ DAState create_state(
                     if (row0.empty() || row1.empty())
                         continue;
                     if (i0 == i1) {
+                        if (partial) {
+                            continue; // skip self-pairs in partial mode
+                        }
                         for (size_t a = 1; a < row0.size(); ++a) {
                             int8_t v0 = row0[a];
                             for (size_t b = 0; b < a; ++b) {
@@ -282,7 +286,7 @@ void update_expr(DAState &state, const Pair &pair, int adder_size, int carry_siz
     state.expr.push_back(std::move(new_slice));
 }
 
-void update_stats(DAState &state, const Pair &pair) {
+void update_stats(DAState &state, const Pair &pair, bool partial) {
     int64_t id0 = pair.id0, id1 = pair.id1;
 
     // id0/1 are dirty now, purge all entries involving them.
@@ -321,6 +325,9 @@ void update_stats(DAState &state, const Pair &pair) {
                     continue;
 
                 if (lo == hi) {
+                    if (partial) {
+                        continue; // skip self-pairs in partial mode
+                    }
                     const size_t sz = row_lo.size();
                     for (size_t a = 1; a < sz; ++a) {
                         for (size_t b = 0; b < a; ++b) {
@@ -344,7 +351,13 @@ void update_stats(DAState &state, const Pair &pair) {
     state.freq_stat.batch_add(raw_pairs);
 }
 
-void update_state(DAState &state, const Pair &pair, int adder_size, int carry_size) {
+void update_state(
+    DAState &state,
+    const Pair &pair,
+    int adder_size,
+    int carry_size,
+    bool partial
+) {
     update_expr(state, pair, adder_size, carry_size);
-    update_stats(state, pair);
+    update_stats(state, pair, partial);
 }

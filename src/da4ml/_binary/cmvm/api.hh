@@ -9,7 +9,8 @@ float minimal_latency(
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &latencies,
     int carry_size = -1,
-    int adder_size = -1
+    int adder_size = -1,
+    bool partial = false
 );
 
 PipelineResult _solve(
@@ -21,7 +22,8 @@ PipelineResult _solve(
     const std::vector<QInterval> &qintervals = {},
     const std::vector<float> &latencies = {},
     int adder_size = -1,
-    int carry_size = -1
+    int carry_size = -1,
+    bool partial = false
 );
 
 PipelineResult solve(
@@ -34,5 +36,6 @@ PipelineResult solve(
     const std::vector<float> &latencies = {},
     int adder_size = -1,
     int carry_size = -1,
-    bool search_all_decompose_dc = true
+    bool search_all_decompose_dc = true,
+    bool partial = false
 );

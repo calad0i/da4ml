@@ -22,12 +22,12 @@ std::pair<float, float> cost_add(
 );
 
 DAState create_state(
-    const xt::xarray<float> &kernel,
+    const xt::xarray<float> &kernel_in,
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &inp_latencies,
-    bool no_stat_init = false
+    bool no_stat_init = false,
+    bool partial = false
 );
-
 void update_stats(DAState &state, const Pair &pair);
 
 std::vector<std::tuple<int64_t, int64_t, int64_t>>
@@ -42,4 +42,10 @@ Op pair_to_op(
 
 void update_expr(DAState &state, const Pair &pair, int adder_size, int carry_size);
 
-void update_state(DAState &state, const Pair &pair, int adder_size, int carry_size);
+void update_state(
+    DAState &state,
+    const Pair &pair,
+    int adder_size,
+    int carry_size,
+    bool partial = false
+);

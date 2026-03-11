@@ -10,10 +10,12 @@ DAState cmvm(
     const std::vector<QInterval> &qintervals = {},
     const std::vector<float> &inp_latencies = {},
     int adder_size = -1,
-    int carry_size = -1
+    int carry_size = -1,
+    bool partial = false
 );
 
-CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size);
+CombLogicResult
+to_solution(const DAState &state, int adder_size, int carry_size, bool partial = false);
 
 CombLogicResult solve_single(
     const xt::xarray<float> &kernel,
@@ -21,5 +23,6 @@ CombLogicResult solve_single(
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &latencies,
     int adder_size,
-    int carry_size
+    int carry_size,
+    bool partial = false
 );

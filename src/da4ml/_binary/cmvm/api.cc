@@ -13,9 +13,10 @@ float minimal_latency(
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &latencies,
     int carry_size,
-    int adder_size
+    int adder_size,
+    bool partial
 ) {
-    DAState state = create_state(kernel, qintervals, latencies, true);
+    DAState state = create_state(kernel, qintervals, latencies, true, true);
     CombLogicResult sol = to_solution(state, adder_size, carry_size);
     float max_lat = 0.0;
     for (auto idx : sol.out_idxs) {
@@ -34,7 +35,8 @@ PipelineResult _solve(
     const std::vector<QInterval> &qintervals_in,
     const std::vector<float> &latencies_in,
     int adder_size,
-    int carry_size
+    int carry_size,
+    bool partial
 ) {
     size_t n_in = kernel.shape(0);
 
@@ -94,7 +96,7 @@ PipelineResult _solve(
 
         auto [mat0, mat1] = kernel_decompose(xt::xarray<float>(kernel), decompose_dc);
         sol0 = solve_single(
-            mat0, method0, qintervals, inp_latencies, adder_size, carry_size
+            mat0, method0, qintervals, inp_latencies, adder_size, carry_size, partial
         );
 
         std::vector<float> latencies0;
@@ -121,8 +123,9 @@ PipelineResult _solve(
             }
         }
 
-        sol1 =
-            solve_single(mat1, method1, qintervals0, latencies0, adder_size, carry_size);
+        sol1 = solve_single(
+            mat1, method1, qintervals0, latencies0, adder_size, carry_size, false
+        );
 
         float max_lat1 = 0.0;
         for (auto idx : sol1.out_idxs) {
@@ -154,7 +157,8 @@ PipelineResult solve(
     const std::vector<float> &latencies_in,
     int adder_size,
     int carry_size,
-    bool search_all_decompose_dc
+    bool search_all_decompose_dc,
+    bool partial
 ) {
     size_t n_in = kernel.shape(0);
 
@@ -183,7 +187,8 @@ PipelineResult solve(
             qintervals,
             latencies,
             adder_size,
-            carry_size
+            carry_size,
+            partial
         );
     }
 
@@ -217,7 +222,8 @@ PipelineResult solve(
                 qintervals,
                 latencies,
                 adder_size,
-                carry_size
+                carry_size,
+                partial
             );
             float _cost = 0.0;
             for (auto &sol : _csol.solutions) {

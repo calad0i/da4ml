@@ -13,7 +13,8 @@ DAState cmvm(
     const std::vector<QInterval> &qintervals_in,
     const std::vector<float> &inp_latencies_in,
     int adder_size,
-    int carry_size
+    int carry_size,
+    bool partial
 ) {
     size_t n_in = kernel.shape(0);
     std::vector<QInterval> qintervals;
@@ -31,7 +32,7 @@ DAState cmvm(
         inp_latencies = inp_latencies_in;
     }
 
-    DAState state = create_state(kernel, qintervals, inp_latencies);
+    DAState state = create_state(kernel, qintervals, inp_latencies, false, partial);
 
     while (true) {
         if (state.freq_stat.empty())
@@ -66,7 +67,7 @@ DAState cmvm(
         if (pair_chosen.id0 == -1 || pair_chosen.id1 == -1)
             break;
 
-        update_state(state, pair_chosen, adder_size, carry_size);
+        update_state(state, pair_chosen, adder_size, carry_size, partial);
     }
     return state;
 }
@@ -86,7 +87,8 @@ struct HeapEntry {
     bool operator>(const HeapEntry &o) const { return as_tuple() > o.as_tuple(); }
 };
 
-CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size) {
+CombLogicResult
+to_solution(const DAState &state, int adder_size, int carry_size, bool partial) {
     auto ops = state.ops; // copy
     int64_t n_out = static_cast<int64_t>(state.kernel.shape(1));
     size_t n_expr = state.expr.size();
@@ -100,11 +102,12 @@ CombLogicResult to_solution(const DAState &state, int adder_size, int carry_size
 
     int64_t _global_id = static_cast<int64_t>(ops.size());
 
+    size_t start_loc = partial ? state.kernel.shape(0) : 0;
     for (int64_t i_out = 0; i_out < n_out; ++i_out) {
         // Find all nonzero entries in expr[:, i_out, :]
         std::vector<int64_t> idx, shifts;
         std::vector<int64_t> sub_vals;
-        for (size_t i_in = 0; i_in < n_expr; ++i_in) {
+        for (size_t i_in = start_loc; i_in < n_expr; ++i_in) {
             for (int16_t v : state.expr[i_in].rows[i_out]) {
                 idx.push_back(static_cast<int64_t>(i_in));
                 shifts.push_back(static_cast<int64_t>(SparseExpr::to_shift(v)));
@@ -230,8 +233,10 @@ CombLogicResult solve_single(
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &latencies,
     int adder_size,
-    int carry_size
+    int carry_size,
+    bool partial
 ) {
-    DAState state = cmvm(kernel, method, qintervals, latencies, adder_size, carry_size);
-    return to_solution(state, adder_size, carry_size);
+    DAState state =
+        cmvm(kernel, method, qintervals, latencies, adder_size, carry_size, partial);
+    return to_solution(state, adder_size, carry_size, partial);
 }

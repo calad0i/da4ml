@@ -191,7 +191,8 @@ static nb::typed<nb::object, PyPipeline> solve_numpy(
     nb::typed<nb::object, std::vector<float>> latencies_obj,
     int adder_size,
     int carry_size,
-    bool search_all_decompose_dc
+    bool search_all_decompose_dc,
+    bool partial
 ) {
     // Adapt numpy array to xtensor
     size_t ndim = kernel_arr.ndim();
@@ -218,7 +219,8 @@ static nb::typed<nb::object, PyPipeline> solve_numpy(
         latencies,
         adder_size,
         carry_size,
-        search_all_decompose_dc
+        search_all_decompose_dc,
+        partial
     );
 
     return make_py_pipeline(result);
@@ -244,7 +246,8 @@ NB_MODULE(cmvm_bin, m) {
         "latencies"_a = nb::none(),
         "adder_size"_a = -1,
         "carry_size"_a = -1,
-        "search_all_decompose_dc"_a = true
+        "search_all_decompose_dc"_a = true,
+        "partial"_a = false
     );
     m.def(
         "cost_add",
