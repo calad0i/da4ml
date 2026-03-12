@@ -247,7 +247,6 @@ def _load_project(path: str | Path) -> dict[str, Any]:
 
 
 def load_project(path: str | Path) -> dict[str, Any] | None:
-    return _load_project(path)
     try:
         return _load_project(path)
     except Exception as e:
