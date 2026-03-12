@@ -20,7 +20,7 @@ nanobind_dep = dependency('nanobind')
 omp_dep = dependency('openmp')
 xtensor_dep = dependency('xtensor', default_options: ['use_xsimd=true', 'use_tbb=false', 'use_openmp=true'])
 
-_limited_abi = py.language_version().version_compare('>=3.12') ? '3.12' : ''
+_limited_abi = ''
 
 dais_bin = py.extension_module(
   'dais_bin',
@@ -31,7 +31,6 @@ dais_bin = py.extension_module(
   dependencies: [nanobind_dep, omp_dep],
   install: true,
   subdir: 'da4ml/_binary',
-  limited_api: _limited_abi,
 )
 
 cmvm_bin = py.extension_module(

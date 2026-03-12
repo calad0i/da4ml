@@ -26,21 +26,7 @@ jobs:
       - name: Build wheels (Python 3.10-3.11)
         uses: pypa/cibuildwheel@v3.3.0
         env:
-          CIBW_BUILD: "cp31[01]-*"
-          CIBW_ARCHS_LINUX: "x86_64"
-          CIBW_ARCHS_MACOS: "arm64"
-          CIBW_SKIP: "*-musllinux_*"
-          CIBW_TEST_REQUIRES: "pytest"
-          CIBW_TEST_COMMAND: "pytest -o 'addopts=--import-mode=importlib' {project}/tests/test_cmvm.py"
-          CIBW_CONFIG_SETTINGS: "setup-args=-Dpython.allow_limited_api=false"
-
-          CIBW_BEFORE_BUILD_MACOS: "brew install libomp"
-          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=15.0
-
-      - name: Build wheels (Python 3.12+ abi3)
-        uses: pypa/cibuildwheel@v3.3.0
-        env:
-          CIBW_BUILD: "cp312-*"
+          CIBW_BUILD: "cp31[01234]-*"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_MACOS: "arm64"
           CIBW_SKIP: "*-musllinux_*"
