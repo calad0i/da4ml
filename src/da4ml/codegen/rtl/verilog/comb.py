@@ -123,17 +123,17 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                     line = f'{_def} assign {v} = {v0_name}[{i0}:{i1}];'
 
             case 4:  # constant addition
-                num = op.data
-                sign, mag = int(num < 0), abs(num)
-                bw1 = ceil(log2(mag + 1))
-                bw0 = widths[op.id0]
-                s0 = int(kifs[op.id0][0])
+                val = ((op.data & 0xFFFFFFFF) + 0x80000000) % 0x100000000 - 0x80000000
+                f1 = (((op.data >> 32) & 0xFFFFFFFF) + 0x80000000) % 0x100000000 - 0x80000000
+                bw0, bw1 = widths[op.id0], ceil(log2(abs(val) + 1))
+                s0, _, f0 = kifs[op.id0]
+                s0, s1 = int(s0), int(val < 0)
+                shift = f0 - f1
                 v0 = f'v{op.id0}[{bw0 - 1}:0]'
-                v1 = f"{bw1}'{bin(mag)[1:]}"
-                shift = kifs[op.id0][2] - kifs[i][2]
-                dlsbs = max(kifs[op.id0][2], kifs[i][2]) - kifs[i][2]
+                v1 = f"{bw1}'{bin(abs(val))[1:]}"
+                dlsbs = max(f0, f1) - kifs[i][2]
 
-                line = f'{_def} shift_adder #({bw0},{bw1},{s0},0,{bw},{dlsbs},{shift},{sign}) op_{i} ({v0},{v1},{v});'
+                line = f'{_def} shift_adder #({bw0},{bw1},{s0},0,{bw},{dlsbs},{shift},{s1}) op_{i} ({v0},{v1},{v});'
 
             case 5:  # constant
                 num = op.data

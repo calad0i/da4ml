@@ -433,7 +433,10 @@ class FixedVariable:
         )
 
     def __add__(self, other: 'FixedVariable|float|int'):
+        if other is None:
+            return self
         if not isinstance(other, FixedVariable):
+            # other = self.from_const(other, hwconf=self.hwconf, _factor=self._factor)
             return self._const_add(other)
         if other.high == other.low:
             return self._const_add(other.low)
@@ -468,15 +471,16 @@ class FixedVariable:
 
         if self.opr != 'cadd':
             _affine = self._affine + other
-            q = _affine.qint
-            unscaled_step = q.step / abs(self._factor)
-            _data = round(other / self._factor / unscaled_step)
+            other = other / self._factor
+            f_other = -get_lsb_loc(other)
+            shift = f_other
+            data = shift << 32 | (int(other * 2**f_other) & 0xFFFFFFFF)
 
             return FixedVariable(
                 _affine=_affine,
                 _from=(self,),
                 _factor=self._factor,
-                _data=_data,
+                _data=data,
                 opr='cadd',
                 hwconf=self.hwconf,
             )
@@ -484,9 +488,11 @@ class FixedVariable:
         assert len(self._from) == 1
         parent = self._from[0]
         assert self._data is not None, 'cadd must have data'
-        unscaled_bias = self._data * self.step / abs(self._factor)
+        dat = ((self._data & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+        shift = (((self._data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+        unscaled_bias = dat * 2**-shift * self._factor
         sf = self._factor / parent._factor
-        other1 = (unscaled_bias * parent._factor) + other / sf
+        other1 = (unscaled_bias + other) / sf
         return (parent + other1) * sf
 
     def __sub__(self, other: 'FixedVariable|int|float'):

@@ -168,10 +168,23 @@ namespace dais {
         int32_t data_high,
         int32_t data_low
     ) const {
-        const int32_t _shift = dtype_to.fractionals - dtype_from.fractionals;
-        int64_t data =
-            (static_cast<int64_t>(data_high) << 32) | static_cast<uint32_t>(data_low);
-        return (value << _shift) + data;
+        int32_t v1 = value;
+        int32_t v2 = data_low;
+        int32_t shift = data_high;
+        auto dtype0 = dtype_from;
+        int32_t actual_shift = -shift + dtype0.fractionals;
+        int64_t result;
+        int32_t global_shift;
+
+        if (actual_shift > 0)
+            result = v1 + (v2 << actual_shift);
+        else
+            result = (v1 << -actual_shift) + v2;
+        global_shift = std::max(dtype0.fractionals, shift) - dtype_to.fractionals;
+        if (global_shift > 0) {
+            result = result >> global_shift;
+        }
+        return result;
     }
 
     bool DAISInterpreter::get_msb(int64_t value, const DType &dtype) const {

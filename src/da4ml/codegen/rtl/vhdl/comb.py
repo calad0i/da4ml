@@ -101,15 +101,17 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
                     line = f'v{i} <= {v0_name}({i0} downto {i1});'
 
             case 4:  # constant addition
-                num = op.data
-                sign, mag = int(num < 0), abs(num)
-                bw1 = ceil(log2(mag + 1)) if mag > 0 else 1
-                bw0 = widths[op.id0]
-                s0 = int(kifs[op.id0][0])
-                shift = kifs[op.id0][2] - kifs[i][2]
-                bin_val = format(mag, f'0{bw1}b')
-                dlsbs = max(kifs[op.id0][2], kifs[i][2]) - kifs[i][2]
-                line = f'op_{i}:entity work.shift_adder generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>0,BW_OUT=>{bw},DROP_LSBS=>{dlsbs},SHIFT1=>{shift},IS_SUB=>{sign}) port map(in0=>v{op.id0},in1=>"{bin_val}",result=>v{i});'
+                val = ((op.data & 0xFFFFFFFF) + 0x80000000) % 0x100000000 - 0x80000000
+                f1 = (((op.data >> 32) & 0xFFFFFFFF) + 0x80000000) % 0x100000000 - 0x80000000
+                bw0, bw1 = widths[op.id0], ceil(log2(abs(val) + 1))
+                s0, _, f0 = kifs[op.id0]
+                s0, s1 = int(s0), int(val < 0)
+                shift = f0 - f1
+                v0 = f'v{op.id0}[{bw0 - 1}:0]'
+                v1 = f'{bin(abs(val))[2:]}'
+                dlsbs = max(f0, f1) - kifs[i][2]
+
+                line = f'op_{i}:entity work.shift_adder generic map(BW_INPUT0=>{bw0},BW_INPUT1=>{bw1},SIGNED0=>{s0},SIGNED1=>0,BW_OUT=>{bw},DROP_LSBS=>{dlsbs},SHIFT1=>{shift},IS_SUB=>{s1}) port map(in0=>v{op.id0},in1=>"{v1}",result=>v{i});'
             case 5:  # constant
                 num = op.data
                 if num < 0:

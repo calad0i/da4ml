@@ -284,15 +284,16 @@ class CombLogic(NamedTuple):
                     _k, _i, _f = minimal_kif(op.qint)
                     buf[i] = _quantize(v, _k, _i, _f, round_mode='TRN', _force_factor_clear=True)
                 case 4:  # const addition
-                    bias = op.data * op.qint.step
-                    buf[i] = buf[op.id0] + bias
+                    shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                    data = (((op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                    val = data * 2**-shift
+                    buf[i] = buf[op.id0] + val
                 case 5:  # const definition
                     buf[i] = op.data * op.qint.step  # const definition
                 case 6:  # MSB Mux
                     id_c = op.data & 0xFFFFFFFF
                     k, v0, v1 = buf[id_c], buf[op.id0], buf[op.id1]
-                    shift = (op.data >> 32) & 0xFFFFFFFF
-                    shift = shift if shift < 0x80000000 else shift - 0x100000000
+                    shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
 
                     if isinstance(k, FixedVariable):
                         buf[i] = k.msb_mux(v0, v1 * 2**shift, op.qint)  # type: ignore
@@ -319,7 +320,7 @@ class CombLogic(NamedTuple):
                     v0, v1 = buf[op.id0], buf[op.id1]
                     inv0, inv1 = (op.data >> 32) & 1, (op.data >> 33) & 1
                     v0, v1 = (-v0 if inv0 else v0), (-v1 if inv1 else v1)
-                    shift = ((int(op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                    shift = ((op.data & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
                     _opcode = (op.data >> 56) & 0xFF
                     _qint1 = self.ops[op.id1].qint
                     s = 2.0**shift
@@ -347,7 +348,10 @@ class CombLogic(NamedTuple):
                     case 3:
                         op_str = f'quantize(buf[{op.id0}])'
                     case 4:
-                        op_str = f'buf[{op.id0}] + {op.data * op.qint.step}'
+                        shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                        data = (((op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                        val = data * 2**-shift
+                        op_str = f'buf[{op.id0}] + {val}'
                     case 5:
                         op_str = f'const {op.data * op.qint.step}'
                     case 6:
