@@ -89,20 +89,20 @@ def sort(
 
 @overload
 def sort(  # type: ignore
-    a: FixedVariableArray,
+    a: 'FixedVariableArray',
     axis: int | None = None,
     kind: str = 'batcher',
     aux_value: None = None,
-) -> FixedVariableArray: ...
+) -> 'FixedVariableArray': ...
 
 
 @overload
 def sort(
-    a: FixedVariableArray,
+    a: 'FixedVariableArray',
     axis: int | None = None,
     kind: str = 'batcher',
-    aux_value: FixedVariableArray = ...,
-) -> tuple[FixedVariableArray, FixedVariableArray]: ...
+    aux_value: 'FixedVariableArray' = ...,
+) -> 'tuple[FixedVariableArray, FixedVariableArray]': ...
 
 
 def sort(  # type: ignore
