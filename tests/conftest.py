@@ -29,7 +29,8 @@ def pytest_sessionfinish(session, exitstatus):
     if hasattr(session.config, 'workerinput'):
         return
     root = Path(os.environ.get('DA4ML_TEST_DIR', '/tmp/da4ml_test'))
-    # Purge empty directories
+    if not root.exists():
+        return
     if exitstatus == 0:
         subprocess.run(['rm', '-rf', str(root)], check=True)
         return

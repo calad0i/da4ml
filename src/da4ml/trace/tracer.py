@@ -195,7 +195,7 @@ def dead_statement_elimination(comb: CombLogic, keep_dead_inputs=False) -> CombL
             dead[id_c] = False
 
     new_idxs = np.cumsum(~dead) - 1
-    idx_map = {i: new_idxs[i] for i in range(len(comb.ops))}
+    idx_map = {i: int(new_idxs[i]) for i in range(len(comb.ops))}
     new_ops = [_index_remap(op, idx_map) for i, op in enumerate(comb.ops) if not dead[i]]
     new_out_idxs = [idx_map[idx] if idx >= 0 else -1 for idx in comb.out_idxs]
     return CombLogic(
