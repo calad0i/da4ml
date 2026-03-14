@@ -170,7 +170,7 @@ class HLSModel:
             'io_delay_max': self._io_delay_minmax[1],
         }
         if metadata is not None:
-            _metadata.update(metadata)
+            _metadata.update({k: v for k, v in metadata.items() if k not in _metadata})
 
         with open(self._path / 'metadata.json', 'w') as f:
             json.dump(_metadata, f)
