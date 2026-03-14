@@ -1,6 +1,6 @@
 from ..._binary import get_lsb_loc, iceil_log2
 from ...trace import HWConfig
-from ...types import CombLogic, Op, QInterval
+from ...types import CombLogic, Op, QInterval, minimal_kif
 
 
 def overlap_counts(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool):
@@ -14,6 +14,8 @@ def overlap_counts(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool
     a, b, c, d = sorted([l0, r0, l1, r1])
     if r0 < l0 or r1 < l0:  # no overlap
         b, c = c, b
+    if is_sub:
+        b = a
     return b - a, c - b, d - c
 
 
@@ -22,7 +24,7 @@ def cost_lat_add(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool, 
     if overlap <= 0:
         return 0, 0
 
-    cost = (overlap * 2 + left + n_add + 1 - 1) // n_add * 0.5
+    cost = ((overlap * 2 + left + n_add + 1 - 1) // n_add + 1) // 2
     lat = (overlap + left + n_accum + 1 - 1) // n_accum
     return cost, lat
 
@@ -55,7 +57,7 @@ def cost_lat_mux(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: int, LU
 
 
 def cost_relu(qint: QInterval, LUT_X: int = 6, LUT_Y: int = 5):
-    return 0, 0
+    return sum(minimal_kif(qint)) * 2 ** (LUT_Y - LUT_X), 0
 
 
 def cost_lat_bin_bitops(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: int, LUT_Y: int):
@@ -68,7 +70,7 @@ def cost_lat_bin_bitops(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: 
 
 
 def cost_neg(qint: QInterval, LUT_X: int, LUT_Y: int):
-    return 0, 0
+    return sum(minimal_kif(qint)) * 2 ** (LUT_Y - LUT_X), 0
 
 
 def cost_lat_op(ops: list[Op], op: Op, hwconf: HWConfig) -> tuple[float, float]:
@@ -91,13 +93,15 @@ def cost_lat_op(ops: list[Op], op: Op, hwconf: HWConfig) -> tuple[float, float]:
             c, l = cost_relu(qint, LUT_X, LUT_Y)
             return c, l
         case 3:  # WRAP
-            c, l = cost_neg(ops[op.id0].qint, LUT_X, LUT_Y)
+            c, l = 0, 0
             return c, l
         case 4:  # cadd
-            f = -get_lsb_loc(op.data)
-            c = iceil_log2(abs(op.data) + 2**-f) + f
-            l = 0
-            return c, l
+            shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+            data = (((op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+            val = data * 2**-shift
+            f = -get_lsb_loc(val)
+            c = iceil_log2(abs(val) / 2**f + 1) / 2
+            return c, 0
         case 5:  # const
             return 0, 0
         case 6:  # msb_mux
