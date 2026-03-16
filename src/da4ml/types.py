@@ -458,6 +458,7 @@ class CombLogic(NamedTuple):
     def save(self, path: str | Path):
         """Save the solution to a file."""
         dump = {'model': self, 'meta': 'DAISModel', 'spec_version': DAIS_SPEC_VERSION}
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w') as f:
             json.dump(dump, f, cls=JSONEncoder, separators=(',', ':'))
 
