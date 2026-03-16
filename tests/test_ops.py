@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from da4ml.codegen import HLSModel, RTLModel
+from da4ml.codegen.xls import XLSModel
 from da4ml.trace import FixedVariableArray, comb_trace
 from da4ml.trace.ops import quantize, relu
 from da4ml.types import CombLogic
@@ -103,6 +104,13 @@ class OperationTestSynth(OperationTest):
         comb_pred = comb.predict(test_data, n_threads=1)
         np.testing.assert_equal(hls_pred, comb_pred)
         subprocess.run(['rm', '-rf', temp_directory])
+
+    def test_xls_gen(self, comb: CombLogic, temp_directory: str, test_data: np.ndarray):
+        xls_model = XLSModel(comb)
+        xls_model.jit()
+        comb_pred = comb.predict(test_data, n_threads=1)
+        xls_pred = xls_model.predict(test_data, n_threads=1)
+        np.testing.assert_equal(xls_pred, comb_pred)
 
 
 class TestQuantize(OperationTestSynth):
