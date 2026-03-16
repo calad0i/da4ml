@@ -3,7 +3,7 @@ from math import ceil, log2
 import numpy as np
 from xls import FunctionBuilder, Package, Value
 from xls.c_api import optimize_ir, parse_ir_package
-from xls.ir_builder import BuilderBase, BValue
+from xls.ir_builder import BuilderBase, BValue, Function
 
 from ...types import CombLogic, minimal_kif
 
@@ -68,34 +68,13 @@ def negate(bb: BuilderBase, val: BValue, bw_in: int, bw_out: int, in_signed: boo
         return bb.add_bit_slice(neg, 0, bw_out)
 
 
-def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
+def _build_core_ops(bb, pkg, sol, model_inp, inp_starts, inp_widths, kifs, widths):
+    """Build the core computation ops from a flat-bits input BValue.
+
+    Returns a list of (BValue, bit_width) for each output.
+    """
     ops = sol.ops
-    kifs = list(map(minimal_kif, (op.qint for op in ops)))
-    widths: list[int] = list(map(sum, kifs))
-
-    inp_kifs = [minimal_kif(qint) for qint in sol.inp_qint]
-    inp_widths = list(map(sum, inp_kifs))
-    _inp_widths = np.cumsum([0] + inp_widths)
-    inp_starts = _inp_widths[:-1].tolist()
-
-    total_inp_bits = int(_inp_widths[-1])
-
-    out_kifs = [minimal_kif(qint) for qint in sol.out_qint]
-    out_widths = [sum(k) for k in out_kifs]
-    total_out_bits = sum(out_widths)
-
-    if total_inp_bits == 0 or total_out_bits == 0:
-        raise ValueError('Cannot build XLS function with zero-width I/O')
-
     ref_count = sol.ref_count
-
-    pkg = Package.create(fn_name)
-    fb = FunctionBuilder.create(fn_name, pkg)
-    bb = fb.as_builder_base()
-
-    inp_type = pkg.get_bits_type(total_inp_bits)
-    model_inp = fb.add_parameter('model_inp', inp_type)
-
     buf: list[BValue] = [None] * len(ops)  # type: ignore
 
     for i, op in enumerate(ops):
@@ -147,20 +126,17 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                     msb = bb.add_bit_slice(v0, bw0 - 1, 1)
                     sliced = bb.add_bit_slice(v0, lsb_bias, bw)
                     zero = _literal(bb, bw, 0)
-                    # sel=0 (MSB=0, positive) -> sliced; sel=1 (MSB=1, negative) -> zero
                     buf[i] = bb.add_select(msb, [sliced, zero])
                 else:
-                    # Unsigned: just slice
                     buf[i] = bb.add_bit_slice(v0, lsb_bias, bw)
 
             case 3:  # Quantize (bit slice with possible sign extension)
                 lsb_bias = kifs[op.id0][2] - kifs[i][2]
-                i0 = bw + lsb_bias - 1  # highest needed bit
+                i0 = bw + lsb_bias - 1
                 v0 = buf[op.id0]
                 bw0 = widths[op.id0]
 
                 if i0 >= bw0:
-                    # Need sign extension before slicing
                     assert ops[op.id0].qint.min < 0
                     v0_ext = bb.add_sign_extend(v0, i0 + 1)
                     buf[i] = bb.add_bit_slice(v0_ext, lsb_bias, bw)
@@ -214,9 +190,8 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                 shift0 = fo - f0
                 assert shift0 == 0 or shift1 == 0
                 shift = shift1 * (shift1 > 0) - shift0 * (shift0 > 0)
-                inv = 0  # INVERT1 is always '0' in current comb.py
+                inv = 0
 
-                # Compute working bitwidth (same as mux.v)
                 in0_need = bw0 - shift if shift < 0 else bw0
                 in1_need = bw1 + shift if shift > 0 else bw1
                 extra_pad = (inv + 1) if (s0 != s1) else (inv + 0)
@@ -227,7 +202,6 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                 _bw0 = bw0 if bw0 > 0 else 1
                 _bw1 = bw1 if bw1 > 0 else 1
 
-                # Extend in0 (shift applied inversely: if shift<0, pad in0 right)
                 if shift < 0:
                     pad_r = -shift
                     zero_pad = _literal(bb, pad_r, 0)
@@ -235,7 +209,6 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                     _bw0 += pad_r
                 va_ext = _extend(bb, va, _bw0, bw_buf, bool(s0))
 
-                # Extend in1 (if shift>0, pad in1 right)
                 if shift > 0:
                     pad_r = shift
                     zero_pad = _literal(bb, pad_r, 0)
@@ -243,30 +216,23 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                     _bw1 += pad_r
                 vb_ext = _extend(bb, vb, _bw1, bw_buf, bool(s1))
 
-                # Extract MSB of condition
                 msb = bb.add_bit_slice(buf[id_c], bwk - 1, 1)
-
-                # Slice both to output width
                 va_out = bb.add_bit_slice(va_ext, 0, bw)
                 vb_out = bb.add_bit_slice(vb_ext, 0, bw)
-
-                # key=1 (MSB set) -> in0; key=0 -> in1
                 buf[i] = bb.add_select(msb, [vb_out, va_out])
 
             case 7:  # Multiplication
                 bw0, bw1 = widths[op.id0], widths[op.id1]
                 s0, s1 = int(kifs[op.id0][0]), int(kifs[op.id1][0])
-                bw_prod = bw0 + bw1  # full product width
+                bw_prod = bw0 + bw1
 
                 v0, v1 = buf[op.id0], buf[op.id1]
 
                 if s0 and s1:
-                    # Both signed: sign-extend both to bw_prod, smul
                     v0_ext = bb.add_sign_extend(v0, bw_prod)
                     v1_ext = bb.add_sign_extend(v1, bw_prod)
                     prod = bb.add_smul(v0_ext, v1_ext)
                 elif s0 and not s1:
-                    # signed * unsigned: zero-extend unsigned with extra bit, sign-extend signed
                     v0_ext = bb.add_sign_extend(v0, bw_prod)
                     v1_ext = bb.add_zero_extend(v1, bw_prod)
                     prod = bb.add_smul(v0_ext, v1_ext)
@@ -275,7 +241,6 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                     v1_ext = bb.add_sign_extend(v1, bw_prod)
                     prod = bb.add_smul(v0_ext, v1_ext)
                 else:
-                    # Both unsigned: zero-extend both, umul
                     v0_ext = bb.add_zero_extend(v0, bw_prod)
                     v1_ext = bb.add_zero_extend(v1, bw_prod)
                     prod = bb.add_umul(v0_ext, v1_ext)
@@ -302,11 +267,11 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
             case 9:  # Unary bitwise
                 v0 = buf[op.id0]
                 match op.data:
-                    case 0:  # NOT
+                    case 0:
                         buf[i] = bb.add_not(v0)
-                    case 1:  # OR reduce
+                    case 1:
                         buf[i] = bb.add_or_reduce(v0)
-                    case 2:  # AND reduce
+                    case 2:
                         buf[i] = bb.add_and_reduce(v0)
                     case _:
                         raise ValueError(f'Unknown unary bitwise op {op.data}')
@@ -321,7 +286,6 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                 s0 = int(ops[op.id0].qint.min < 0)
                 s1 = int(ops[op.id1].qint.min < 0)
 
-                # Same extension logic as binop.v
                 in0_need = bw0 - shift if shift < 0 else bw0
                 in1_need = bw1 + shift if shift > 0 else bw1
                 extra_pad = 1 if (s0 != s1) else 0
@@ -330,7 +294,6 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                 v0 = buf[op.id0]
                 v1 = buf[op.id1]
 
-                # Extend v0
                 if shift < 0:
                     pad_r = -shift
                     zero_pad = _literal(bb, pad_r, 0)
@@ -340,7 +303,6 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
                     bw0_eff = bw0
                 v0_ext = _extend(bb, v0, bw0_eff, bw_tmp, bool(s0))
 
-                # Extend v1
                 if shift > 0:
                     pad_r = shift
                     zero_pad = _literal(bb, pad_r, 0)
@@ -365,15 +327,49 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
             case _:
                 raise ValueError(f'Unknown opcode {op.opcode}')
 
+    return buf
+
+
+def _sol_io_params(sol: CombLogic):
+    """Compute I/O parameters from a CombLogic solution."""
+    ops = sol.ops
+    kifs = list(map(minimal_kif, (op.qint for op in ops)))
+    widths: list[int] = list(map(sum, kifs))
+
+    inp_kifs = [minimal_kif(qint) for qint in sol.inp_qint]
+    inp_widths = list(map(sum, inp_kifs))
+    _inp_widths = np.cumsum([0] + inp_widths)
+    inp_starts = _inp_widths[:-1].tolist()
+    total_inp_bits = int(_inp_widths[-1])
+
+    out_kifs = [minimal_kif(qint) for qint in sol.out_qint]
+    out_widths = [sum(k) for k in out_kifs]
+    total_out_bits = sum(out_widths)
+
+    return kifs, widths, inp_kifs, inp_widths, inp_starts, total_inp_bits, out_kifs, out_widths, total_out_bits
+
+
+def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn') -> tuple[Package, Function]:
+    kifs, widths, inp_kifs, inp_widths, inp_starts, total_inp_bits, out_kifs, out_widths, total_out_bits = _sol_io_params(sol)
+
+    if total_inp_bits == 0 or total_out_bits == 0:
+        raise ValueError('Cannot build XLS function with zero-width I/O')
+
+    pkg = Package.create(fn_name)
+    fb = FunctionBuilder.create(fn_name, pkg)
+    bb = fb.as_builder_base()
+
+    inp_type = pkg.get_bits_type(total_inp_bits)
+    model_inp = fb.add_parameter('model_inp', inp_type)
+
+    buf = _build_core_ops(bb, pkg, sol, model_inp, inp_starts, inp_widths, kifs, widths)
+
     out_parts = []
     for idx_i, out_idx in enumerate(sol.out_idxs):
         obw = out_widths[idx_i]
         if obw == 0:
             continue
-
-        v = buf[out_idx]
-
-        out_parts.append(v)
+        out_parts.append(buf[out_idx])
 
     if len(out_parts) == 0:
         raise ValueError('No output parts')
@@ -382,6 +378,96 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn'):
         ret_val = out_parts[0]
     else:
         ret_val = bb.add_concat(out_parts[::-1])
+
+    _ = fb.build_with_return_value(ret_val)
+    ir_str = pkg.to_string()
+    pkg_opt = parse_ir_package(optimize_ir(ir_str, top=fn_name))
+    fn_opt = pkg_opt.get_function(fn_name)
+    return pkg_opt, fn_opt
+
+
+def build_xls_io_wrapper(sol: CombLogic, fn_name: str = 'dais_fn') -> tuple[Package, Function]:
+    """Build an XLS function with unpacked array I/O.
+
+    Input:  bits[max_inp_bw][N_inp]  — array of uniform-width input elements
+    Output: bits[max_out_bw][N_out]  — array of uniform-width output elements
+
+    Uses RTL-style uniform bit layout: max_bw = max(k) + max(i) + max(f).
+    Each element is LSB-aligned at bit offset max(f) - f_j within its slot.
+    """
+    kifs, widths, inp_kifs, inp_widths, inp_starts, total_inp_bits, out_kifs, out_widths, total_out_bits = _sol_io_params(sol)
+    inp_size, out_size = sol.shape
+
+    if total_inp_bits == 0 or total_out_bits == 0:
+        raise ValueError('Cannot build XLS function with zero-width I/O')
+
+    # RTL-style uniform bit widths: max(k) + max(i) + max(f)
+    inp_ks, inp_is, inp_fs = zip(*inp_kifs)
+    max_inp_bw = max(inp_ks) + max(inp_is) + max(inp_fs)
+    max_f_inp = max(inp_fs)
+
+    out_ks, out_is, out_fs = zip(*out_kifs)
+    max_out_bw = max(out_ks) + max(out_is) + max(out_fs)
+    max_f_out = max(out_fs)
+
+    pkg = Package.create(fn_name)
+    fb = FunctionBuilder.create(fn_name, pkg)
+    bb = fb.as_builder_base()
+
+    # Input: array of bits[max_inp_bw], length N_inp
+    inp_elem_type = pkg.get_bits_type(max_inp_bw)
+    inp_arr_type = pkg.get_array_type(inp_elem_type, inp_size)
+    inp_arr = fb.add_parameter('model_inp', inp_arr_type)
+
+    # Extract each element from input array at the correct LSB offset
+    idx_bw = max(1, int(ceil(log2(max(inp_size, 2)))))
+    inp_sliced = []
+    for j in range(inp_size):
+        idx_lit = _literal(bb, idx_bw, j)
+        elem = bb.add_array_index(inp_arr, [idx_lit])
+        ibw = inp_widths[j]
+        if ibw == 0:
+            continue
+        bias_low = max_f_inp - inp_fs[j]
+        elem = bb.add_bit_slice(elem, bias_low, ibw)
+        inp_sliced.append(elem)
+
+    if len(inp_sliced) == 1:
+        flat_inp = inp_sliced[0]
+    else:
+        flat_inp = bb.add_concat(inp_sliced[::-1])
+
+    # Run core computation on the flat bits
+    buf = _build_core_ops(bb, pkg, sol, flat_inp, inp_starts, inp_widths, kifs, widths)
+
+    # Assemble output array: place each output at the correct LSB offset
+    out_parts_raw = []
+    for idx_i, out_idx in enumerate(sol.out_idxs):
+        obw = out_widths[idx_i]
+        out_parts_raw.append((buf[out_idx], obw, out_kifs[idx_i]))
+
+    if len(out_parts_raw) == 0:
+        raise ValueError('No output parts')
+
+    out_elem_type = pkg.get_bits_type(max_out_bw)
+    out_elems = []
+    for v, obw, kif in out_parts_raw:
+        if obw == 0:
+            out_elems.append(_literal(bb, max_out_bw, 0))
+            continue
+        k_j, _, f_j = kif
+        bias_low = max_f_out - f_j
+        is_signed = bool(k_j)
+        # Pad low bits for fractional alignment
+        if bias_low > 0:
+            v = bb.add_concat([v, _literal(bb, bias_low, 0)])
+            obw += bias_low
+        # Sign/zero extend to max_out_bw
+        if obw < max_out_bw:
+            v = _extend(bb, v, obw, max_out_bw, is_signed)
+        out_elems.append(v)
+
+    ret_val = bb.add_array(out_elem_type, out_elems)
 
     _ = fb.build_with_return_value(ret_val)
     ir_str = pkg.to_string()
