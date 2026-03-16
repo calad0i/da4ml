@@ -2,32 +2,8 @@ from math import ceil, log2
 
 import numpy as np
 
-from ....types import CombLogic, QInterval, minimal_kif
+from ....types import CombLogic, minimal_kif
 from ..verilog.comb import get_table_name_memfile
-
-
-def make_neg(
-    signals: list[str],
-    assigns: list[str],
-    idx: int,
-    qint: QInterval,
-    v0_name: str,
-    neg_repo: dict[int, tuple[int, str]],
-):
-    if idx in neg_repo:
-        return neg_repo[idx]
-    _min, _max, step = qint
-    was_signed = int(_min < 0)
-    bw0 = sum(minimal_kif(qint))
-    bw_neg = sum(minimal_kif(QInterval(-_max, -_min, step)))
-    signals.append(f'signal v{idx}_neg : std_logic_vector({bw_neg - 1} downto {0});')
-    assigns.append(
-        f'op_neg_{idx} : entity work.negative generic map (BW_IN => {bw0}, BW_OUT => {bw_neg}, IN_SIGNED => {was_signed}) port map (neg_in => {v0_name}, neg_out => v{idx}_neg);'
-    )
-    bw0 = bw_neg
-    v0_name = f'v{idx}_neg'
-    neg_repo[idx] = (bw0, v0_name)
-    return bw0, v0_name
 
 
 def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency: bool = False):
@@ -197,11 +173,8 @@ def output_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]]):
         if i0 == i1 - 1:
             continue
         bw = widths[i]
-        if sol.out_negs[i]:
-            bw, name = make_neg(signals, assigns, idx, sol.ops[idx].qint, f'v{idx}', neg_repo)
-            assigns.append(f'model_out({i0} downto {i1}) <= {name}({bw - 1} downto {0});')
-        else:
-            assigns.append(f'model_out({i0} downto {i1}) <= v{idx}({bw - 1} downto {0});')
+        assert not sol.out_negs[i]
+        assigns.append(f'model_out({i0} downto {i1}) <= v{idx}({bw - 1} downto {0});')
     return signals, assigns
 
 
