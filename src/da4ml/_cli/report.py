@@ -382,6 +382,8 @@ def report_main(args):
     with open(output, 'w') as f:
         ext = Path(output).suffix
         if ext == '.json':
+            if len(vals) == 1:
+                vals = vals[0]
             json.dump(vals, f)
         elif ext in ['.tsv', '.csv']:
             sep = ',' if ext == '.csv' else '\t'

@@ -953,7 +953,7 @@ class FixedVariable:
 
         if was_numpy_table and isinstance(table, np.ndarray):
             if len(table) == 1:
-                return self.from_const(float(table[0]), hwconf=self.hwconf)
+                return self.from_const(float(table[0]), hwconf=self.hwconf)  # type: ignore
             if self._factor < 0:
                 table = table[::-1]
 
