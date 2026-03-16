@@ -10,23 +10,29 @@ def canonicalize_outputs(comb: CombLogic) -> CombLogic:
     for i in range(comb.shape[1]):
         idx, s, n = comb.out_idxs[i], comb.out_shifts[i], comb.out_negs[i]
         if idx < 0:
-            out_idxs[i] = len(comb.ops)
+            out_idxs[i] = len(ops)
             ops.append(Op(-1, -1, 5, 0, QInterval(0, 0, 2**127), 0, 0))
             out_shifts[i] = 0
             out_negs[i] = False
             continue
 
         op = comb.ops[idx]
-        if comb.ops[idx].opcode == 5:
+        if ops[idx].opcode == 5:
             if s or n:
                 val = op.data * op.qint.step * 2**s * (-1 if n else 1)
-                out_idxs[i] = len(comb.ops)
+                out_idxs[i] = len(ops)
                 step = 2 ** get_lsb_loc(val)
                 op = Op(-1, -1, 5, int(val / step), QInterval(val, val, step), 0, 0)
                 ops.append(op)
                 out_shifts[i] = 0
                 out_negs[i] = False
             continue
+
+        if n:
+            out_idxs[i] = len(ops)
+            qint = ops[idx].qint
+            ops.append(Op(idx, -1, -2, 0, QInterval(-qint.max, -qint.min, qint.step), op.latency, 0))
+            out_negs[i] = False
 
     return CombLogic(
         comb.shape,
