@@ -48,6 +48,7 @@ optional-dependencies.tests = [
   "pytest-env",
   "pytest-sugar",
   "pytest-xdist",
+  "xls-python",
 ]
 urls.repository = "https://github.com/calad0i/da4ml"
 scripts.da4ml = "da4ml._cli:main"
