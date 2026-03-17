@@ -420,17 +420,7 @@ class FixedVariable:
         return f'({self._factor}) FixedVariable({self.low}, {self.high}, {self.step})'
 
     def __neg__(self):
-        return FixedVariable(
-            _affine=-self._affine,
-            _from=self._from,
-            _factor=-self._factor,
-            latency=self.latency,
-            cost=self.cost,
-            opr=self.opr,
-            _id=self.id,
-            _data=self._data,
-            hwconf=self.hwconf,
-        )
+        return self._with(_affine=-self._affine, _factor=-self._factor, renew_id=False)
 
     def __add__(self, other: 'FixedVariable|float|int'):
         if other is None:
