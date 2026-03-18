@@ -994,6 +994,32 @@ class FixedVariable:
     def _eq(self, other):
         return ~(self._ne(other))
 
+    @property
+    def bits(self):
+        return BitsView(self)
+
+
+class BitsView:
+    def __init__(self, var: FixedVariable):
+        self.var = var
+
+    def __getitem__(self, idx: slice):
+        k, i, f = self.var.kif
+        bw = k + i + f
+        start, stop, step = idx.indices(bw)
+        assert step is None or step == 1, 'Bit slicing with step is not supported'
+        start = start if start is not None else 0
+        if start < 0:
+            start += bw
+        stop = stop if stop is not None else bw
+        if stop < 0:
+            stop += bw
+        assert 0 <= start <= stop <= bw, f'Bit slice {idx} out of range for variable with bit width {bw}'
+        new_k = int(start == 0 and k == 1)
+        new_i = k + i - start - new_k
+        new_f = stop - k - i
+        return self.var.quantize(new_k, new_i, new_f)
+
 
 class FixedVariableInput(FixedVariable):
     __normal__variable__ = False
