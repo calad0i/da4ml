@@ -51,7 +51,7 @@ def to_pipeline(comb: CombLogic, n_stages: int | None = None, latency_cutoff: fl
         'Exactly one of n_stages and latency_cutoff must be specified.'
     )
     latencies = [op.latency for op in comb.ops]
-    assert np.all(np.diff(latencies) >= 0), 'Operations must be sorted by latency in descending order.'
+    assert np.all(np.diff(latencies) >= -1e-8), 'Operations must be sorted by latency in descending order'
     _latency = latencies[-1]
     n_stages = n_stages if n_stages is not None else max(ceil(_latency / latency_cutoff), 1)  # type: ignore
     assert n_stages > 0, 'Number of stages must be greater than 0.'

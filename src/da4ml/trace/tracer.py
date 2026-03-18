@@ -90,7 +90,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 sub = int(f1 < 0)
                 data = int(log2(abs(f1 / f0)))
                 assert id0 < ii and id1 < ii, f'{id0} {id1} {ii} {v.id}'
-                op = Op(id0, id1, sub, data, v.unscaled.qint, v.latency, v.cost)
+                op = Op(id0, id1, sub, data, v.unscaled.qint, v.latency, 0.0)
             case 'cadd':
                 v0 = v._from[0]
                 f0 = v0._factor
@@ -99,19 +99,19 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 qint = v.unscaled.qint
                 data = v._data
                 assert id0 < ii, f'{id0} {ii} {v.id}'
-                op = Op(id0, -1, 4, data, qint, v.latency, v.cost)
+                op = Op(id0, -1, 4, data, qint, v.latency, 0.0)
             case 'wrap':
                 v0 = v._from[0]
                 id0 = index[v0.id] + (v0._factor < 0)
                 assert id0 < ii, f'{id0} {ii} {v.id}'
                 opcode = 3
-                op = Op(id0, -1, opcode, 0, v.unscaled.qint, v.latency, v.cost)
+                op = Op(id0, -1, opcode, 0, v.unscaled.qint, v.latency, 0.0)
             case 'relu':
                 v0 = v._from[0]
                 id0 = index[v0.id] + (v0._factor < 0)
                 assert id0 < ii, f'{id0} {ii} {v.id}'
                 opcode = 2
-                op = Op(id0, -1, opcode, 0, v.unscaled.qint, v.latency, v.cost)
+                op = Op(id0, -1, opcode, 0, v.unscaled.qint, v.latency, 0.0)
             case 'const':
                 qint = v.unscaled.qint
                 assert qint.min == qint.max, f'const {v.id} {qint.min} {qint.max}'
@@ -119,7 +119,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 step = 2.0**-f
                 qint = QInterval(qint.min, qint.min, step)
                 data = qint.min / step
-                op = Op(-1, -1, 5, int(data), qint, v.latency, v.cost)
+                op = Op(-1, -1, 5, int(data), qint, v.latency, 0.0)
             case 'msb_mux':
                 qint = v.unscaled.qint
                 key, in0, in1 = v._from
@@ -130,13 +130,13 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 data = idk + (shift << 32)
                 assert idk < ii and id0 < ii and id1 < ii, f'{idk} {id0} {id1} {ii} {v.id}'
                 assert key._factor > 0, f'Cannot mux on v{key.id} with negative factor {key._factor}'
-                op = Op(id0, id1, opcode, data, qint, v.latency, v.cost)
+                op = Op(id0, id1, opcode, data, qint, v.latency, 0.0)
             case 'vmul':
                 v0, v1 = v._from
                 opcode = 7
                 id0, id1 = index[v0.id], index[v1.id]
                 assert id0 < ii and id1 < ii, f'{id0} {id1} {ii} {v.id}'
-                op = Op(id0, id1, opcode, 0, v.unscaled.qint, v.latency, v.cost)
+                op = Op(id0, id1, opcode, 0, v.unscaled.qint, v.latency, 0.0)
             case 'lookup':
                 opcode = 8
                 v0 = v._from[0]
@@ -151,14 +151,14 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                     data = len(table_id_map)
                     table_id_map[tb_bash] = data
                     lookup_tables.append(v._table)
-                op = Op(id0, -1, opcode, data, v.unscaled.qint, v.latency, v.cost)
+                op = Op(id0, -1, opcode, data, v.unscaled.qint, v.latency, 0.0)
             case 'bit_unary':
                 v0 = v._from[0]
                 id0 = index[v0.id] + (v._factor < 0)
                 assert id0 < ii, f'{id0} {ii} {v.id}'
                 assert v._data is not None, 'bit_unary must have data'
                 opcode = 9
-                op = Op(id0, -1, opcode, int(v._data), v.unscaled.qint, v.latency, v.cost)
+                op = Op(id0, -1, opcode, int(v._data), v.unscaled.qint, v.latency, 0.0)
             case 'bit_binary':
                 v0, v1 = v._from
                 id0, id1 = index[v0.id], index[v1.id]
@@ -169,7 +169,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 # data: {subopcode[63:56], pad0, v1_neg[33], v0_neg[32], shift[31:0]}
                 _data = int(log2(abs(f1 / f0))) & 0xFFFFFFFF
                 _data += int(v._data) << 56
-                op = Op(id0, id1, 10, _data, v.unscaled.qint, v.latency, v.cost)
+                op = Op(id0, id1, 10, _data, v.unscaled.qint, v.latency, 0.0)
             case _:
                 raise NotImplementedError(f'Operation "{v.opr}" is not supported in tracing')
 

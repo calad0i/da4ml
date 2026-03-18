@@ -10,7 +10,7 @@ from uuid import UUID
 import numpy as np
 from numpy.typing import NDArray
 
-from .._binary.cmvm_bin import cost_add, get_lsb_loc, iceil_log2, solve
+from .._binary.cmvm_bin import get_lsb_loc, iceil_log2, solve
 from ..types import QInterval, minimal_kif
 from .affine_interval import AffineInterval
 
@@ -235,7 +235,6 @@ class FixedVariable:
         latency: float | None = None,
         hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, 1, -1),
         opr: str = 'new',
-        cost: float | None = None,
         _from: tuple['FixedVariable', ...] = (),
         _factor: float = 1.0,
         _data: int | None = None,
@@ -277,15 +276,10 @@ class FixedVariable:
         if self.opr == 'cadd':
             assert self._data is not None, 'cadd must have data'
 
-        if cost is None or latency is None:
-            _cost, _latency = self.get_cost_and_latency()
+        if latency is not None:
+            self.latency = float(latency)
         else:
-            _cost, _latency = cost, latency
-
-        self.latency = _latency
-        self.cost = _cost
-
-        # self._from = tuple(v if v.opr != 'const' else v._with(latency=self.latency) for v in self._from)
+            self.latency = self.get_latency() + (max(v.latency for v in self._from) if self._from else 0.0)
 
     @property
     def low(self) -> float:
@@ -309,87 +303,39 @@ class FixedVariable:
             _var.id = UUID(int=rd.getrandbits(128), version=4)
         return _var
 
-    def get_cost_and_latency(self) -> tuple[float, float]:
-        if self.opr == 'const':
-            return 0.0, 0.0
+    def get_latency(self) -> float:
 
-        if self.opr == 'lookup':
-            assert len(self._from) == 1
-            b_in = sum(self._from[0].kif)
-            b_out = sum(self.kif)
-            _latency = max(b_in - 6, 1) + self._from[0].latency
-            _cost = 2 ** max(b_in - 5, 0) * ceil(b_out / 2)
-            if b_in < 5:
-                _cost *= b_in / 5
-            return _cost, _latency
+        # neg, new, add, sub, relu, wrap, cadd, const, msb_mux, mul, lookup, bit_unary, bit_binary
 
-        if self.opr in ('vadd', 'cadd', 'min', 'max', 'vmul'):
-            adder_size = self.hwconf.adder_size
-            carry_size = self.hwconf.carry_size
-            latency_cutoff = self.hwconf.latency_cutoff
+        from ..trace.passes.surrogate import cost_lat_add, cost_lat_bin_bitops, cost_lat_lut, cost_lat_mul, cost_lat_mux
 
-            if self.opr in ('min', 'max', 'vadd'):
-                assert len(self._from) == 2
-                v0, v1 = self._from
-                int0, int1 = v0.qint, v1.qint
-                base_latency = max(v0.latency, v1.latency)
-                dlat, _cost = cost_add(int0, int1, 0, False, adder_size, carry_size)
-            elif self.opr == 'cadd':
-                assert len(self._from) == 1
-                assert self._data is not None, 'cadd must have data'
-                # Reconstruct float bias for cost estimation
-                unscaled_step = self.step / abs(self._factor)
-                float_data = self._data * unscaled_step
-                _f = -get_lsb_loc(float_data)
-                _cost = float(ceil(log2(abs(float_data) + 2.0**-_f))) + _f
-                base_latency = self._from[0].latency
-                dlat = 0.0
-            elif self.opr == 'vmul':
-                assert len(self._from) == 2
-                v0, v1 = self._from
-                b0, b1 = sum(v0.kif), sum(v1.kif)
-                int0, int1 = v0.qint, v1.qint
-                dlat0, _cost0 = cost_add(int0, int0, 0, False, adder_size, carry_size)
-                dlat1, _cost1 = cost_add(int1, int1, 0, False, adder_size, carry_size)
-                dlat = max(dlat0 * b1, dlat1 * b0)
-                _cost = min(_cost0 * b1, _cost1 * b0)
-                base_latency = max(v0.latency, v1.latency)
-            else:
-                raise NotImplementedError(f'Operation {self.opr} is unknown')
+        match self.opr:
+            case 'neg' | 'new' | 'wrap' | 'cadd' | 'const' | 'bit_unary' | 'relu':
+                return 0.0
 
-            _latency = dlat + base_latency
-            if latency_cutoff > 0 and ceil(_latency / latency_cutoff) > ceil(base_latency / latency_cutoff):
-                assert dlat <= latency_cutoff, (
-                    f'Latency of an atomic operation {dlat} is larger than the pipelining latency cutoff {latency_cutoff}'
-                )
-                _latency = ceil(base_latency / latency_cutoff) * latency_cutoff + dlat
+            case 'vadd':
+                qint0, qint1 = self._from[0].qint, self._from[1].qint
+                return cost_lat_add(qint0, qint1, 0, self.hwconf.adder_size, self.hwconf.carry_size)[1]
 
-        elif self.opr in ('relu', 'wrap'):
-            assert len(self._from) == 1
-            _latency = self._from[0].latency
-            _cost = 0.0
-            if self._from[0]._factor < 0:
-                _cost += sum(self.kif) / 2
-            if self.opr == 'relu':
-                _cost += sum(self.kif) / 2
+            case 'vmul':
+                qint0, qint1 = self._from[0].qint, self._from[1].qint
+                return cost_lat_mul(qint0, qint1, self.hwconf.adder_size, self.hwconf.carry_size)[1]
 
-        elif self.opr == 'bit_binary':
-            _cost = sum(self.kif) * 0.2
-            _latency = 1.0 + max(v.latency for v in self._from)
+            case 'lookup':
+                qint_in = self._from[0].qint
+                assert self._table is not None
+                return cost_lat_lut(qint_in, self._table, 6, 5, True)[1]
 
-        elif self.opr == 'bit_unary':
-            if self._data == 0:
-                _cost = 0.0
-                _latency = self._from[0].latency
-            else:
-                _cost = sum(self._from[0].kif) / 6
-                _latency = 1.0 + max(v.latency for v in self._from)
-        elif self.opr == 'new':
-            _latency = 0.0
-            _cost = 0.0
-        else:
-            raise NotImplementedError(f'Operation {self.opr} is unknown')
-        return _cost, _latency
+            case 'msb_mux':
+                qint0, qint1 = self._from[0].qint, self._from[1].qint
+                return cost_lat_mux(qint0, qint1, 0, 6, 5)[1]
+
+            case 'bit_binary':
+                qint0, qint1 = self._from[0].qint, self._from[1].qint
+                return cost_lat_bin_bitops(qint0, qint1, 0, 6, 5)[1]
+
+            case _:
+                raise ValueError(f'Unknown operation {self.opr} for latency estimation')
 
     @property
     def unscaled(self):
@@ -516,8 +462,6 @@ class FixedVariable:
             decompose_dc=-1,
             qintervals=[self._affine.qint],
             latencies=[self.latency],
-            adder_size=self.hwconf.adder_size,
-            carry_size=self.hwconf.carry_size,
         )
         return sol([self])[0]
 
@@ -633,7 +577,6 @@ class FixedVariable:
             _factor=abs(_factor),
             opr='relu',
             hwconf=self.hwconf,
-            cost=sum(self.kif) * (1 if _factor > 0 else 2),
         )
 
     def quantize(
@@ -725,7 +668,6 @@ class FixedVariable:
             _from=(self,),
             _factor=abs(self._factor),
             opr='wrap',
-            latency=self.latency,
             hwconf=self.hwconf,
         )
 
@@ -789,9 +731,6 @@ class FixedVariable:
             _max = min(floor(_max / step) * step, float(max(a.high, b.high)))
             qint = (_min, _max, step)
 
-        dlat, dcost = cost_add(a.qint, b.qint, 0, False, self.hwconf.adder_size, self.hwconf.carry_size)
-        dcost = dcost / 2
-
         if a.opr == 'const' and a._factor != b._factor:
             _factor = b._factor
             a = a._with(_factor=b._factor, renew_id=True)
@@ -804,9 +743,7 @@ class FixedVariable:
             _from=(self, a, b),
             _factor=_factor,
             opr='msb_mux',
-            latency=max(a.latency, b.latency, self.latency) + dlat,
             hwconf=self.hwconf,
-            cost=dcost,
         )
 
     def is_negative(self) -> 'FixedVariable':
@@ -1082,10 +1019,8 @@ class FixedVariableInput(FixedVariable):
             low=self._bounds_low,
             high=self._bounds_high,
             step=self._bounds_step,
-            latency=latency if latency is not None else 0.0,
             hwconf=HWConfig(*hwconf),
             opr=opr,
-            cost=0.0,
             _factor=1.0,
             _from=(),
             _data=None,
@@ -1182,6 +1117,5 @@ class FixedVariableInput(FixedVariable):
             _from=(self,),
             _factor=self._factor,
             opr='wrap',
-            latency=self.latency,
             hwconf=self.hwconf,
         )

@@ -27,10 +27,9 @@ class Packet:
 
         if isinstance(a, FixedVariable):
             if isinstance(b, FixedVariable):
-                if b.latency > a.latency:
-                    return False
-                if b.latency < a.latency:
-                    return True
+                la, lb = round(a.latency), round(b.latency)
+                if la != lb:
+                    return la > lb
                 if b._factor > 0 and a._factor < 0:
                     return False
                 if b._factor < 0 and a._factor > 0:

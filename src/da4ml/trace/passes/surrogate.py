@@ -8,7 +8,7 @@ from ...trace.fixed_variable import LookupTable
 from ...types import CombLogic, Op, QInterval, minimal_kif
 
 
-def cost_lat_add(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool, n_add: int, n_accum: int):
+def cost_lat_add(qint0: QInterval, qint1: QInterval, shift1: int, n_add: int, n_accum: int):
     left, overlap, right = overlap_counts(qint0, qint1, shift1)
     if overlap <= 0:  # bit concat
         return 0, 0
@@ -73,14 +73,17 @@ def _count_luts(bit_nd: np.ndarray, LUT_X: int = 6) -> float:
     return best_cost
 
 
-def cost_lat_lut(qint_in: QInterval, table: LookupTable, LUT_X: int, LUT_Y: int):
+def cost_lat_lut(qint_in: QInterval, table: LookupTable, LUT_X: int, LUT_Y: int, skip_cost: bool = False):
     data = table.padded_table(qint_in)
     int_data = np.where(np.isnan(data), 0, data).astype(int)  # fill DCs with 0
     out_bw = sum(table.spec.out_kif)
 
     n = max(int(np.ceil(np.log2(max(len(data), 2)))), 1)
+    lat = max(n - LUT_X, 1) * 0.5
 
-    # Pad to 2^n
+    if skip_cost:
+        return 0, lat
+
     full_size = 2**n
     if len(int_data) < full_size:
         int_data = np.pad(int_data, (0, full_size - len(int_data)))
@@ -95,7 +98,6 @@ def cost_lat_lut(qint_in: QInterval, table: LookupTable, LUT_X: int, LUT_Y: int)
         bit_nd = bit_vals.reshape((2,) * n)
         total_cost += _count_luts(bit_nd, LUT_X)
 
-    lat = max(n - LUT_X, 1) * 0.5
     return ceil(total_cost), lat
 
 
@@ -117,60 +119,56 @@ def cost_lat_bin_bitops(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: 
     return cost, lat
 
 
-def cost_neg(qint: QInterval, LUT_X: int, LUT_Y: int):
-    return 0, 0
-
-
-def cost_lat_op(ops: list[Op], op: Op, hwconf: HWConfig, lut: tuple[LookupTable, ...] | None) -> tuple[float, float]:
+def cost_lat_op(
+    ops: list[Op],
+    op: Op,
+    hwconf: HWConfig,
+    lut: tuple[LookupTable, ...] | None,
+) -> tuple[float, float]:
     LUT_X, LUT_Y = 6, 5
     n_add, n_carry = hwconf.adder_size % 65535, hwconf.carry_size % 65535
     match op.opcode:
         case -2:  # neg
-            return cost_neg(ops[op.id0].qint, LUT_X, LUT_Y)
+            c, l = 0, 0
         case -1:  # READ
-            return 0, 0
+            c, l = 0, 0
         case 0 | 1:  # +/-
             op0, op1 = ops[op.id0], ops[op.id1]
             qint0, qint1 = op0.qint, op1.qint
             shift1 = op.data
-            is_sub = op.opcode == 1
-            c, l = cost_lat_add(qint0, qint1, shift1, is_sub, n_add, n_carry)
-            return c, l
+            c, l = cost_lat_add(qint0, qint1, shift1, n_add, n_carry)
         case 2:  # relu(-)
             qint_in = ops[op.id0].qint
             if qint_in.min >= 0:
                 return 0, 0  # no-op for non-negative
             c, l = cost_relu(qint_in, LUT_X, LUT_Y)
-            return c, l
-        case 3:  # WRAP — pure routing (bit-select / sign-extend)
+        case 3:  # WRAP
             return 0, 0
-        case 4:  # cadd — absorbed by synthesis
+        case 4:  # cadd: absorbed
             return 0, 0
         case 5:  # const
             return 0, 0
         case 6:  # msb_mux
             out_bw = sum(minimal_kif(op.qint))
-            c0 = out_bw * 2.0 ** (LUT_Y - LUT_X)  # 0.5 LUT/bit
-            return c0, 1
+            c = out_bw * 2.0 ** (LUT_Y - LUT_X)  # 0.5 LUT/bit
+            l = 1
         case 7:  # mul
             qint0, qint1 = ops[op.id0].qint, ops[op.id1].qint
             c, l = cost_lat_mul(qint0, qint1, n_add, n_carry)
-            return c, l
         case 8:  # lut
             qint_in = ops[op.id0].qint
             # qint_out = op.qint
             assert lut is not None
             c, l = cost_lat_lut(qint_in, lut[op.data], LUT_X, LUT_Y)
-            return c, l
-        case 9:  # unary bitops — absorbed by synthesis
-            return 0, 0
+        case 9:  # unary bitops: absorbed
+            c, l = 0, 0
         case 10:  # bin bitops
             qint0, qint1 = ops[op.id0].qint, ops[op.id1].qint
             shift = ((int(op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
             c, l = cost_lat_bin_bitops(qint0, qint1, shift, LUT_X, LUT_Y)
-            return c, l
         case _:
             raise NotImplementedError(f'Unsupported opcode: {op.opcode}')
+    return c, l
 
 
 def _with_cost_lat(op: Op, cost, lat) -> Op:

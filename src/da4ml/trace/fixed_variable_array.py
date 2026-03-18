@@ -70,11 +70,8 @@ def cmvm(cm: np.ndarray, v: 'FixedVariableArray', solver_options: solver_options
         offload_cm = None
     qintervals = [QInterval(float(_v.low), float(_v.high), float(_v.step)) for _v in v._vars]
     latencies = [float(_v.latency) for _v in v._vars]
-    hwconf = v._vars.ravel()[0].hwconf
-    solver_options = solver_options.copy()
-    solver_options.setdefault('adder_size', hwconf.adder_size)
-    solver_options.setdefault('carry_size', hwconf.carry_size)
     _mat = np.ascontiguousarray(cm.astype(np.float32))
+    solver_options = solver_options.copy()
     solver_options.pop('offload_fn', None)
     sol = solve(_mat, qintervals=qintervals, latencies=latencies, **solver_options)  # type: ignore
     _r: np.ndarray = sol(v._vars)
