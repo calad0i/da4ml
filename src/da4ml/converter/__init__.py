@@ -19,7 +19,7 @@ def get_available_plugins() -> dict[str, EntryPoint]:
 @overload
 def trace_model(  # type: ignore
     model: Any,
-    hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
+    hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, 1, -1),
     solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
@@ -33,7 +33,7 @@ def trace_model(  # type: ignore
 @overload
 def trace_model(  # type: ignore
     model: Any,
-    hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
+    hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, 1, -1),
     solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
@@ -46,7 +46,7 @@ def trace_model(  # type: ignore
 
 def trace_model(  # type: ignore
     model: Any,
-    hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
+    hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, 1, -1),
     solver_options: solver_options_t | None = None,
     verbose: bool = False,
     inputs: tuple[FixedVariableArray, ...] | None = None,

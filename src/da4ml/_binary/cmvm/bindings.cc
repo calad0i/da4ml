@@ -25,10 +25,7 @@ namespace nanobind::detail {
 nb::typed<nb::tuple, float, float> cost_add_numpy(
     const nb::typed<nb::tuple, float, float, float> &q0_obj,
     const nb::typed<nb::tuple, float, float, float> &q1_obj,
-    int64_t shift,
-    bool sub,
-    int adder_size,
-    int carry_size
+    int64_t shift
 ) {
     QInterval q0{
         nb::cast<float>(q0_obj[0]), nb::cast<float>(q0_obj[1]), nb::cast<float>(q0_obj[2])
@@ -36,7 +33,7 @@ nb::typed<nb::tuple, float, float> cost_add_numpy(
     QInterval q1{
         nb::cast<float>(q1_obj[0]), nb::cast<float>(q1_obj[1]), nb::cast<float>(q1_obj[2])
     };
-    auto [lat, cost] = cost_add(q0, q1, shift, sub, adder_size, carry_size);
+    auto [lat, cost] = cost_add(q0, q1, shift);
     return nb::make_tuple(lat, cost);
 }
 
@@ -189,8 +186,6 @@ static nb::typed<nb::object, PyPipeline> solve_numpy(
     int decompose_dc,
     nb::typed<nb::object, vec_of_qints> qintervals_obj,
     nb::typed<nb::object, std::vector<float>> latencies_obj,
-    int adder_size,
-    int carry_size,
     bool search_all_decompose_dc,
     bool partial
 ) {
@@ -217,13 +212,26 @@ static nb::typed<nb::object, PyPipeline> solve_numpy(
         decompose_dc,
         qintervals,
         latencies,
-        adder_size,
-        carry_size,
         search_all_decompose_dc,
         partial
     );
 
     return make_py_pipeline(result);
+}
+
+nb::typed<nb::tuple, int8_t, int8_t, int8_t> overlap_counts_(
+    const nb::typed<nb::tuple, float, float, float> &q0_obj,
+    const nb::typed<nb::tuple, float, float, float> &q1_obj,
+    int8_t shift1
+) {
+    QInterval q0{
+        nb::cast<float>(q0_obj[0]), nb::cast<float>(q0_obj[1]), nb::cast<float>(q0_obj[2])
+    };
+    QInterval q1{
+        nb::cast<float>(q1_obj[0]), nb::cast<float>(q1_obj[1]), nb::cast<float>(q1_obj[2])
+    };
+    auto [a, b, c] = overlap_counts(q0, q1, shift1);
+    return nb::make_tuple(a, b, c);
 }
 
 NB_MODULE(cmvm_bin, m) {
@@ -244,8 +252,6 @@ NB_MODULE(cmvm_bin, m) {
         "decompose_dc"_a = -2,
         "qintervals"_a = nb::none(),
         "latencies"_a = nb::none(),
-        "adder_size"_a = -1,
-        "carry_size"_a = -1,
         "search_all_decompose_dc"_a = true,
         "partial"_a = false
     );
@@ -255,13 +261,11 @@ NB_MODULE(cmvm_bin, m) {
         "q0"_a,
         "q1"_a,
         "shift"_a,
-        "sub"_a,
-        "adder_size"_a,
-        "carry_size"_a,
         nb::sig(
             "def cost_add(q0: tuple[float, float, float], q1: tuple[float, float, "
-            "float], shift: int, sub: bool, adder_size: int, carry_size: int) -> "
+            "float], shift: int) -> "
             "tuple[float, float]"
         )
     );
+    m.def("overlap_counts", &overlap_counts_, "q0"_a, "q1"_a, "shift1"_a);
 }

@@ -8,8 +8,6 @@ float minimal_latency(
     const xt::xarray<float> &kernel,
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &latencies,
-    int carry_size = -1,
-    int adder_size = -1,
     bool partial = false
 );
 
@@ -21,8 +19,6 @@ PipelineResult _solve(
     int decompose_dc = -2,
     const std::vector<QInterval> &qintervals = {},
     const std::vector<float> &latencies = {},
-    int adder_size = -1,
-    int carry_size = -1,
     bool partial = false
 );
 
@@ -34,8 +30,6 @@ PipelineResult solve(
     int decompose_dc = -2,
     const std::vector<QInterval> &qintervals = {},
     const std::vector<float> &latencies = {},
-    int adder_size = -1,
-    int carry_size = -1,
     bool search_all_decompose_dc = true,
     bool partial = false
 );

@@ -17,7 +17,6 @@ class solver_options_t(TypedDict, total=False):
     hard_dc: int
     decompose_dc: int
     adder_size: int
-    carry_size: int
     search_all_decompose_dc: bool
     offload_fn: None | Callable[[np.ndarray, 'FixedVariableArray'], np.ndarray]
     """

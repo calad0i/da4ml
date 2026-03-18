@@ -285,7 +285,7 @@ class FixedVariableArray:
         low: NDArray[np.floating],
         high: NDArray[np.floating],
         step: NDArray[np.floating],
-        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, 1, -1),
         latency: np.ndarray | float = 0.0,
         solver_options: solver_options_t | None = None,
     ):
@@ -319,7 +319,7 @@ class FixedVariableArray:
         k: NDArray[np.bool_ | np.integer],
         i: NDArray[np.integer],
         f: NDArray[np.integer],
-        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, 1, -1),
         latency: NDArray[np.floating] | float = 0.0,
         solver_options: solver_options_t | None = None,
     ):
@@ -638,7 +638,7 @@ class FixedVariableArrayInput(FixedVariableArray):
     def __init__(
         self,
         shape: tuple[int, ...] | int,
-        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, -1, -1),
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(1, 1, -1),
         solver_options: solver_options_t | None = None,
         latency=0.0,
     ):

@@ -12,12 +12,10 @@ float minimal_latency(
     const xt::xarray<float> &kernel,
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &latencies,
-    int carry_size,
-    int adder_size,
     bool partial
 ) {
     DAState state = create_state(kernel, qintervals, latencies, true, true);
-    CombLogicResult sol = to_solution(state, adder_size, carry_size);
+    CombLogicResult sol = to_solution(state);
     float max_lat = 0.0;
     for (auto idx : sol.out_idxs) {
         float lat = (idx >= 0) ? sol.ops[idx].latency : 0.0;
@@ -34,8 +32,6 @@ PipelineResult _solve(
     int decompose_dc,
     const std::vector<QInterval> &qintervals_in,
     const std::vector<float> &latencies_in,
-    int adder_size,
-    int carry_size,
     bool partial
 ) {
     size_t n_in = kernel.shape(0);
@@ -69,8 +65,7 @@ PipelineResult _solve(
 
     float min_lat = std::numeric_limits<float>::infinity();
     if (hard_dc >= 0)
-        min_lat =
-            minimal_latency(kernel, qintervals, inp_latencies, carry_size, adder_size);
+        min_lat = minimal_latency(kernel, qintervals, inp_latencies);
     float latency_allowed = hard_dc + min_lat;
 
     int log2_n = static_cast<int>(std::ceil(std::log2(static_cast<float>(n_in))));
@@ -95,9 +90,7 @@ PipelineResult _solve(
         }
 
         auto [mat0, mat1] = kernel_decompose(xt::xarray<float>(kernel), decompose_dc);
-        sol0 = solve_single(
-            mat0, method0, qintervals, inp_latencies, adder_size, carry_size, partial
-        );
+        sol0 = solve_single(mat0, method0, qintervals, inp_latencies, partial);
 
         std::vector<float> latencies0;
         std::vector<QInterval> qintervals0;
@@ -123,9 +116,7 @@ PipelineResult _solve(
             }
         }
 
-        sol1 = solve_single(
-            mat1, method1, qintervals0, latencies0, adder_size, carry_size, false
-        );
+        sol1 = solve_single(mat1, method1, qintervals0, latencies0, false);
 
         float max_lat1 = 0.0;
         for (auto idx : sol1.out_idxs) {
@@ -155,8 +146,6 @@ PipelineResult solve(
     int decompose_dc,
     const std::vector<QInterval> &qintervals_in,
     const std::vector<float> &latencies_in,
-    int adder_size,
-    int carry_size,
     bool search_all_decompose_dc,
     bool partial
 ) {
@@ -179,16 +168,7 @@ PipelineResult solve(
 
     if (!search_all_decompose_dc) {
         return _solve(
-            kernel,
-            method0,
-            method1,
-            hard_dc,
-            decompose_dc,
-            qintervals,
-            latencies,
-            adder_size,
-            carry_size,
-            partial
+            kernel, method0, method1, hard_dc, decompose_dc, qintervals, latencies, partial
         );
     }
 
@@ -221,8 +201,6 @@ PipelineResult solve(
                 try_dcs[i],
                 qintervals,
                 latencies,
-                adder_size,
-                carry_size,
                 partial
             );
             float _cost = 0.0;

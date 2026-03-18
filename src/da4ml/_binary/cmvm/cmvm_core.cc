@@ -12,8 +12,6 @@ DAState cmvm(
     const std::string &method,
     const std::vector<QInterval> &qintervals_in,
     const std::vector<float> &inp_latencies_in,
-    int adder_size,
-    int carry_size,
     bool partial
 ) {
     size_t n_in = kernel.shape(0);
@@ -67,7 +65,7 @@ DAState cmvm(
         if (pair_chosen.id0 == -1 || pair_chosen.id1 == -1)
             break;
 
-        update_state(state, pair_chosen, adder_size, carry_size, partial);
+        update_state(state, pair_chosen, partial);
     }
     return state;
 }
@@ -87,8 +85,7 @@ struct HeapEntry {
     bool operator>(const HeapEntry &o) const { return as_tuple() > o.as_tuple(); }
 };
 
-CombLogicResult
-to_solution(const DAState &state, int adder_size, int carry_size, bool partial) {
+CombLogicResult to_solution(const DAState &state, bool partial) {
     auto ops = state.ops; // copy
     int64_t n_out = static_cast<int64_t>(state.kernel.shape(1));
     size_t n_expr = state.expr.size();
@@ -136,7 +133,7 @@ to_solution(const DAState &state, int adder_size, int carry_size, bool partial) 
             heap;
         for (size_t k = 0; k < idx.size(); ++k) {
             auto &qint = ops[idx[k]].qint;
-            float lat = ops[idx[k]].latency;
+            float lat = roundf(ops[idx[k]].latency);
             int64_t n_int = static_cast<int64_t>(
                 std::log2(std::max(std::abs(qint.max + qint.step), std::abs(qint.min)))
             );
@@ -167,8 +164,7 @@ to_solution(const DAState &state, int adder_size, int carry_size, bool partial) 
             if (sub0) {
                 int64_t s = shift0 - shift1;
                 qint = qint_add(qint1, qint0, s, sub1 != 0, sub0 != 0);
-                auto [dl, dc] =
-                    cost_add(qint1, qint0, s, (1 ^ sub1) != 0, adder_size, carry_size);
+                auto [dl, dc] = cost_add(qint1, qint0, s);
                 dlat = dl;
                 dcost = dc;
                 float lat = std::max(lat0, lat1) + dlat;
@@ -177,9 +173,8 @@ to_solution(const DAState &state, int adder_size, int carry_size, bool partial) 
             }
             else {
                 int64_t s = shift1 - shift0;
-                qint = qint_add(qint0, qint1, s, sub0 != 0, sub1 != 0);
-                auto [dl, dc] =
-                    cost_add(qint0, qint1, s, sub1 != 0, adder_size, carry_size);
+                qint = qint_add(qint0, qint1, s, sub0 != 0);
+                auto [dl, dc] = cost_add(qint0, qint1, s);
                 dlat = dl;
                 dcost = dc;
                 float lat = std::max(lat0, lat1) + dlat;
@@ -191,7 +186,7 @@ to_solution(const DAState &state, int adder_size, int carry_size, bool partial) 
                              std::max(std::abs(qint.max + qint.step), std::abs(qint.min))
                          )) +
                          result_shift;
-            float lat = op.latency;
+            float lat = roundf(op.latency);
             heap.push(
                 {lat,
                  sub0 & sub1,
@@ -222,8 +217,6 @@ to_solution(const DAState &state, int adder_size, int carry_size, bool partial) 
     result.out_shifts = std::move(out_shifts_vec);
     result.out_negs = std::move(out_negs);
     result.ops = std::move(ops);
-    result.carry_size = carry_size;
-    result.adder_size = adder_size;
     return result;
 }
 
@@ -232,11 +225,8 @@ CombLogicResult solve_single(
     const std::string &method,
     const std::vector<QInterval> &qintervals,
     const std::vector<float> &latencies,
-    int adder_size,
-    int carry_size,
     bool partial
 ) {
-    DAState state =
-        cmvm(kernel, method, qintervals, latencies, adder_size, carry_size, partial);
-    return to_solution(state, adder_size, carry_size, partial);
+    DAState state = cmvm(kernel, method, qintervals, latencies, partial);
+    return to_solution(state, partial);
 }

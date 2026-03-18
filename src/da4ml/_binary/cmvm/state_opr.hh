@@ -12,14 +12,7 @@ QInterval qint_add(
     bool sub1 = false
 );
 
-std::pair<float, float> cost_add(
-    const QInterval &q0,
-    const QInterval &q1,
-    int64_t shift,
-    bool sub = false,
-    int adder_size = -1,
-    int carry_size = -1
-);
+std::pair<float, float> cost_add(const QInterval &q0, const QInterval &q1, int64_t shift);
 
 DAState create_state(
     const xt::xarray<float> &kernel_in,
@@ -33,19 +26,8 @@ void update_stats(DAState &state, const Pair &pair);
 std::vector<std::tuple<int64_t, int64_t, int64_t>>
 gather_matching_idxs(const DAState &state, const Pair &pair);
 
-Op pair_to_op(
-    const Pair &pair,
-    const DAState &state,
-    int adder_size = -1,
-    int carry_size = -1
-);
+Op pair_to_op(const Pair &pair, const DAState &state);
 
-void update_expr(DAState &state, const Pair &pair, int adder_size, int carry_size);
+void update_expr(DAState &state, const Pair &pair);
 
-void update_state(
-    DAState &state,
-    const Pair &pair,
-    int adder_size,
-    int carry_size,
-    bool partial = false
-);
+void update_state(DAState &state, const Pair &pair, bool partial = false);

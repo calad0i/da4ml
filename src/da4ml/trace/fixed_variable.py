@@ -233,7 +233,7 @@ class FixedVariable:
         step: float | None = None,
         *,
         latency: float | None = None,
-        hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, -1, -1),
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, 1, -1),
         opr: str = 'new',
         cost: float | None = None,
         _from: tuple['FixedVariable', ...] = (),
@@ -1071,7 +1071,7 @@ class FixedVariableInput(FixedVariable):
     def __init__(
         self,
         latency: float | None = None,
-        hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, -1, -1),
+        hwconf: HWConfig | tuple[int, int, int] = HWConfig(-1, 1, -1),
         opr: str = 'new',
     ) -> None:
         # Accumulators for tracking widest quantization range seen

@@ -2,32 +2,20 @@ from math import ceil
 
 import numpy as np
 
-from ..._binary import get_lsb_loc, iceil_log2
+from ..._binary import iceil_log2, overlap_counts
 from ...trace import HWConfig
 from ...trace.fixed_variable import LookupTable
 from ...types import CombLogic, Op, QInterval, minimal_kif
 
 
-def overlap_counts(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool):
-    r0, r1 = -get_lsb_loc(qint0.step), -get_lsb_loc(qint1.step) - shift1
-    b0, b1 = sum(minimal_kif(qint0)), sum(minimal_kif(qint1))
-    l0, l1 = r0 - b0, r1 - b1
-    a, b, c, d = sorted([l0, r0, l1, r1])
-    if r0 < l0 or r1 < l0:  # no overlap
-        b, c = c, b
-    if is_sub:
-        b = a
-    return b - a, c - b, d - c
-
-
 def cost_lat_add(qint0: QInterval, qint1: QInterval, shift1: int, is_sub: bool, n_add: int, n_accum: int):
-    left, overlap, right = overlap_counts(qint0, qint1, shift1, is_sub)
+    left, overlap, right = overlap_counts(qint0, qint1, shift1)
     if overlap <= 0:  # bit concat
         return 0, 0
 
     bw_add = left + overlap + right
     cost = (max(bw_add - 1, 1) + n_add - 1) // n_add
-    lat = (cost + n_accum - 1) // n_accum if n_accum > 0 else 1
+    lat = (left + overlap - 1) // n_accum * 0.03 + 1.1
     return cost, lat
 
 
@@ -107,22 +95,21 @@ def cost_lat_lut(qint_in: QInterval, table: LookupTable, LUT_X: int, LUT_Y: int)
         bit_nd = bit_vals.reshape((2,) * n)
         total_cost += _count_luts(bit_nd, LUT_X)
 
-    lat = max(n - LUT_X, 1)
+    lat = max(n - LUT_X, 1) * 0.5
     return ceil(total_cost), lat
 
 
 def cost_lat_mux(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: int, LUT_Y: int):
-    return sum(overlap_counts(qint0, qint1, shift1, False)) * 2.0 ** (LUT_Y - LUT_X), 1
+    return sum(overlap_counts(qint0, qint1, shift1)) * 2.0 ** (LUT_Y - LUT_X), 1
 
 
 def cost_relu(qint: QInterval, LUT_X: int = 6, LUT_Y: int = 5):
-    # LUT6_2 packs 2 ReLU bits (shared sign), but ~1/3 of bits can't share
-    # due to routing constraints. Effective: 0.67 LUT/bit.
-    return sum(minimal_kif(qint)) * 2 / 3, 0
+    # LUT6_2 fractures, but somehow 1/3 of the bits can't be shared statistically...
+    return sum(minimal_kif(qint)) * 0.666, 0
 
 
 def cost_lat_bin_bitops(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: int, LUT_Y: int):
-    x, y, z = overlap_counts(qint0, qint1, shift1, False)
+    x, y, z = overlap_counts(qint0, qint1, shift1)
     if y <= 0:
         return 0, 0
     cost = 2 * y / LUT_Y * 2 ** (LUT_X - LUT_Y)
@@ -130,9 +117,7 @@ def cost_lat_bin_bitops(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: 
     return cost, lat
 
 
-def cost_neg(qint: QInterval, LUT_X: int, LUT_Y: int):  # noqa: ARG001
-    # NEG = 0 - x: one constant input (0). Synthesis absorbs the carry chain
-    # into downstream ops (79% into RELU via LUT6_2 sharing, 21% into WRAP).
+def cost_neg(qint: QInterval, LUT_X: int, LUT_Y: int):
     return 0, 0
 
 
@@ -195,7 +180,7 @@ def _with_cost_lat(op: Op, cost, lat) -> Op:
 def add_surrogate(comb: CombLogic) -> CombLogic:
     "Add surrogate cost and latency"
     new_ops = []
-    hwconf = HWConfig(comb.adder_size, comb.carry_size, -1.0)
+    hwconf = HWConfig(1, 1, -1)
     for op in comb.ops:
         cost, lat = cost_lat_op(new_ops, op, hwconf, comb.lookup_tables)
         lat = lat + max(tuple(new_ops[j].latency for j in op.input_ids) + (0,))
