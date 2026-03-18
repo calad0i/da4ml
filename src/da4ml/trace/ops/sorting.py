@@ -14,7 +14,7 @@ if typing.TYPE_CHECKING:
 def cmp_swap(a: 'Sequence[FixedVariable]|NDArray', b: 'Sequence[FixedVariable]|NDArray', ascending: bool):
     ka, kb = a[0], b[0]
     k = ka <= kb
-    a, b = zip(*[(k.msb_mux(va, vb, zt_sensitive=False), k.msb_mux(vb, va, zt_sensitive=False)) for va, vb in zip(a, b)])
+    a, b = zip(*[(k.msb_mux(va, vb), k.msb_mux(vb, va)) for va, vb in zip(a, b)])
 
     if not ascending:
         return b, a
@@ -79,17 +79,8 @@ def batcher_odd_even_merge_sort(a: 'NDArray', ascending: bool):
 
 
 @overload
-def sort(
-    a: np.ndarray,
-    axis: int | None = None,
-    kind: str = 'batcher',
-    aux_value: None = None,
-) -> np.ndarray: ...
-
-
-@overload
 def sort(  # type: ignore
-    a: 'FixedVariableArray',
+    a: 'np.ndarray',
     axis: int | None = None,
     kind: str = 'batcher',
     aux_value: None = None,
@@ -98,7 +89,7 @@ def sort(  # type: ignore
 
 @overload
 def sort(
-    a: 'FixedVariableArray',
+    a: 'np.ndarray',
     axis: int | None = None,
     kind: str = 'batcher',
     aux_value: 'FixedVariableArray' = ...,
@@ -106,13 +97,14 @@ def sort(
 
 
 def sort(  # type: ignore
-    a: 'FixedVariableArray | np.ndarray',
+    a: 'np.ndarray',
     axis: int | None = None,
     kind: str = 'batcher',
     aux_value: 'FixedVariableArray | None' = None,
 ):
+    from ..fixed_variable_array import FixedVariableArray
 
-    if isinstance(a, np.ndarray):
+    if not isinstance(a, FixedVariableArray):
         return np.sort(a, axis=axis)
     if axis is None:
         axis = -1
@@ -127,9 +119,9 @@ def sort(  # type: ignore
 
     if aux_value is not None:
         if aux_value.shape == a.shape:
-            aux_value = aux_value[..., None]
-        assert aux_value.ndim - a.ndim == 1 and aux_value.shape[:-1] == a.shape, (
-            f'aux_value must be of shape a.shape (+ (k,)). Got a.shape={a.shape}, aux_value.shape={aux_value.shape}'
+            aux_value = aux_value[..., None]  # type: ignore
+        assert aux_value.ndim - a.ndim == 1 and aux_value.shape[:-1] == a.shape, (  # type: ignore
+            f'aux_value must be of shape a.shape (+ (k,)). Got a.shape={a.shape}, aux_value.shape={aux_value.shape}'  # type: ignore
         )
         a = np.concatenate([a[..., None], aux_value], axis=-1)  # type: ignore
     else:
@@ -146,9 +138,9 @@ def sort(  # type: ignore
     for i in range(len(r)):
         kind = kind.lower()
         if kind == 'bitonic':
-            _bitonic_sort(r._vars[i], ascending=True)
+            _bitonic_sort(r[i], ascending=True)
         elif kind == 'batcher':
-            batcher_odd_even_merge_sort(r._vars[i], ascending=True)  # type: ignore
+            batcher_odd_even_merge_sort(r[i], ascending=True)  # type: ignore
         else:
             raise ValueError(f'Unsupported sorting algorithm: {kind}')
 
@@ -156,5 +148,5 @@ def sort(  # type: ignore
     r = np.moveaxis(r, -2, axis)  # type: ignore
     if aux_value is not None:
         return r[..., 0], r[..., 1:]
-    assert r.shape[-1] == 1
+    assert r.shape[-1] == 1  # type: ignore
     return r[..., 0]

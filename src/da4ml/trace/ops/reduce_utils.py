@@ -47,7 +47,7 @@ def _reduce(operator: Callable[[T, T], T], arr: Sequence[T]) -> T:
     from ..fixed_variable_array import FixedVariable
 
     if isinstance(arr, np.ndarray):
-        arr = list(arr.ravel())
+        arr = arr.ravel().tolist()
     assert len(arr) > 0, 'Array must not be empty'
     if len(arr) == 1:
         return arr[0]
@@ -76,7 +76,7 @@ def reduce(operator: Callable[[T, T], T], x: TA, axis: int | Sequence[int] | Non
 
     if isinstance(x, FixedVariableArray):
         solver_config = x.solver_options
-        arr = x._vars
+        arr = np.asarray(x)
     else:
         solver_config = None
         arr = x
@@ -100,5 +100,5 @@ def reduce(operator: Callable[[T, T], T], x: TA, axis: int | Sequence[int] | Non
     if isinstance(x, FixedVariableArray):
         r = FixedVariableArray(r, solver_config)
         if r.shape == ():
-            return r._vars.item()  # type: ignore
+            return r.item()  # type: ignore
     return r if r.shape != () or keepdims else r.item()  # type: ignore

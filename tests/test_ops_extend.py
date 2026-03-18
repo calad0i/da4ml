@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from da4ml.trace import FixedVariableArrayInput, comb_trace
+from da4ml.trace import FixedVariableArray, FixedVariableArrayInput, comb_trace
 from da4ml.trace.ops import quantize, relu
 from da4ml.types import CombLogic
 
@@ -36,7 +36,9 @@ functions = {
     'multi_cadd': lambda x, w: x * 2.0 ** np.arange(-8, 8, 2) + 2 + 3.75,
     'mux0': lambda x, w: np.where(x[..., None] > w, x[..., None], w),
     'lut': lambda x, w: (
-        quantize(np.cos(np.sin(x)), 1, 2, 3) if isinstance(x, np.ndarray) else quantize(x.apply(np.sin).apply(np.cos), 1, 2, 3)
+        quantize(np.cos(np.sin(x)), 1, 2, 3)
+        if not isinstance(x, FixedVariableArray)
+        else quantize(x.apply(np.sin).apply(np.cos), 1, 2, 3)
     ),
     'prod': lambda x, w: np.prod(x[..., :3], axis=-1, keepdims=True),
     'mean': lambda x, w: np.mean(x, axis=-1, keepdims=True),
@@ -75,7 +77,7 @@ class TestSort(OperationTest):
     def op_func(self, kind, size):
         def sort_fn(x):
             _kind = kind
-            if isinstance(x, np.ndarray):
+            if not isinstance(x, FixedVariableArray):
                 _kind = 'quicksort'
             if size >= 4:
                 return np.sort(x[..., :size], axis=-1, kind=_kind)
@@ -91,7 +93,7 @@ class TestArgsort(OperationTest):
     @pytest.fixture()
     def op_func(self):
         def argsort_fn(x):
-            if not isinstance(x, np.ndarray):
+            if isinstance(x, FixedVariableArray):
                 return x[..., :4][np.argsort(x[..., 4:])]
             else:
                 return np.apply_along_axis(lambda v: v[:4][np.argsort(v[4:])], -1, x)

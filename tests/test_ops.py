@@ -194,7 +194,7 @@ class TestBinaryBitOps(OperationTestSynth):
 
         def func(x):
             x0, x1 = x * w0, x[..., ::-1] * w1
-            if isinstance(x, np.ndarray):
+            if not isinstance(x, FixedVariableArray):
                 x0, x1 = (x0 * sf).astype(np.int64), (x1 * sf).astype(np.int64)
             if request.param == 'and':
                 x = x0 & x1
@@ -205,7 +205,7 @@ class TestBinaryBitOps(OperationTestSynth):
             else:
                 raise ValueError()
 
-            if isinstance(x, np.ndarray):
+            if not isinstance(x, FixedVariableArray):
                 x = x / sf
 
             return x + 3.75
@@ -232,7 +232,7 @@ class TestBitReduction(OperationTestSynth):
             if request.param == 'any':
                 return x != 0
             else:
-                if isinstance(x, np.ndarray):
+                if not isinstance(x, FixedVariableArray):
                     return x == -1 if signed else x == 15
                 else:
                     return x.to_bool('all')
@@ -257,7 +257,7 @@ class TestBitNot(OperationTestSynth):
     def op_func(self, request, signed):
         def func(x):
             if request.param == 'not':
-                if isinstance(x, np.ndarray):
+                if not isinstance(x, FixedVariableArray):
                     x = x.astype(np.int8) if signed else x.astype(np.uint8)
                 x = ~x
             else:

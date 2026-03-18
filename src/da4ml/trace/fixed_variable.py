@@ -683,7 +683,6 @@ class FixedVariable:
         a: 'FixedVariable|float',
         b: 'FixedVariable|float',
         qint: tuple[float, float, float] | None = None,
-        zt_sensitive: bool = True,
     ):
         """If the MSB of this variable is 1, return a, else return b.
         When the variable is signed, the MSB is determined by the sign bit (1 for <0, 0 for >=0)
@@ -693,11 +692,6 @@ class FixedVariable:
             a = FixedVariable.from_const(a, hwconf=self.hwconf, _factor=1)
         if not isinstance(b, FixedVariable):
             b = FixedVariable.from_const(b, hwconf=self.hwconf, _factor=1)
-        if self._factor < 0:
-            if zt_sensitive:
-                return self.msb().msb_mux(a, b, qint)
-            else:
-                return (-self).msb_mux(b, a, qint, zt_sensitive=False)
 
         if self.opr == 'const':
             if self.low >= 0:
@@ -710,12 +704,11 @@ class FixedVariable:
             _factor = self._factor
             _factor0 = self._from[0]._factor
             if k + i == k0 + i0 + log2(abs(_factor / _factor0)):
-                if _factor * _factor0 > 0 or not zt_sensitive:
-                    return self._from[0].msb_mux(a, b, qint=qint, zt_sensitive=zt_sensitive)
+                return self._from[0].msb_mux(a, b, qint=qint)
 
         if a._factor < 0:
             qint = (-qint[1], -qint[0], qint[2]) if qint else None
-            return -(self.msb_mux(-a, -b, qint=qint, zt_sensitive=zt_sensitive))
+            return -(self.msb_mux(-a, -b, qint=qint))
 
         _factor = a._factor
 
@@ -765,7 +758,7 @@ class FixedVariable:
             return self
         step = self.step
         high = max(-self.low, self.high)
-        return self.msb_mux(-self, self, (0, float(high), float(step)), zt_sensitive=False)
+        return self.msb_mux(-self, self, (0, float(high), float(step)))
 
     def abs(self):
         """Get the absolute value of this variable."""
@@ -819,7 +812,7 @@ class FixedVariable:
 
         _qint = (max(self.low, other.low), max(self.high, other.high), min(self.step, other.step))
         qint = (float(_qint[0]), float(_qint[1]), float(_qint[2]))
-        return (self - other).msb_mux(other, self, qint=qint, zt_sensitive=False)
+        return (self - other).msb_mux(other, self, qint=qint)
 
     def min_of(self, other):
         """Get the minimum of this variable and another variable or constant."""
@@ -840,7 +833,7 @@ class FixedVariable:
 
         _qint = (min(self.low, other.low), min(self.high, other.high), min(self.step, other.step))
         qint = (float(_qint[0]), float(_qint[1]), float(_qint[2]))
-        return (self - other).msb_mux(self, other, qint=qint, zt_sensitive=False)
+        return (self - other).msb_mux(self, other, qint=qint)
 
     def lookup(self, table: LookupTable | np.ndarray, original_qint: tuple[float, float, float] | None = None) -> 'FixedVariable':
         """Use a lookup table to map the variable.
