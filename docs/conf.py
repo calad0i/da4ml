@@ -14,7 +14,7 @@ import da4ml
 sys.path.insert(0, os.path.abspath('../'))
 
 project = 'da4ml'
-copyright = '2025, Chang Sun'
+copyright = '2025-2026, Chang Sun'
 author = 'Chang Sun'
 release = str(da4ml.__version__)
 version = release
@@ -38,6 +38,8 @@ myst_enable_extensions = [
 
 
 autosummary_generate = True
+
+autodoc_mock_imports = ['xls']
 
 autodoc_default_options = {
     'ignore-module-all': True,

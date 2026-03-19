@@ -1,6 +1,6 @@
 # Getting Started with da4ml
 
-da4ml can be used in three different ways. When standalone code generation, it is recommended to use the functional API or HGQ2 integration. See [FAQ](faq.md) for more details on when to use which flow.
+da4ml can be used in multiple ways. When standalone code generation, it is recommended to use the functional API or HGQ2 integration. See [FAQ](faq.md) for more details on when to use which flow.
 
 ## functional API:
 
@@ -37,19 +37,26 @@ out = operation(inp)
 # Generate pipelined Verilog code form the traced operation
 # flavor can be 'verilog' or 'vhdl'. VHDL code generated will be in 2008 standard.
 comb_logic = comb_trace(inp, out)
-rtl_model = RTLModel(comb_logic, '/tmp/rtl', flavor='verilog', latency_cutoff=5) # can also be HLSModel
+rtl_model = RTLModel(comb_logic, '/tmp/rtl', flavor='verilog', latency_cutoff=5)
 rtl_model.write()
 # rtl_model.compile() # compile the generated Verilog code with verilator (with GHDL, if using vhdl)
 # rtl_model.predict(data_inp) # run inference with the compiled model; bit-accurate
 
-# Now in 0.5.0: run bit-exact (all int64 arithmetic) inference with the combinational logic model
-# Backed by cpp-based DAIS interpreter for speed
+# Run bit-exact (all int64 arithmetic) inference with the combinational logic model
+# Backed by C++-based DAIS interpreter for speed
 # comb_logic.predict(data_inp)
 ```
 
+## Using external plugins:
+
+da4ml supports a plugin system for external frameworks. A plugin can implement the logic for tracing models defined in a specific framework (e.g., Keras3/HGQ2, PyTorch, etc.) and register itself under the `dais_tracer.plugins` entry point. When tracing a model, da4ml will automatically discover the appropriate plugin based on the model type and use it for tracing. See [Conversion Plugin](plugin.md) for more details. Below are some examples.
+
+
 ## HGQ2/Keras3 integration:
 
-For models defined in [HGQ2](https://github.com/calad0i/HGQ2) (Keras3 based), da4ml can trace the model operations automatically when the supported layers/operations are used (i.e., most HGQ2 layers without general non-linear activations). In this way, one can easily convert existing HGQ2 models to HDL or HLS code in seconds.
+For models defined in [HGQ2](https://github.com/calad0i/HGQ2) (Keras3 based), da4ml can trace the model operations automatically when the supported layers/operations are used (i.e., most HGQ2 layers without general non-linear activations). In this way, one can easily convert existing HGQ2 models to HDL or HLS code in seconds. The plugin is built-in in HGQ2, so installing HGQ2 is sufficient to enable the integration. No additional configuration is needed.
+
+> **Note**: HGQ2 support requires installing the [HGQ2](https://github.com/calad0i/HGQ2) package separately. HGQ2 registers its own `dais_tracer.plugins` entry point under the `keras` key, which da4ml discovers automatically. `trace_model()` auto-detects the framework from `type(model).__module__.split('.', 1)[0]`, so a Keras model resolves to `'keras'` and the HGQ2 plugin is used. See [Conversion Plugin](plugin.md) for how the plugin system works.
 
 ```python
 # da4ml with HGQ2
@@ -75,6 +82,77 @@ comb_logic = comb_trace(inp, out)
 
 ... # The rest is the same as above
 ```
+
+## RTL/HLS backends:
+
+### RTL (Verilog/VHDL)
+
+`RTLModel` generates synthesizable RTL and wraps a compiled simulation emulator for bit-accurate inference:
+
+```python
+from da4ml.codegen import RTLModel
+
+# flavor='verilog' uses Verilator for simulation;
+# 'vhdl' uses GHDL and Verilator chained (GHDL for VHDL to Verilog conversion, then Verilator for simulation)
+rtl_model = RTLModel(comb_logic, '/tmp/rtl', flavor='verilog', latency_cutoff=5, clock_period=5.0)
+rtl_model.write()        # write RTL project to disk
+rtl_model.compile()      # compile simulation emulator (requires Verilator or GHDL)
+y = rtl_model.predict(x) # bit-accurate inference via compiled emulator
+```
+
+The generated project includes TCL build scripts for Vivado (`build_vivado_prj.tcl`) and Quartus (`build_quartus_prj.tcl`). Both `CombLogic` and `Pipeline` are supported.
+
+### HLS (Vitis / HLSlib / oneAPI)
+
+`HLSModel` generates HLS C++ code and wraps a compiled emulator:
+
+```python
+from da4ml.codegen import HLSModel
+
+# flavor='vitis' (ap_types), 'hlslib' (ac_types/Intel), or 'oneapi'
+hls_model = HLSModel(comb_logic, '/tmp/hls', flavor='vitis', clock_period=5.0)
+hls_model.write()        # write HLS project to disk
+hls_model.compile()      # compile C++ emulator
+y = hls_model.predict(x) # inference via compiled emulator
+```
+
+Note: only `CombLogic` is supported for HLS backends; `Pipeline` is not.
+
+
+## XLS backend (experimental):
+
+
+```{note}
+`xls-python`, a python binding for `libxls.so`, is required for the XLS backend. It can be installed from PyPI with `pip install xls-python`, but only available for Linux-x86_64 for the binary wheel. For other platforms, you may need to build `libxls` and `xls-python` from source.
+```
+
+For generating Verilog through [XLS](https://google.github.io/xls/), an experimental backend is available. This requires the `pyxls` package (experimental) to be installed separately.
+
+```python
+from da4ml.codegen.xls import XLSModel
+
+xls_model = XLSModel(comb_logic) # Converts DAIS to XLS IR.
+_ = xls_model.jit() # JIT-compile the XLS IR
+y = xls_model.predict(data_inp) # Batched inference; bit-exact. No multithreading support for now.
+verilog_text = xls_model.compile('/tmp/xls_output.v')
+```
+
+## CLI usage:
+
+da4ml provides a command-line interface for common workflows:
+
+```bash
+# Convert a Keras/HGQ2 model to an RTL project
+da4ml convert model.keras /tmp/rtl_output --flavor verilog --latency-cutoff 5
+
+# Convert a serialized DAIS model (JSON) to an RTL project
+da4ml convert model.json /tmp/rtl_output --flavor vhdl
+
+# Generate a resource/timing report from an existing RTL project
+da4ml report /tmp/rtl_output
+```
+
+Use `da4ml convert --help` and `da4ml report --help` for full option details.
 
 ## hls4ml integration:
 

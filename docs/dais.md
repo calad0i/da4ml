@@ -8,7 +8,7 @@ One program represented in DAIS consists of the following components:
 ## Program Structure
 
 - `spec version`: int
-    - The spec version of the DAIS program. Currently, the version is `0`.
+    - The spec version of the DAIS program. Currently, the version is `2`.
 - `firmware version`: int
     - Reserved for downstream firmware versioning. The DAIS interpreter **must** ignore this field.
 - `shape`: tuple<int, int>
@@ -45,27 +45,39 @@ The program is executed as follows:
 
 ### OpCode
 The operation codes are defined as follows:
+- `-2`: Explicit negation
+  - `buf[i] = -buf[id0]`
 - `-1`: Copy from input buffer (**implies quantization**)
   - `buf[i] = input[id0]`
 - `0/1`: Addition/Subtraction
   - `buf[i] = buf[id0] +/- buf[id1] * 2^data`
-- `2/-2`: ReLU (**implies quantization**)
-  - `buf[i] = quantize(relu(+/- buf[id0]))`
-- `3/-3`: Quantization (**implies quantization**)
-  - `buf[i] = quantize(+/- buf[id0])`
+- `2`: ReLU (**implies quantization**)
+  - `buf[i] = quantize(relu(buf[id0]))`
+- `3`: Quantization (**implies quantization**)
+  - `buf[i] = quantize(buf[id0])`
 - `4`: Add a constant
   - `buf[i] = buf[id0] + data * qint.step`
 - `5`: Define a constant
   - `buf[i] = data * qint.step`
-- `6/-6`: Mux by MSB
-  - `buf[i] = MSB(buf[int32(data_lower_i32)]) ? buf[id0] : +/- buf[id1] * 2^int32(data_higher_i32)` (**implies msb chopping**)
+- `6`: Mux by MSB
+  - `buf[i] = MSB(buf[id_c]) ? buf[id0] : buf[id1] * 2^shift` (**implies msb chopping**)
+  - `id_c = int32(data & 0xFFFFFFFF)`, `shift = int32(data >> 32)`
 - `7`: Multiplication
   - `buf[i] = buf[id0] * buf[id1]`
 - `8`: Logic Lookup
   - `buf[i] = lookup_table[data_lower_i32][index(buf[id0])]`
   - `index()` converts the fixed-point representation to integer index by `(buf[id0] - qint.min) / qint.step` or `(buf[id0] + signed*2^integer_bits) * 2^fractional_bits - data_higher_i32` depending on the dtype format.
+- `9`: Unary bitwise operation
+  - `buf[i] = unary_bit_op(buf[id0], data, qint[id0], qint[i])`
+  - `data` selects the sub-operation: `0` = bitwise NOT (`~`), `1` = reduce-any, `2` = reduce-all.
+  - For bitwise NOT, the position of the decimal point and interpretation of the bits does not change.
+  - For reduce-any/reduce-all, the result is a single-bit boolean.
+- `10`: Binary bitwise operation
+  - `buf[i] = binary_bit_op(v0, v1 << shift, sub_opcode, qint[id0], qint[id1]*2^shift, qint[i])`
+  - `data` encoding: `bits[31:0]` = shift (signed), `bit[32]` = invert operand 0, `bits[63:56]` = sub-opcode.
+  - Sub-opcodes: `0` = AND (`&`), `1` = OR (`|`), `2` = XOR (`^`).
 
-In all cases, unused id0 or id1 **must** be set to `-1`; id0, id1 (and data for opcode=+/-6) **must** be smaller than the index of the operation itself to ensure causality. All quantization are direct bit-drop in binary format (i.e., WRAP for overflow and TRUNC for rounding).
+In all cases, unused id0 or id1 **must** be set to `-1`; id0, id1 (and data for opcode=6) **must** be smaller than the index of the operation itself to ensure causality. All quantization are direct bit-drop in binary format (i.e., WRAP for overflow and TRUNC for rounding).
 
 ### Binary Representation
 The binary representation of the program is as follows, in order:
@@ -98,4 +110,4 @@ Each table is in the order of increasing index on the order of the smallest to l
 
 In execution, the internal buffer **must** have larger bitwidth than the maximum bitwidth appears in any of the operations. When an operation implies quantization, the program **must** apply the quantization explicitly. When an operation does not imply quantization, the program **may** apply quantization and verify no value change is incurred as a result.
 
-`interperter/DAISInterpreter.cc` and `interperter/DAISInterpreter.hh` contains a reference implementation of a DAIS interpreter in C++, which runs the program in a straightforward manner with `int64_t` for the internal buffer. The program is represented in a `int32_t` array, which can be obtained by `comb_logic.to_binary()` or `comb_logic.save_binary(path)`.
+`_binary/dais/DAISInterpreter.cc` and `_binary/dais/DAISInterpreter.hh` contains a reference implementation of a DAIS interpreter in C++, which runs the program in a straightforward manner with `int64_t` for the internal buffer. The program is represented in a `int32_t` array, which can be obtained by `comb_logic.to_binary()` or `comb_logic.save_binary(path)`.
