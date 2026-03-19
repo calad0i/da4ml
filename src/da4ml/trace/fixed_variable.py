@@ -369,7 +369,7 @@ class FixedVariable:
     def __neg__(self):
         return self._with(_affine=-self._affine, _factor=-self._factor, renew_id=False)
 
-    def __add__(self, other: 'FixedVariable|float|int'):
+    def __add__(self, other: 'FixedVariable|float|int') -> 'FixedVariable':
         if other is None:
             return self
         if not isinstance(other, FixedVariable):
@@ -522,7 +522,7 @@ class FixedVariable:
     def __rmul__(self, other: 'float|int|FixedVariable'):
         return self * other
 
-    def __pow__(self, other):
+    def __pow__(self, other) -> 'FixedVariable':
         _power = int(other)
         assert _power == other, 'Power must be an integer'
         assert _power >= 0, 'Power must be non-negative'
@@ -587,7 +587,6 @@ class FixedVariable:
         f: int,
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
-        _force_factor_clear=False,
     ) -> 'FixedVariable':
         """Quantize the variable to the specified fixed-point format.
 
@@ -603,8 +602,6 @@ class FixedVariable:
             Overflow mode, one of 'WRAP', 'SAT', 'SAT_SYM', by default 'WRAP'
         round_mode : str, optional
             Rounding mode, one of 'TRN' (truncate), 'RND' (round to nearest, half up), by default 'TRN'
-        _force_factor_clear : bool, optional
-            Whether to force clear the scaling factor (set to 1) in the output variable, by default False.
         """
 
         overflow_mode, round_mode = overflow_mode.upper(), round_mode.upper()
@@ -615,7 +612,7 @@ class FixedVariable:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
         _k, _i, _f = self.kif
 
-        if k >= _k and i >= _i and f >= _f and not _force_factor_clear:
+        if k >= _k and i >= _i and f >= _f:
             if overflow_mode != 'SAT_SYM' or i > _i:
                 return self
 
@@ -748,8 +745,8 @@ class FixedVariable:
         return self.msb()
 
     def msb(self) -> 'FixedVariable':
-        k, i, f = self.kif
-        return self.quantize(0, i + k, -i - k + 1, _force_factor_clear=True) >> i + k - 1
+        k, i, _ = self.kif
+        return self.quantize(0, i + k, -i - k + 1) >> i + k - 1
 
     def is_positive(self) -> 'FixedVariable':
         return (-self).is_negative()
@@ -1120,7 +1117,6 @@ class FixedVariableInput(FixedVariable):
         f: int,
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
-        _force_factor_clear=False,
     ):
         assert overflow_mode == 'WRAP'
         k, i, f = int(k), int(i), int(f)
