@@ -5,7 +5,6 @@ import numpy as np
 import pytest
 
 from da4ml.codegen import HLSModel, RTLModel
-from da4ml.codegen.xls import XLSModel
 from da4ml.trace import FixedVariableArray, comb_trace
 from da4ml.trace.ops import quantize, relu
 from da4ml.types import CombLogic
@@ -108,6 +107,10 @@ class OperationTestSynth(OperationTest):
         subprocess.run(['rm', '-rf', temp_directory])
 
     def test_xls_gen(self, comb: CombLogic, temp_directory: str, test_data: np.ndarray):
+        from da4ml.codegen.xls import XLSModel
+
+        if np.sum(comb.out_kifs) == 0 or np.sum(comb.inp_kifs) == 0:
+            return  # By chance, the comb logic is trivial/invalid.
         xls_model = XLSModel(comb)
         xls_model.jit()
         comb_pred = comb.predict(test_data, n_threads=1)
@@ -116,15 +119,16 @@ class OperationTestSynth(OperationTest):
 
 
 class TestQuantize(OperationTestSynth):
-    @pytest.fixture()
-    def op_func(self, overflow_mode: str, round_mode: str):
-        return lambda x: quantize(x, 1, 3, 3, overflow_mode, round_mode)
+    @pytest.fixture(params=[(1, 3, 3), (0, 4, -2), (1, 0, 0)])
+    def op_func(self, overflow_mode: str, round_mode: str, request):
+        kif: tuple[int, int, int] = request.param
+        return lambda x: quantize(x, *kif, overflow_mode=overflow_mode, round_mode=round_mode)
 
     @pytest.fixture(params=['WRAP', 'SAT', 'SAT_SYM'])
     def overflow_mode(self, request) -> str:
         return request.param
 
-    @pytest.fixture(params=['TRN', 'RND'])
+    @pytest.fixture(params=['TRN', 'RND', 'RND_CONV'])
     def round_mode(self, request) -> str:
         return request.param
 

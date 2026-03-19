@@ -644,31 +644,42 @@ class FixedVariable:
 
         return self._wrap(k, i, f)
 
-    def _wrap(self, k, i, f):
+    def _wrap(self, k: int, i: int, f: int):
         _k, _i, _f = self.kif
 
+        # trivial: target format incl. source
         f = min(f, _f)
-        k = min(k, _k) if i >= _i else k
+        if k >= _k and i >= _i and f >= _f:
+            return self
 
         step = 2.0**-f
 
-        if self.low < 0:
-            _low = floor(self.low / step) * step
-            _i = max(_i, ceil(log2(-_low)))
+        # target MSB below source LSB
+        if k + i + _f <= 0:
+            return FixedVariable.from_const(0.0, hwconf=self.hwconf)
 
-        i = min(i, _i + (k == 0 and _k == 1))
+        # target LSB above source MSB (level _k+_i-1)
+        if _k and f <= -_k - _i:
+            if self.low >= 0:
+                return FixedVariable.from_const(0.0, hwconf=self.hwconf)
+            all_ones = -step if k else 2.0**i - step
+            if self.high < 0:
+                return FixedVariable.from_const(all_ones, hwconf=self.hwconf)
+            low_v, high_v = (all_ones, 0.0) if k else (0.0, all_ones)
+            return FixedVariable(low_v, high_v, step, _from=(self,), _factor=abs(self._factor), opr='wrap', hwconf=self.hwconf)
+        if not _k and f <= -_i:
+            return FixedVariable.from_const(0.0, hwconf=self.hwconf)
 
-        if i + k + f <= 0:
-            return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
+        # overlap
+        target_low = -int(k) * 2.0**i
+        target_high = 2.0**i - step
 
-        low = -int(k) * 2.0**i
-
-        high = 2.0**i - step
-        _low, _high = self.low, self.high
-
-        if _low >= low and _high <= high:
-            low = floor(_low / step) * step
-            high = floor(_high / step) * step
+        rounded_low = floor(self.low / step) * step
+        rounded_high = floor(self.high / step) * step
+        if rounded_low >= target_low and rounded_high <= target_high:
+            low, high = rounded_low, rounded_high
+        else:
+            low, high = target_low, target_high
 
         return FixedVariable(
             low,
