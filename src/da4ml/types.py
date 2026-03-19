@@ -231,7 +231,7 @@ class CombLogic(NamedTuple):
     adder_size: int
     lookup_tables: 'tuple[LookupTable, ...] | None' = None
 
-    def __call__(self, inp: 'list | np.ndarray | tuple | FixedVariableArray', quantize=False, debug=False, dump=False):
+    def __call__(self, inp: 'list | np.ndarray | tuple | FixedVariableArray', quantize=True, debug=False, dump=False):
         """Executes the solution on the input data.
 
         Parameters

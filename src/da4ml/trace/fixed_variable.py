@@ -606,7 +606,7 @@ class FixedVariable:
 
         overflow_mode, round_mode = overflow_mode.upper(), round_mode.upper()
         assert overflow_mode in ('WRAP', 'SAT', 'SAT_SYM')
-        assert round_mode in ('TRN', 'RND')
+        assert round_mode in ('TRN', 'RND', 'RND_CONV')
 
         if k + i + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
@@ -618,13 +618,19 @@ class FixedVariable:
 
         if f < _f and round_mode == 'RND':
             return (self + 2.0 ** (-f - 1)).quantize(k, i, f, overflow_mode, 'TRN')
+        elif f < _f and round_mode == 'RND_CONV' and overflow_mode == 'WRAP':
+            off: FixedVariable = self + 2.0 ** (-f - 1)
+            roundup = off._wrap(k, i, f)
+            (not_multiple) = off.bits[-_f + f :].unary_bit_op('any') * 2.0**-f
+            v = ((not_multiple) & roundup.bits[-1:]) + roundup.bits[:-1]
+            return v.quantize(k, i, f, overflow_mode, 'TRN')
 
         if overflow_mode in ('SAT', 'SAT_SYM'):
             step = 2.0**-f
             _high = 2.0**i
             high = _high - step
             low = -_high * k if overflow_mode == 'SAT' else -high * k
-            ff = f + 1 if round_mode == 'RND' else f
+            ff = f + 1 if round_mode == 'RND' else (f if round_mode == 'TRN' else _f)
             v = self.quantize(_k, _i, ff, 'WRAP', 'TRN') if _k + _i + ff > 0 else self
             return v.max_of(low).min_of(high).quantize(k, i, f, 'WRAP', round_mode)
 
@@ -635,6 +641,11 @@ class FixedVariable:
             high, low = _high - step, -_high * k
             val = (floor(val / step) * step - low) % (2 * _high) + low
             return FixedVariable.from_const(val, hwconf=self.hwconf)
+
+        return self._wrap(k, i, f)
+
+    def _wrap(self, k, i, f):
+        _k, _i, _f = self.kif
 
         f = min(f, _f)
         k = min(k, _k) if i >= _i else k
@@ -1030,7 +1041,7 @@ class BitsView:
         new_k = int(start == 0 and k == 1)
         new_i = k + i - start - new_k
         new_f = stop - k - i
-        return self.var.quantize(new_k, new_i, new_f)
+        return self.var._wrap(new_k, new_i, new_f)
 
 
 class FixedVariableInput(FixedVariable):
@@ -1119,6 +1130,7 @@ class FixedVariableInput(FixedVariable):
         round_mode: str = 'TRN',
     ):
         assert overflow_mode == 'WRAP'
+        assert round_mode in ('TRN', 'RND')
         k, i, f = int(k), int(i), int(f)
 
         if k + i + f <= 0:
