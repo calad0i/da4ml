@@ -199,7 +199,7 @@ def comb_trace(inputs, outputs, optimize=True, keep_dead_inputs: bool = False) -
         outputs = list(outputs)
         for i, v in enumerate(outputs):
             if not isinstance(v, FixedVariable):
-                outputs[i] = FixedVariable.from_const(v, hwconf, 1)
+                outputs[i] = FixedVariable.from_const(v, hwconf)
 
     ops, out_index, lookup_tables = _comb_trace(inputs, outputs)
     shape = len(inputs), len(outputs)

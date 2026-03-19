@@ -356,8 +356,9 @@ class FixedVariable:
         return k, i, f
 
     @classmethod
-    def from_const(cls, const: float, hwconf: HWConfig, _factor: float = 1):
+    def from_const(cls, const: float, hwconf: HWConfig):
         const = float(const)
+        _factor = 2 ** get_lsb_loc(const) if const != 0 else 1.0
         return cls(const, const, -1, hwconf=hwconf, opr='const', _factor=_factor)
 
     def __repr__(self) -> str:
@@ -636,7 +637,7 @@ class FixedVariable:
             _high = 2.0**i
             high, low = _high - step, -_high * k
             val = (floor(val / step) * step - low) % (2 * _high) + low
-            return FixedVariable.from_const(val, hwconf=self.hwconf, _factor=1)
+            return FixedVariable.from_const(val, hwconf=self.hwconf)
 
         f = min(f, _f)
         k = min(k, _k) if i >= _i else k
@@ -689,9 +690,9 @@ class FixedVariable:
         """
 
         if not isinstance(a, FixedVariable):
-            a = FixedVariable.from_const(a, hwconf=self.hwconf, _factor=1)
+            a = FixedVariable.from_const(a, hwconf=self.hwconf)
         if not isinstance(b, FixedVariable):
-            b = FixedVariable.from_const(b, hwconf=self.hwconf, _factor=1)
+            b = FixedVariable.from_const(b, hwconf=self.hwconf)
 
         if self.opr == 'const':
             if self.low >= 0:
@@ -801,7 +802,7 @@ class FixedVariable:
         if other == float('inf'):
             raise ValueError('Cannot apply max_of with inf')
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+            other = FixedVariable.from_const(other, hwconf=self.hwconf)
 
         if self.low >= other.high:
             return self
@@ -822,7 +823,7 @@ class FixedVariable:
         if other == -float('inf'):
             raise ValueError('Cannot apply min_of with -inf')
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=(self._factor))
+            other = FixedVariable.from_const(other, hwconf=self.hwconf)
 
         if self.high <= other.low:
             return self
@@ -929,6 +930,20 @@ class FixedVariable:
         k, i, f = self.kif
         k_other, i_other, f_other = other.kif
         k, i, f = max(k, k_other), max(i, i_other), max(f, f_other)
+
+        # match _type:
+        #     case 'and':
+        #         k = k & k_other
+        #     case 'or':
+        #         k = k | k_other
+        #     case 'xor':
+        #         if self.low >= 0 and other.low >= 0:
+        #             k = 0
+        #         elif self.high < 0 and other.high < 0:
+        #             k = 0
+        #         else:
+        #             k = 1
+
         qint = QInterval(-k * 2.0**i, 2.0**i - 2.0**-f, 2.0**-f)
         if self.opr == 'const' and other.opr == 'const':
             qint0 = QInterval(float(self.low), float(self.high), float(self.step))
@@ -961,17 +976,17 @@ class FixedVariable:
 
     def __and__(self, other: 'FixedVariable|float|int'):
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+            other = FixedVariable.from_const(other, hwconf=self.hwconf)
         return self.binary_bit_op(other, 'and')
 
     def __or__(self, other: 'FixedVariable|float|int'):
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+            other = FixedVariable.from_const(other, hwconf=self.hwconf)
         return self.binary_bit_op(other, 'or')
 
     def __xor__(self, other: 'FixedVariable|float|int'):
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+            other = FixedVariable.from_const(other, hwconf=self.hwconf)
         return self.binary_bit_op(other, 'xor')
 
     def __rand__(self, other: 'float|int|FixedVariable'):
@@ -988,7 +1003,7 @@ class FixedVariable:
 
     def _ne(self, other):
         if not isinstance(other, FixedVariable):
-            other = FixedVariable.from_const(other, hwconf=self.hwconf, _factor=abs(self._factor))
+            other = FixedVariable.from_const(other, hwconf=self.hwconf)
         return (self ^ other).unary_bit_op('any')
 
     def _eq(self, other):

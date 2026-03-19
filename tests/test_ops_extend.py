@@ -55,6 +55,10 @@ functions = {
     'any1': lambda x, w: np.any((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
     'all0': lambda x, w: np.all(x, axis=-1, keepdims=True),
     'all1': lambda x, w: np.all((x > 0).reshape(x.shape[:-1] + (2, 4)), axis=-2, keepdims=True),
+    'floor': lambda x, w: np.floor(x),
+    'sign': lambda x, w: np.sign(x),
+    'signbit': lambda x, w: np.signbit(x),
+    'const_propagation': lambda x, w: x * 3 - 2 + 1.5 - 0.5 * x - 0.25 * x + 0.5,
 }
 
 

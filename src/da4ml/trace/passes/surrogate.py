@@ -15,7 +15,7 @@ def cost_lat_add(qint0: QInterval, qint1: QInterval, shift1: int, n_add: int, n_
 
     bw_add = left + overlap + right
     cost = (max(bw_add - 1, 1) + n_add - 1) // n_add
-    lat = (left + overlap - 1) // n_accum * 0.03 + 1.1
+    lat = (left + overlap - 1) // n_accum * 0.029296875 + 1.099609375
     return cost, lat
 
 
@@ -114,7 +114,7 @@ def cost_lat_bin_bitops(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: 
     x, y, z = overlap_counts(qint0, qint1, shift1)
     if y <= 0:
         return 0, 0
-    cost = 2 * y / LUT_Y * 2 ** (LUT_X - LUT_Y)
+    cost = 2 * y / LUT_Y * 2 ** (LUT_Y - LUT_X)
     lat = 1
     return cost, lat
 

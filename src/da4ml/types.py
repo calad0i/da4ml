@@ -256,9 +256,6 @@ class CombLogic(NamedTuple):
 
         """
 
-        from .trace.fixed_variable import FixedVariable
-        from .trace.ops.bit_oprs import binary_bit_op, unary_bit_op
-
         buf = np.empty(len(self.ops), dtype=object)
         inp = np.asarray(inp)
 
@@ -266,68 +263,9 @@ class CombLogic(NamedTuple):
             k, i, f = self.inp_kifs
             inp = [_quantize(*x, round_mode='TRN') for x in zip(inp, k, i, f)]
         inp = inp * (2.0 ** np.array(self.inp_shifts))
-        for i, op in enumerate(self.ops):
-            match op.opcode:
-                case -2:  # neg
-                    buf[i] = -buf[op.id0]
-                case -1:  # copy form external buffer
-                    buf[i] = inp[op.id0]
-                case 0 | 1:  # addition
-                    v0, v1 = buf[op.id0], 2.0**op.data * buf[op.id1]
-                    buf[i] = v0 + v1 if op.opcode == 0 else v0 - v1
-                case 2:  # relu(+/-x)
-                    v = buf[op.id0]
-                    _, _i, _f = minimal_kif(op.qint)
-                    buf[i] = _relu(v, _i, _f, inv=op.opcode == -2, round_mode='TRN')
-                case 3:  # quantize(+/-x)
-                    v = buf[op.id0] if op.opcode == 3 else -buf[op.id0]
-                    _k, _i, _f = minimal_kif(op.qint)
-                    buf[i] = _quantize(v, _k, _i, _f, round_mode='TRN', _force_factor_clear=True)
-                case 4:  # const addition
-                    shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
-                    data = (((op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
-                    val = data * 2**-shift
-                    buf[i] = buf[op.id0] + val
-                case 5:  # const definition
-                    buf[i] = op.data * op.qint.step  # const definition
-                case 6:  # MSB Mux
-                    id_c = op.data & 0xFFFFFFFF
-                    k, v0, v1 = buf[id_c], buf[op.id0], buf[op.id1]
-                    shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
 
-                    if isinstance(k, FixedVariable):
-                        buf[i] = k.msb_mux(v0, v1 * 2**shift, op.qint)  # type: ignore
-                    else:
-                        qint_k = self.ops[id_c].qint
-                        if qint_k.min < 0:
-                            buf[i] = v0 if k < 0 else v1 * 2.0**shift
-                        else:
-                            _k, _i, _f = minimal_kif(qint_k)
-                            buf[i] = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
-                case 7:  # multiplication
-                    v0, v1 = buf[op.id0], buf[op.id1]
-                    buf[i] = v0 * v1
-                case 8:  # lookup table
-                    v0 = buf[op.id0]
-                    tables = self.lookup_tables
-                    assert tables is not None, 'No lookup table provided for lookup operation'
-                    table = tables[op.data]
-                    buf[i] = table.lookup(v0, self.ops[op.id0].qint)
-                case 9:  # Unary bitwise operation
-                    v0 = buf[op.id0]
-                    buf[i] = unary_bit_op(v0 if op.opcode == 9 else -v0, op.data, self.ops[op.id0].qint, op.qint)
-                case 10:  # Binary bitwise operation
-                    v0, v1 = buf[op.id0], buf[op.id1]
-                    inv0, inv1 = (op.data >> 32) & 1, (op.data >> 33) & 1
-                    v0, v1 = (-v0 if inv0 else v0), (-v1 if inv1 else v1)
-                    shift = ((op.data & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
-                    _opcode = (op.data >> 56) & 0xFF
-                    _qint1 = self.ops[op.id1].qint
-                    s = 2.0**shift
-                    qint1 = QInterval(_qint1.min * s, _qint1.max * s, _qint1.step * s)
-                    buf[i] = binary_bit_op(v0, v1 * s, _opcode, self.ops[op.id0].qint, qint1, op.qint)
-                case _:
-                    raise ValueError(f'Unknown opcode {op.opcode} in {op}')
+        for i, op in enumerate(self.ops):
+            buf[i] = self.exec_op(op, buf, inp)
 
         sf = 2.0 ** np.array(self.out_shifts, dtype=np.float64)  # type: ignore
         sign = np.where(self.out_negs, -1, 1)
@@ -384,6 +322,73 @@ class CombLogic(NamedTuple):
             return buf
         out_buf = np.array([buf[i] if i >= 0 else 0 for i in self.out_idxs])
         return out_buf * sf * sign
+
+    def exec_op(self, op: Op, buf: np.ndarray, inp: np.ndarray):
+        from .trace.fixed_variable import FixedVariable
+        from .trace.ops.bit_oprs import binary_bit_op, unary_bit_op
+
+        match op.opcode:
+            case -2:  # neg
+                ret = -buf[op.id0]
+            case -1:  # copy form external buffer
+                ret = inp[op.id0]
+            case 0 | 1:  # addition
+                v0, v1 = buf[op.id0], 2.0**op.data * buf[op.id1]
+                ret = v0 + v1 if op.opcode == 0 else v0 - v1
+            case 2:  # relu(+/-x)
+                v = buf[op.id0]
+                _, _i, _f = minimal_kif(op.qint)
+                ret = _relu(v, _i, _f, inv=op.opcode == -2, round_mode='TRN')
+            case 3:  # quantize(+/-x)
+                v = buf[op.id0] if op.opcode == 3 else -buf[op.id0]
+                _k, _i, _f = minimal_kif(op.qint)
+                ret = _quantize(v, _k, _i, _f, round_mode='TRN', _force_factor_clear=True)
+            case 4:  # const addition
+                shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                data = (((op.data) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                val = data * 2**-shift
+                ret = buf[op.id0] + val
+            case 5:  # const definition
+                ret = op.data * op.qint.step  # const definition
+            case 6:  # MSB Mux
+                id_c = op.data & 0xFFFFFFFF
+                k, v0, v1 = buf[id_c], buf[op.id0], buf[op.id1]
+                shift = (((op.data >> 32) & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+
+                if isinstance(k, FixedVariable):
+                    ret = k.msb_mux(v0, v1 * 2**shift, op.qint)  # type: ignore
+                else:
+                    qint_k = self.ops[id_c].qint
+                    if qint_k.min < 0:
+                        ret = v0 if k < 0 else v1 * 2.0**shift
+                    else:
+                        _k, _i, _f = minimal_kif(qint_k)
+                        ret = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
+            case 7:  # multiplication
+                v0, v1 = buf[op.id0], buf[op.id1]
+                ret = v0 * v1
+            case 8:  # lookup table
+                v0 = buf[op.id0]
+                tables = self.lookup_tables
+                assert tables is not None, 'No lookup table provided for lookup operation'
+                table = tables[op.data]
+                ret = table.lookup(v0, self.ops[op.id0].qint)
+            case 9:  # Unary bitwise operation
+                v0 = buf[op.id0]
+                ret = unary_bit_op(v0 if op.opcode == 9 else -v0, op.data, self.ops[op.id0].qint, op.qint)
+            case 10:  # Binary bitwise operation
+                v0, v1 = buf[op.id0], buf[op.id1]
+                inv0, inv1 = (op.data >> 32) & 1, (op.data >> 33) & 1
+                v0, v1 = (-v0 if inv0 else v0), (-v1 if inv1 else v1)
+                shift = ((op.data & 0xFFFFFFFF) + (1 << 31)) % (1 << 32) - (1 << 31)
+                _opcode = (op.data >> 56) & 0xFF
+                _qint1 = self.ops[op.id1].qint
+                s = 2.0**shift
+                qint1 = QInterval(_qint1.min * s, _qint1.max * s, _qint1.step * s)
+                ret = binary_bit_op(v0, v1 * s, _opcode, self.ops[op.id0].qint, qint1, op.qint)
+            case _:
+                raise ValueError(f'Unknown opcode {op.opcode} in {op}')
+        return ret
 
     @property
     def kernel(self):

@@ -107,7 +107,6 @@ _unary_functions = (
     np.tan,
     np.exp,
     np.log,
-    np.invert,
     np.sqrt,
     np.tanh,
     np.sinh,
@@ -130,8 +129,6 @@ _unary_functions = (
 
 class FixedVariableArray(np.ndarray):
     """Symbolic array of FixedVariable for tracing operations. Supports numpy ufuncs and array functions."""
-
-    __array_priority__ = 100
 
     def __new__(
         cls,
@@ -160,7 +157,7 @@ class FixedVariableArray(np.ndarray):
     def __array_finalize__(self, obj):
         if obj is None:
             return
-        self.solver_options = obj.solver_options
+        self.solver_options: solver_options_t = obj.solver_options
         self.hwconf = obj.hwconf
 
     def __array_function__(self, func, types, args, kwargs):
@@ -227,53 +224,6 @@ class FixedVariableArray(np.ndarray):
         high, low = _high - step, -_high * k
         return cls.from_lhs(low, high, step, hwconf, latency, solver_options)
 
-    def matmul(self, other) -> 'FixedVariableArray':
-        if self.collapsed:
-            self_mat = np.array([v.low for v in np.asarray(self).ravel()], dtype=np.float64).reshape(self.shape)
-            if isinstance(other, FixedVariableArray):
-                if not other.collapsed:
-                    return self_mat @ other  # type: ignore
-                other_mat = np.array([v.low for v in np.asarray(other).ravel()], dtype=np.float64).reshape(other.shape)
-            else:
-                other_mat = np.array(other, dtype=np.float64)
-            r = self_mat @ other_mat
-            return FixedVariableArray.from_lhs(
-                low=r,
-                high=r,
-                step=np.ones_like(r),
-                hwconf=self.hwconf,
-                solver_options=self.solver_options,
-            )
-
-        _other = np.asarray(other) if isinstance(other, FixedVariableArray) else np.array(other)
-        if any(isinstance(x, FixedVariable) for x in _other.ravel()):
-            _vars = mmm(np.asarray(self), _other)
-            return FixedVariableArray(_vars, self.solver_options, hwconf=self.hwconf)
-
-        solver_options = (self.solver_options or {}).copy()
-        shape0, shape1 = self.shape, _other.shape
-        assert shape0[-1] == shape1[0], f'Matrix shapes do not match: {shape0} @ {shape1}'
-        contract_len = shape1[0]
-        out_shape = shape0[:-1] + shape1[1:]
-        mat0, mat1 = self.reshape((-1, contract_len)), _other.reshape((contract_len, -1))
-        r = []
-        for i in range(mat0.shape[0]):
-            vec = mat0[i]
-            _r = cmvm(mat1, vec, solver_options)
-            r.append(_r)
-        r = np.array(r).reshape(out_shape)
-        return FixedVariableArray(r, self.solver_options, hwconf=self.hwconf)
-
-    def rmatmul(self, other):
-        mat1 = np.moveaxis(other, -1, 0)
-        mat0 = np.moveaxis(self, 0, -1)  # type: ignore
-        ndim0, ndim1 = mat0.ndim, mat1.ndim
-        r = mat0 @ mat1
-
-        _axes = tuple(range(0, ndim0 + ndim1 - 2))
-        axes = _axes[ndim0 - 1 :] + _axes[: ndim0 - 1]
-        return r.transpose(axes)
-
     def __getitem__(self, item):
         if isinstance(item, _ArgsortDelayedIndex):
             ret = sort(*item.args, **item.kwargs, aux_value=self)[1]
@@ -281,69 +231,6 @@ class FixedVariableArray(np.ndarray):
                 ret = ret[s]
             return ret
         return super().__getitem__(item)
-
-    def __gt__(self, other):
-        _b = np.asarray(other) if isinstance(other, FixedVariableArray) else other
-        a, b = np.broadcast_arrays(np.asarray(self), _b)
-        shape = a.shape
-        r = np.array([av > bv for av, bv in zip(a.ravel(), b.ravel())])
-        return FixedVariableArray(r.reshape(shape), self.solver_options, hwconf=self.hwconf)
-
-    def __lt__(self, other):
-        _b = np.asarray(other) if isinstance(other, FixedVariableArray) else other
-        a, b = np.broadcast_arrays(np.asarray(self), _b)
-        shape = a.shape
-        r = np.array([av < bv for av, bv in zip(a.ravel(), b.ravel())])
-        return FixedVariableArray(r.reshape(shape), self.solver_options, hwconf=self.hwconf)
-
-    def __ge__(self, other):
-        _b = np.asarray(other) if isinstance(other, FixedVariableArray) else other
-        a, b = np.broadcast_arrays(np.asarray(self), _b)
-        shape = a.shape
-        r = np.array([av >= bv for av, bv in zip(a.ravel(), b.ravel())])
-        return FixedVariableArray(r.reshape(shape), self.solver_options, hwconf=self.hwconf)
-
-    def __le__(self, other):
-        _b = np.asarray(other) if isinstance(other, FixedVariableArray) else other
-        a, b = np.broadcast_arrays(np.asarray(self), _b)
-        shape = a.shape
-        r = np.array([av <= bv for av, bv in zip(a.ravel(), b.ravel())])
-        return FixedVariableArray(r.reshape(shape), self.solver_options, hwconf=self.hwconf)
-
-    def __and__(self, other):
-        _b = np.asarray(other) if isinstance(other, FixedVariableArray) else other
-        a, b = np.broadcast_arrays(np.asarray(self), _b)
-        shape = a.shape
-        r = np.array([av & bv for av, bv in zip(a.ravel(), b.ravel())])
-        return FixedVariableArray(r.reshape(shape), self.solver_options, hwconf=self.hwconf)
-
-    def __or__(self, other):
-        _b = np.asarray(other) if isinstance(other, FixedVariableArray) else other
-        a, b = np.broadcast_arrays(np.asarray(self), _b)
-        shape = a.shape
-        r = np.array([av | bv for av, bv in zip(a.ravel(), b.ravel())])
-        return FixedVariableArray(r.reshape(shape), self.solver_options, hwconf=self.hwconf)
-
-    def __invert__(self):
-        r = np.array([~av for av in np.asarray(self).ravel()])
-        return FixedVariableArray(r.reshape(self.shape), self.solver_options, hwconf=self.hwconf)
-
-    def __xor__(self, other):
-        _b = np.asarray(other) if isinstance(other, FixedVariableArray) else other
-        a, b = np.broadcast_arrays(np.asarray(self), _b)
-        shape = a.shape
-        r = np.array([av ^ bv for av, bv in zip(a.ravel(), b.ravel())])
-        return FixedVariableArray(r.reshape(shape), self.solver_options, hwconf=self.hwconf)
-
-    def __eq__(self, other):  # type: ignore
-        return ~(self.__ne__(other))
-
-    def __ne__(self, other):  # type: ignore
-        _b = np.asarray(other) if isinstance(other, FixedVariableArray) else other
-        a, b = np.broadcast_arrays(np.asarray(self), _b)
-        shape = a.shape
-        r = np.array([av._ne(bv) for av, bv in zip(a.ravel(), b.ravel())])
-        return FixedVariableArray(r.reshape(shape), self.solver_options, hwconf=self.hwconf)
 
     def __repr__(self):
         shape = self.shape
@@ -385,8 +272,8 @@ class FixedVariableArray(np.ndarray):
         f = np.broadcast_to(f, shape) if f is not None else kif[2]  # type: ignore
         ret = [
             v.quantize(k=kk, i=ii, f=ff, overflow_mode=overflow_mode, round_mode=round_mode)
-            for v, kk, ii, ff in zip(np.asarray(self).ravel(), k.ravel(), i.ravel(), f.ravel())
-        ]  # type: ignore
+            for v, kk, ii, ff in zip(np.asarray(self).ravel(), k.ravel(), i.ravel(), f.ravel())  # type: ignore
+        ]
         return FixedVariableArray(np.array(ret).reshape(shape), self.solver_options, hwconf=self.hwconf)
 
     @property
@@ -465,11 +352,13 @@ class RetardedFixedVariableArray(FixedVariableArray):
         return obj
 
     def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self._operator = obj._operator
         super().__array_finalize__(obj)
-        self._operator = getattr(obj, '_operator', None)
 
     def __array_function__(self, func, types, args, kwargs):
-        raise RuntimeError('RetardedFixedVariableArray only supports quantization or further unary operations.')
+        raise RuntimeError('RetardedFixedVariableArray only supports quantization or further unary mapping operations.')
 
     def apply(self, fn: Callable[[NDArray], NDArray]) -> 'RetardedFixedVariableArray':
         return RetardedFixedVariableArray(
@@ -615,6 +504,7 @@ def _np_dot(a, b, out=None):
 @_array_fn(np.where)
 def _np_where(condition, x=None, y=None):
     fva = next(v for v in (condition, x, y) if isinstance(v, FixedVariableArray))
+    assert x is not None and y is not None, 'Only 3-arg version of np.where is supported'
     if isinstance(condition, FixedVariableArray):
         cond_fva = condition.to_bool('any')
         _cond, _x, _y = np.broadcast_arrays(
@@ -644,12 +534,12 @@ def _np_argsort(a, axis=-1, **kw):
 
 
 @_ufunc(np.add, np.subtract, np.multiply, np.true_divide, np.negative)
-def _ufunc_elementwise(arr, ufunc, *inputs, **kwargs):
+def _ufunc_elementwise(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
     return FixedVariableArray(ufunc(*[to_raw_arr(x) for x in inputs], **kwargs), arr.solver_options, hwconf=arr.hwconf)
 
 
 @_ufunc(np.maximum, np.minimum)
-def _ufunc_minmax(arr, ufunc, *inputs, **kwargs):
+def _ufunc_minmax(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
     op = _max_of if ufunc is np.maximum else _min_of
     a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
     shape = a.shape
@@ -659,16 +549,51 @@ def _ufunc_minmax(arr, ufunc, *inputs, **kwargs):
     return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
 
 
+def _matmul(a: FixedVariableArray, b) -> FixedVariableArray:
+    if a.collapsed:
+        self_mat = np.array([v.low for v in np.asarray(a).ravel()], dtype=np.float64).reshape(a.shape)
+        if isinstance(b, FixedVariableArray):
+            if not b.collapsed:
+                return self_mat @ b  # type: ignore
+            other_mat = np.array([v.low for v in np.asarray(b).ravel()], dtype=np.float64).reshape(b.shape)
+        else:
+            other_mat = np.array(b, dtype=np.float64)
+        r = self_mat @ other_mat
+        return FixedVariableArray.from_lhs(low=r, high=r, step=np.ones_like(r), hwconf=a.hwconf, solver_options=a.solver_options)
+
+    _b = np.asarray(b) if isinstance(b, FixedVariableArray) else np.array(b)
+    if any(isinstance(x, FixedVariable) for x in _b.ravel()):
+        return FixedVariableArray(mmm(np.asarray(a), _b), a.solver_options, hwconf=a.hwconf)
+
+    shape0, shape1 = a.shape, _b.shape
+    assert shape0[-1] == shape1[0], f'Matrix shapes do not match: {shape0} @ {shape1}'
+    contract_len = shape1[0]
+    out_shape = shape0[:-1] + shape1[1:]
+    mat0, mat1 = a.reshape((-1, contract_len)), _b.reshape((contract_len, -1))
+    r = [cmvm(mat1, mat0[i], (a.solver_options or {}).copy()) for i in range(mat0.shape[0])]
+    return FixedVariableArray(np.array(r).reshape(out_shape), a.solver_options, hwconf=a.hwconf)
+
+
+def _rmatmul(a: 'FixedVariableArray', other) -> 'FixedVariableArray':
+    mat1 = np.moveaxis(other, -1, 0)
+    mat0 = np.moveaxis(a, 0, -1)  # type: ignore
+    ndim0, ndim1 = mat0.ndim, mat1.ndim
+    r = mat0 @ mat1
+    _axes = tuple(range(0, ndim0 + ndim1 - 2))
+    axes = _axes[ndim0 - 1 :] + _axes[: ndim0 - 1]
+    return r.transpose(axes)
+
+
 @_ufunc(np.matmul)
-def _ufunc_matmul(arr, ufunc, *inputs, **kwargs):
+def _ufunc_matmul(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
     a, b = inputs
     if isinstance(a, FixedVariableArray):
-        return a.matmul(b)
-    return b.rmatmul(a)
+        return _matmul(a, b)
+    return _rmatmul(b, a)
 
 
 @_ufunc(np.power)
-def _ufunc_power(arr, ufunc, *inputs, **kwargs):
+def _ufunc_power(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
     base, exp = inputs
     if isinstance(exp, (int, float, np.integer, np.floating)):
         _exp = int(exp)
@@ -680,11 +605,124 @@ def _ufunc_power(arr, ufunc, *inputs, **kwargs):
 
 
 @_ufunc(np.abs, np.absolute)
-def _ufunc_abs(arr, ufunc, *inputs, **kwargs):
+def _ufunc_abs(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
     r = np.array([v.__abs__() for v in np.asarray(arr).ravel()])
     return FixedVariableArray(r.reshape(arr.shape), arr.solver_options, hwconf=arr.hwconf)
 
 
 @_ufunc(np.square)
-def _ufunc_square(arr, ufunc, *inputs, **kwargs):
+def _ufunc_square(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
     return arr**2
+
+
+@_ufunc(np.greater)
+def _ufunc_greater(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av > bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.less)
+def _ufunc_less(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av < bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.greater_equal)
+def _ufunc_greater_equal(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av >= bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.less_equal)
+def _ufunc_less_equal(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av <= bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.logical_and)
+def _ufunc_logical_and(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av & bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.logical_or)
+def _ufunc_logical_or(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av | bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.bitwise_and)
+def _ufunc_bitwise_and(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av & bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.bitwise_or)
+def _ufunc_bitwise_or(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av | bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.bitwise_xor)
+def _ufunc_bitwise_xor(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av ^ bv for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.invert)
+def _ufunc_bitwise_not(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    r = np.array([~av for av in np.asarray(arr).ravel()])
+    return FixedVariableArray(r.reshape(arr.shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.equal)
+def _ufunc_equal(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av._eq(bv) for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.not_equal)
+def _ufunc_not_equal(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    a, b = np.broadcast_arrays(to_raw_arr(inputs[0]), to_raw_arr(inputs[1]))
+    shape = a.shape
+    r = np.array([av._ne(bv) for av, bv in zip(a.ravel(), b.ravel())])
+    return FixedVariableArray(r.reshape(shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.signbit)
+def _ufunc_signbit(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    r = np.array([v.is_negative() for v in np.asarray(arr).ravel()])
+    return FixedVariableArray(r.reshape(arr.shape), arr.solver_options, hwconf=arr.hwconf)
+
+
+@_ufunc(np.sign)
+def _ufunc_sign(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    not_zero = arr.to_bool('any')
+    mask = not_zero + not_zero * 2
+    ret: FixedVariableArray = (1 - 2 * np.signbit(arr)) & mask  # type: ignore
+    return ret.quantize(1, 1, 0)
+
+
+@_ufunc(np.floor)
+def _ufunc_floor(arr: FixedVariableArray, ufunc, *inputs, **kwargs):
+    return arr.quantize(f=0, round_mode='TRN')

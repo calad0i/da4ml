@@ -2,6 +2,36 @@ from ..._binary import get_lsb_loc
 from ...types import CombLogic, Op, QInterval
 
 
+def canonicalize(comb: CombLogic) -> CombLogic:
+    comb = const_propagation(comb)
+    comb = canonicalize_outputs(comb)
+    return comb
+
+
+def const_propagation(comb: CombLogic) -> CombLogic:
+    ops = comb.ops.copy()
+    for i, op in enumerate(ops):
+        if op.opcode in (-1, 5):
+            continue
+        if all(ops[j].opcode == 5 for j in op.input_ids):
+            # constant propagation
+            fake_buf = {j: ops[j].data * ops[j].qint.step for j in op.input_ids}
+            val: float = comb.exec_op(op, fake_buf, None)  # type: ignore
+            step = 2 ** get_lsb_loc(val)
+            ops[i] = Op(-1, -1, 5, int(val / step), QInterval(val, val, step), op.latency, op.cost)
+    return CombLogic(
+        comb.shape,
+        comb.inp_shifts,
+        comb.out_idxs,
+        comb.out_shifts,
+        comb.out_negs,
+        ops,
+        comb.carry_size,
+        comb.adder_size,
+        comb.lookup_tables,
+    )
+
+
 def canonicalize_outputs(comb: CombLogic) -> CombLogic:
     ops = comb.ops.copy()
     out_idxs = comb.out_idxs.copy()
