@@ -62,6 +62,7 @@ class OperationTest:
 
 
 class OperationTestSynth(OperationTest):
+    @pytest.mark.slow
     @pytest.mark.parametrize('flavor', ('verilog', 'vhdl'))
     @pytest.mark.parametrize('latency_cutoff', (-1, 0.5, 1))
     def test_rtl_gen(self, comb: CombLogic, flavor: str, latency_cutoff, temp_directory: str, test_data: np.ndarray):
@@ -87,6 +88,7 @@ class OperationTestSynth(OperationTest):
         np.testing.assert_equal(rtl_pred, comb_pred)
         subprocess.run(['rm', '-rf', temp_directory])
 
+    @pytest.mark.slow
     @pytest.mark.parametrize('flavor', ('vitis',))
     def test_hls_gen(self, comb: CombLogic, flavor: str, temp_directory: str, test_data: np.ndarray):
         hls_model = HLSModel(comb, temp_directory, flavor=flavor)
