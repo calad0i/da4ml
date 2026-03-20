@@ -1,3 +1,4 @@
+import typing
 from collections.abc import Callable
 from typing import TypeVar
 
@@ -224,13 +225,13 @@ class FixedVariableArray(np.ndarray):
         high, low = _high - step, -_high * k
         return cls.from_lhs(low, high, step, hwconf, latency, solver_options)
 
-    def __getitem__(self, item):
-        if isinstance(item, _ArgsortDelayedIndex):
-            ret = sort(*item.args, **item.kwargs, aux_value=self)[1]
-            for s in item._slicing:
-                ret = ret[s]
+    def __getitem__(self, key) -> 'FixedVariableArray|FixedVariable':  # type: ignore
+        if isinstance(key, _ArgsortDelayedIndex):
+            ret = sort(*key.args, **key.kwargs, aux_value=self)[1]
+            for s in key._slicing:
+                ret = ret[s]  # type: ignore
             return ret
-        return super().__getitem__(item)
+        return super().__getitem__(key)  # type: ignore
 
     def __repr__(self):
         shape = self.shape
@@ -312,6 +313,23 @@ class FixedVariableArray(np.ndarray):
         shape = self.shape
         _arr = np.array([v._with(_from=(), opr='new', renew_id=True) for v in np.asarray(self).ravel()]).reshape(shape)
         return FixedVariableArray(_arr, self.solver_options, hwconf=self.hwconf)
+
+    if typing.TYPE_CHECKING:
+
+        def __add__(self, other) -> 'FixedVariableArray': ...
+        def __sub__(self, other) -> 'FixedVariableArray': ...  # type: ignore
+        def __mul__(self, other) -> 'FixedVariableArray': ...
+        def __truediv__(self, other) -> 'FixedVariableArray': ...  # type: ignore
+        def __matmul__(self, other) -> 'FixedVariableArray': ...
+        def __radd__(self, other) -> 'FixedVariableArray': ...
+        def __rsub__(self, other) -> 'FixedVariableArray': ...  # type: ignore
+        def __rmul__(self, other) -> 'FixedVariableArray': ...
+        def __rtruediv__(self, other) -> 'FixedVariableArray': ...  # type: ignore
+        def __rmatmul__(self, other) -> 'FixedVariableArray': ...
+
+        def ravel(self, /, order='C') -> 'FixedVariableArray': ...
+        def reshape(self, shape, /, *, order='C', copy=None) -> 'FixedVariableArray': ...  # type: ignore
+        def transpose(self, *axes) -> 'FixedVariableArray': ...
 
 
 class FixedVariableArrayInput(FixedVariableArray):
@@ -570,7 +588,7 @@ def _matmul(a: FixedVariableArray, b) -> FixedVariableArray:
     contract_len = shape1[0]
     out_shape = shape0[:-1] + shape1[1:]
     mat0, mat1 = a.reshape((-1, contract_len)), _b.reshape((contract_len, -1))
-    r = [cmvm(mat1, mat0[i], (a.solver_options or {}).copy()) for i in range(mat0.shape[0])]
+    r = [cmvm(mat1, mat0[i], (a.solver_options or {}).copy()) for i in range(mat0.shape[0])]  # type: ignore
     return FixedVariableArray(np.array(r).reshape(out_shape), a.solver_options, hwconf=a.hwconf)
 
 
@@ -581,7 +599,7 @@ def _rmatmul(a: 'FixedVariableArray', other) -> 'FixedVariableArray':
     r = mat0 @ mat1
     _axes = tuple(range(0, ndim0 + ndim1 - 2))
     axes = _axes[ndim0 - 1 :] + _axes[: ndim0 - 1]
-    return r.transpose(axes)
+    return r.transpose(axes)  # type: ignore
 
 
 @_ufunc(np.matmul)
