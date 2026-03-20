@@ -147,7 +147,7 @@ class RTLModel:
 
         if self._pipe is not None:
             # get actual latency cutoff
-            latency_cutoff = int(max(max(st.latency) / (i + 1) for i, st in enumerate(self._pipe.solutions)))
+            latency_cutoff = max(max(st.latency) / (i + 1) for i, st in enumerate(self._pipe.solutions))
             self._latency_cutoff = latency_cutoff
 
         self._lib = None
