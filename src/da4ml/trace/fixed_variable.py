@@ -2,6 +2,7 @@ import random
 from collections.abc import Callable, Generator
 from copy import copy
 from dataclasses import dataclass
+from functools import lru_cache
 from hashlib import sha256
 from math import ceil, floor, log2
 from typing import Any, NamedTuple, overload
@@ -10,7 +11,7 @@ from uuid import UUID
 import numpy as np
 from numpy.typing import NDArray
 
-from .._binary.cmvm_bin import get_lsb_loc, iceil_log2, solve
+from .._binary.cmvm_bin import get_lsb_loc, get_lsb_loc_arr, iceil_log2, solve
 from ..types import QInterval, minimal_kif
 from .affine_interval import AffineInterval
 
@@ -39,15 +40,15 @@ class TableSpec:
 
 def to_spec(table: NDArray[np.floating]) -> tuple[TableSpec, NDArray[np.int32], NDArray[np.bool_] | None]:
     mask = np.isnan(table)
-    f_out = max(-get_lsb_loc(float(x)) for x in table.ravel() if not np.isnan(x))
-    int_table = np.where(mask, 0, table * 2**f_out).astype(np.int32)
+    f_out = -get_lsb_loc_arr(table.astype(np.float32)).min()
+    int_table = np.where(mask, 0, table * 2.0**f_out).astype(np.int32)
     h = sha256(int_table.data)
     if mask.any():
         h.update(b'mask')
         h.update(mask.data)
     h.update(f'{f_out}'.encode())
     inp_width = ceil(log2(table.size))
-    out_qint = QInterval(float(np.min(table[~mask])), float(np.max(table[~mask])), float(2**-f_out))
+    out_qint = QInterval(float(np.min(table[~mask])), float(np.max(table[~mask])), float(2.0**-f_out))
     mask = mask if mask.any() else None
     return TableSpec(hash=h.hexdigest(), inp_width=inp_width, out_qint=out_qint), int_table, mask
 
@@ -151,6 +152,7 @@ class LookupTable:
         pad_right = size - len(self.table) - pad_left
         return pad_left, pad_right
 
+    @lru_cache(maxsize=8)
     def padded_table(self, key_qint: QInterval) -> NDArray[np.float64]:
         pad_left, pad_right = self._get_pads(key_qint)
         _table = self.table.astype(np.float64)
@@ -174,6 +176,9 @@ class LookupTable:
         _mask = self.mask[item] if self.mask is not None else None
         _table, _spec, _ = to_spec(table)
         return LookupTable(_spec, _table, _mask)
+
+    def __hash__(self) -> int:
+        return hash(self.spec.hash)
 
 
 def to_csd_powers(x: float) -> Generator[float, None, None]:

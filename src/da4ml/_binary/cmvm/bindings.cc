@@ -10,6 +10,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/optional.h>
+#include <vector>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -234,9 +235,22 @@ nb::typed<nb::tuple, int8_t, int8_t, int8_t> overlap_counts_(
     return nb::make_tuple(a, b, c);
 }
 
+nb::ndarray<nb::numpy, int8_t> get_lsb_loc_arr(nb::ndarray<float> arr) {
+    float *ptr = arr.data();
+    int8_t *ret_ptr = new int8_t[arr.size()];
+    for (size_t i = 0; i < arr.size(); ++i) {
+        ret_ptr[i] = get_lsb_loc(ptr[i]);
+    }
+    nb::capsule owner(ret_ptr, [](void *p) noexcept { delete[] (int8_t *)(p); });
+    return nb::ndarray<nb::numpy, int8_t>(
+        ret_ptr, arr.ndim(), (size_t *)(arr.shape_ptr()), owner
+    );
+}
+
 NB_MODULE(cmvm_bin, m) {
     m.def("int_arr_to_csd", &int_arr_to_csd_numpy, "inp"_a.noconvert());
     m.def("get_lsb_loc", &get_lsb_loc, "x"_a);
+    m.def("get_lsb_loc_arr", &get_lsb_loc_arr, "x"_a);
     m.def("iceil_log2", &iceil_log2, "x"_a);
     m.def("csd_decompose", &csd_decompose_numpy, "inp"_a.noconvert(), "center"_a = true);
     m.def(

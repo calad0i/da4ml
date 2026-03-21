@@ -9,7 +9,7 @@ static_assert(
 
 int8_t get_lsb_loc(float x) {
     // s1, m24, e7
-    if (x == 0.0f) {
+    if (x == 0.0f || std::isnan(x)) {
         return 127;
     }
     uint32_t bits = std::bit_cast<uint32_t>(x);

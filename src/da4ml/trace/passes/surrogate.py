@@ -74,28 +74,28 @@ def _count_luts(bit_nd: np.ndarray, LUT_X: int = 6) -> float:
 
 
 def cost_lat_lut(qint_in: QInterval, table: LookupTable, LUT_X: int, LUT_Y: int, skip_cost: bool = False):
-    data = table.padded_table(qint_in)
-    int_data = np.where(np.isnan(data), 0, data).astype(int)  # fill DCs with 0
-    out_bw = sum(table.spec.out_kif)
 
-    n = max(int(np.ceil(np.log2(max(len(data), 2)))), 1)
-    lat = max(n - LUT_X, 1) * 0.5
+    bw_in = sum(minimal_kif(qint_in))
+    lat = max(bw_in - LUT_X, 1) * 0.5
 
     if skip_cost:
         return 0, lat
 
-    full_size = 2**n
-    if len(int_data) < full_size:
-        int_data = np.pad(int_data, (0, full_size - len(int_data)))
+    if bw_in - LUT_X > 6:
+        return 0.7 * 2.0 ** (bw_in - LUT_X), lat
+
+    out_bw = sum(table.spec.out_kif)
+    data = table.padded_table(qint_in)
+    int_data = np.nan_to_num(data, nan=0).astype(np.int64)
 
     total_cost = 0.0
     for b in range(out_bw):
-        bit_vals = ((int_data >> b) & 1).astype(np.int8)
+        bit_vals = (int_data >> b) & 1
 
         if np.all(bit_vals == bit_vals[0]):
             continue
 
-        bit_nd = bit_vals.reshape((2,) * n)
+        bit_nd = bit_vals.reshape((2,) * bw_in)
         total_cost += _count_luts(bit_nd, LUT_X)
 
     return ceil(total_cost), lat
