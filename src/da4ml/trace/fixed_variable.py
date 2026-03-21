@@ -703,7 +703,7 @@ class FixedVariable:
         a: 'FixedVariable|float',
         b: 'FixedVariable|float',
         qint: tuple[float, float, float] | None = None,
-    ):
+    ) -> 'FixedVariable':
         """If the MSB of this variable is 1, return a, else return b.
         When the variable is signed, the MSB is determined by the sign bit (1 for <0, 0 for >=0)
         """
@@ -948,20 +948,20 @@ class FixedVariable:
         }
         k, i, f = self.kif
         k_other, i_other, f_other = other.kif
-        k, i, f = max(k, k_other), max(i, i_other), max(f, f_other)
+        i, f = max(i, i_other), max(f, f_other)
 
-        # match _type:
-        #     case 'and':
-        #         k = k & k_other
-        #     case 'or':
-        #         k = k | k_other
-        #     case 'xor':
-        #         if self.low >= 0 and other.low >= 0:
-        #             k = 0
-        #         elif self.high < 0 and other.high < 0:
-        #             k = 0
-        #         else:
-        #             k = 1
+        match _type:
+            case 'and':
+                k = k & k_other
+            case 'or':
+                k = k | k_other
+            case 'xor':
+                if self.low >= 0 and other.low >= 0:
+                    k = 0
+                elif self.high < 0 and other.high < 0:
+                    k = 0
+                else:
+                    k = 1
 
         qint = QInterval(-k * 2.0**i, 2.0**i - 2.0**-f, 2.0**-f)
         if self.opr == 'const' and other.opr == 'const':
