@@ -733,11 +733,7 @@ class FixedVariable:
             if k + i == k0 + i0 + log2(abs(_factor / _factor0)):
                 return self._from[0].msb_mux(a, b, qint=qint)
 
-        if a._factor < 0:
-            qint = (-qint[1], -qint[0], qint[2]) if qint else None
-            return -(self.msb_mux(-a, -b, qint=qint))
-
-        _factor = a._factor
+        _factor = abs(a._factor)
 
         if qint is None:
             qint = (float(min(a.low, b.low)), float(max(a.high, b.high)), float(min(a.step, b.step)))
