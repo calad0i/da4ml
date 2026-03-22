@@ -190,7 +190,7 @@ namespace dais {
     bool DAISInterpreter::get_msb(int64_t value, const DType &dtype) const {
         if (dtype.is_signed)
             return value < 0;
-        return value > std::max((1LL << (dtype.width() - 2)), 0LL);
+        return (value >> (dtype.width() - 1)) & 1;
     }
 
     int64_t DAISInterpreter::msb_mux(
@@ -296,7 +296,7 @@ namespace dais {
     }
 
     std::vector<int64_t>
-    DAISInterpreter::exec_ops(const std::span<const double> &inputs) {
+    DAISInterpreter::exec_ops(const std::span<const double> &inputs, bool verbose) const {
         if (inputs.size() != n_in)
             throw std::runtime_error(
                 "Input size mismatch: expected " + std::to_string(n_in) + ", got " +
@@ -374,6 +374,13 @@ namespace dais {
                     std::to_string(i)
                 );
             }
+
+            if (verbose) {
+                std::cout << "buf[" << i << "] = " << buffer[i]
+                          << " (opcode=" << op.opcode << ", id0=" << op.id0
+                          << ", id1=" << op.id1 << ", data_high=" << op.data_high
+                          << ", data_low=" << op.data_low << ")\n";
+            }
         }
         for (size_t i = 0; i < n_out; ++i)
             output_buffer[i] = out_idxs[i] >= 0 ? buffer[out_idxs[i]] : 0;
@@ -382,9 +389,10 @@ namespace dais {
 
     void DAISInterpreter::inference(
         const std::span<const double> &inputs,
-        std::span<double> &outputs
+        std::span<double> &outputs,
+        bool verbose
     ) {
-        std::vector<int64_t> int_outputs = exec_ops(inputs);
+        std::vector<int64_t> int_outputs = exec_ops(inputs, verbose);
         for (size_t i = 0; i < n_out; ++i) {
             int64_t tmp = out_negs[i] ? -int_outputs[i] : int_outputs[i];
             outputs[i] =
@@ -394,10 +402,10 @@ namespace dais {
     }
 
     std::vector<double>
-    DAISInterpreter::inference(const std::span<const double> &inputs) {
+    DAISInterpreter::inference(const std::span<const double> &inputs, bool verbose) {
         std::vector<double> outputs(n_out);
         std::span<double> out_span(outputs.data(), n_out);
-        inference(inputs, out_span);
+        inference(inputs, out_span, verbose);
         return outputs;
     }
 

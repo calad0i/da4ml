@@ -5,7 +5,7 @@ from .cmvm_bin import csd_decompose, get_lsb_loc, iceil_log2, int_arr_to_csd, ke
 from .dais_bin import run_interp
 
 
-def dais_interp_run(bin_logic: NDArray[np.int32], data: NDArray, n_threads: int = 1):
+def dais_interp_run(bin_logic: NDArray[np.int32], data: NDArray, n_threads: int = 1, debug=False):
     inp_size = int(bin_logic[2])
 
     assert data.size % inp_size == 0, f'Input size {data.size} is not divisible by {inp_size}'
@@ -13,7 +13,7 @@ def dais_interp_run(bin_logic: NDArray[np.int32], data: NDArray, n_threads: int 
     inputs = np.ascontiguousarray(np.ravel(data), dtype=np.float64)
     bin_logic = np.ascontiguousarray(np.ravel(bin_logic), dtype=np.int32)
 
-    return run_interp(bin_logic, inputs, n_threads)
+    return run_interp(bin_logic, inputs, n_threads, debug)
 
 
 __all__ = [

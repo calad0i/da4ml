@@ -105,7 +105,8 @@ namespace dais {
             const DType &dtype_out
         ) const;
 
-        std::vector<int64_t> exec_ops(const std::span<const double> &inputs);
+        std::vector<int64_t>
+        exec_ops(const std::span<const double> &inputs, bool verbose) const;
 
         // 8
         int64_t logic_lookup(int64_t v1, const Op &op, const DType dtype_in) const;
@@ -121,8 +122,13 @@ namespace dais {
 
         void load_from_binary(const std::span<const int32_t> &binary_data);
 
-        std::vector<double> inference(const std::span<const double> &inputs);
-        void inference(const std::span<const double> &inputs, std::span<double> &outputs);
+        std::vector<double>
+        inference(const std::span<const double> &inputs, bool verbose = false);
+        void inference(
+            const std::span<const double> &inputs,
+            std::span<double> &outputs,
+            bool verbose = false
+        );
 
         void print_program_info() const;
     };

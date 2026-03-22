@@ -13,7 +13,8 @@ void _run_interp(
     const std::span<const int32_t> &binary_data,
     const std::span<const double_t> &inputs,
     std::span<double_t> &outputs,
-    size_t n_samples
+    size_t n_samples,
+    bool debug
 ) {
     int32_t n_in = binary_data[2];
     int32_t n_out = binary_data[3];
@@ -23,7 +24,7 @@ void _run_interp(
     for (size_t i = 0; i < n_samples; ++i) {
         const std::span<const double_t> inp_span(&inputs[i * n_in], n_in);
         std::span<double_t> out_span(&outputs[i * n_out], n_out);
-        interp.inference(inp_span, out_span);
+        interp.inference(inp_span, out_span, debug);
     }
 }
 
@@ -31,7 +32,8 @@ void run_interp(
     const std::span<const int32_t> &bin_logic,
     const std::span<const double_t> &input,
     std::span<double_t> &output,
-    int64_t n_threads
+    int64_t n_threads,
+    bool debug
 ) {
     const int32_t *bin_logic_ptr = bin_logic.data();
     const double_t *input_ptr = input.data();
@@ -54,6 +56,10 @@ void run_interp(
     int32_t n_out = bin_logic[3];
 
     // =============== openmp config ===============
+
+    if (debug) {
+        n_threads = 1;
+    }
 
     size_t n_samples = input.size() / n_in;
 
@@ -84,7 +90,7 @@ void run_interp(
         );
         std::span<double_t> out_span(&output[offset_out], n_samples_this_thread * n_out);
         try {
-            _run_interp(bin_logic, inp_span, out_span, n_samples_this_thread);
+            _run_interp(bin_logic, inp_span, out_span, n_samples_this_thread, debug);
         }
         catch (...) {
 #pragma omp critical
@@ -102,7 +108,8 @@ void run_interp(
 nb::ndarray<nb::numpy, double_t> run_interp_numpy(
     const nb::ndarray<int32_t> &bin_logic,
     const nb::ndarray<double_t> &input,
-    int64_t n_threads
+    int64_t n_threads,
+    bool debug
 ) {
     const int32_t *bin_logic_ptr = bin_logic.data();
     const double_t *input_ptr = input.data();
@@ -119,7 +126,7 @@ nb::ndarray<nb::numpy, double_t> run_interp_numpy(
     const std::span<const double_t> inp_span(input_ptr, input.size());
     std::span<double_t> out_span(output_ptr, n_samples * n_out);
 
-    run_interp(bin_span, inp_span, out_span, n_threads);
+    run_interp(bin_span, inp_span, out_span, n_threads, debug);
 
     nb::capsule owner(output_ptr, [](void *p) noexcept { delete[] (double_t *)p; });
     return nb::ndarray<nb::numpy, double_t>(
@@ -128,5 +135,12 @@ nb::ndarray<nb::numpy, double_t> run_interp_numpy(
 }
 
 NB_MODULE(dais_bin, m) {
-    m.def("run_interp", &run_interp_numpy, "bin_logic"_a, "data"_a, "n_threads"_a = 1);
+    m.def(
+        "run_interp",
+        &run_interp_numpy,
+        "bin_logic"_a,
+        "data"_a,
+        "n_threads"_a = 1,
+        "debug"_a = false
+    );
 }
