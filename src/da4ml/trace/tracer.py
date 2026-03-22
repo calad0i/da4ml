@@ -80,6 +80,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 ops.append(op_neg)
                 ii += 1
             continue
+
         if v.opr == 'new':
             raise NotImplementedError('Operation "new" is only expected in the input list')
         match v.opr:
@@ -154,7 +155,7 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 op = Op(id0, -1, opcode, data, v.unscaled.qint, v.latency, 0.0)
             case 'bit_unary':
                 v0 = v._from[0]
-                id0 = index[v0.id] + (v._factor < 0)
+                id0 = index[v0.id] + (v0._factor < 0)
                 assert id0 < ii, f'{id0} {ii} {v.id}'
                 assert v._data is not None, 'bit_unary must have data'
                 opcode = 9
