@@ -879,7 +879,6 @@ class FixedVariable:
 
         size = len(table)
 
-        was_numpy_table = isinstance(table, np.ndarray)
         if original_qint is not None:
             o_min, o_max, o_step = original_qint
             assert round((o_max - o_min) / o_step) + 1 == size, f'table size {size} does not match original qint {original_qint}'
@@ -899,12 +898,17 @@ class FixedVariable:
         )
 
         if isinstance(table, np.ndarray):
-            if was_numpy_table and self._factor < 0:
+            if self._factor < 0:
                 table = table[::-1]
             table = LookupTable(table)
 
         if np.all(table.float_table == table.float_table[0]):
             return self.from_const(table.float_table[0], hwconf=self.hwconf)
+
+        if len(table.float_table) == 2:
+            a, b = table.float_table
+            key = self if self._factor > 0 else -self
+            return (key - key.low).msb_mux(b, a)
 
         return FixedVariable(
             *table.spec.out_qint, _from=(self,), _factor=1.0, opr='lookup', hwconf=self.hwconf, _data=None, _table=table
