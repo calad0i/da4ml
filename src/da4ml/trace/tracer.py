@@ -48,7 +48,7 @@ def gather_variables(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVar
 def needs_negative(variables: Sequence[FixedVariable], outputs: Sequence[FixedVariable]) -> set[UUID]:
     needs_neg = set()
     for v in variables:
-        if v.opr == 'vadd' or v.opr == 'vmul':
+        if v.opr == 'vadd' or v.opr == 'vmul' or v.opr == 'lookup':
             continue
         for _v in v._from:
             if _v._factor < 0:
@@ -166,7 +166,6 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 id0, id1 = id0 + (f0 < 0), id1 + (f1 < 0)
                 assert id0 < ii and id1 < ii, f'{id0} {id1} {ii} {v.id}'
                 assert v._data is not None, 'bit_binary must have data'
-                # data: {subopcode[63:56], pad0, v1_neg[33], v0_neg[32], shift[31:0]}
                 _data = int(log2(abs(f1 / f0))) & 0xFFFFFFFF
                 _data += int(v._data) << 56
                 op = Op(id0, id1, 10, _data, v.unscaled.qint, v.latency, 0.0)

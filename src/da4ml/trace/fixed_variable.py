@@ -613,9 +613,11 @@ class FixedVariable:
         assert overflow_mode in ('WRAP', 'SAT', 'SAT_SYM')
         assert round_mode in ('TRN', 'RND', 'RND_CONV')
 
+        k, i, f = int(k), int(i), int(f)
         if k + i + f <= 0:
             return FixedVariable(0, 0, 1, hwconf=self.hwconf, opr='const')
-        _k, _i, _f = self.kif
+
+        _k, _i, _f = map(int, self.kif)
 
         if k >= _k and i >= _i and f >= _f:
             if overflow_mode != 'SAT_SYM' or i > _i:
@@ -636,7 +638,7 @@ class FixedVariable:
             high = _high - step
             low = -_high * k if overflow_mode == 'SAT' else -high * k
             ff = f + 1 if round_mode == 'RND' else (f if round_mode == 'TRN' else _f)
-            v = self.quantize(_k, _i, ff, 'WRAP', 'TRN') if _k + _i + ff > 0 else self
+            v = self.quantize(_k, _i, ff, 'WRAP', 'TRN') if _k + _i > -ff else self
             return v.max_of(low).min_of(high).quantize(k, i, f, 'WRAP', round_mode)
 
         if self.low == self.high:
@@ -903,13 +905,6 @@ class FixedVariable:
 
         if np.all(table.float_table == table.float_table[0]):
             return self.from_const(table.float_table[0], hwconf=self.hwconf)
-
-        if len(table) == 2:
-            a, b = table.float_table
-            if (self.low < 0) ^ (self._factor < 0):
-                return self.msb_mux(a, b)
-            else:
-                return self.msb_mux(b, a)
 
         return FixedVariable(
             *table.spec.out_qint, _from=(self,), _factor=1.0, opr='lookup', hwconf=self.hwconf, _data=None, _table=table
