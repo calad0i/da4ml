@@ -59,12 +59,12 @@ def quantize(
         return x.quantize(k=k, i=i, f=f, overflow_mode=overflow_mode, round_mode=round_mode)
     elif isinstance(x, list):
         ret: list[FixedVariable] = []
-        for i in range(len(x)):
+        for idx in range(len(x)):
             ret.append(
-                x[i].quantize(
-                    k=int(k[i] if isinstance(k, (list, np.ndarray)) else k),
-                    i=int(i[i] if isinstance(i, (list, np.ndarray)) else i),
-                    f=int(f[i] if isinstance(f, (list, np.ndarray)) else f),
+                x[idx].quantize(
+                    k=int(k[idx] if isinstance(k, (list, np.ndarray)) else k),
+                    i=int(i[idx] if isinstance(i, (list, np.ndarray)) else i),
+                    f=int(f[idx] if isinstance(f, (list, np.ndarray)) else f),
                     overflow_mode=overflow_mode,
                     round_mode=round_mode,
                 )

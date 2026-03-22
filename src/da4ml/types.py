@@ -135,12 +135,10 @@ T = TypeVar('T', 'FixedVariable', float, int, np.float32, np.float64)
 
 
 @singledispatch
-def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False, round_mode: str = 'TRN') -> 'T':
+def _relu(v: 'T', i: int | None = None, f: int | None = None, round_mode: str = 'TRN') -> 'T':
     from .trace.fixed_variable import FixedVariable
 
     assert isinstance(v, FixedVariable), f'Unknown type {type(v)} for symbolic relu'
-    if inv:
-        v = -v
     return v.relu(i, f, round_mode=round_mode)
 
 
@@ -148,9 +146,7 @@ def _relu(v: 'T', i: int | None = None, f: int | None = None, inv: bool = False,
 @_relu.register(int)
 @_relu.register(np.float32)
 @_relu.register(np.float64)
-def _(v, i: int | None = None, f: int | None = None, inv: bool = False, round_mode: str = 'TRN'):
-    if inv:
-        v = -v
+def _(v, i: int | None = None, f: int | None = None, round_mode: str = 'TRN'):
     v = max(0, v)
     if f is not None:
         if round_mode.upper() == 'RND':
@@ -338,7 +334,7 @@ class CombLogic(NamedTuple):
             case 2:  # relu(+/-x)
                 v = buf[op.id0]
                 _, _i, _f = minimal_kif(op.qint)
-                ret = _relu(v, _i, _f, inv=op.opcode == -2, round_mode='TRN')
+                ret = _relu(v, _i, _f, round_mode='TRN')
             case 3:  # quantize(+/-x)
                 v = buf[op.id0] if op.opcode == 3 else -buf[op.id0]
                 _k, _i, _f = minimal_kif(op.qint)
