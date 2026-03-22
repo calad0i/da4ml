@@ -13,7 +13,7 @@ def _flatten_arr(args: Any) -> FixedVariableArray:
     if isinstance(args, FixedVariable):
         return FixedVariableArray(np.array([args]))
     if not isinstance(args, Sequence):
-        return None  # type: ignore
+        raise ValueError(f'Expected a sequence or FixedVariable, got {type(args)}')
     args = [_flatten_arr(a) for a in args]
     args = [a for a in args if a is not None]
     return np.concatenate(args)  # type: ignore
