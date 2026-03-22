@@ -2,7 +2,7 @@ import random
 from collections.abc import Callable, Generator
 from copy import copy
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from hashlib import sha256
 from math import ceil, floor, log2
 from typing import Any, NamedTuple, overload
@@ -111,7 +111,7 @@ class LookupTable:
             assert self.mask is None or not self.mask[index], f'Value {var} is masked out in the lookup table'
             return interpret_as(int(self.table[index]), *self.spec.out_kif)
 
-    @property
+    @cached_property
     def float_table(self) -> NDArray[np.floating]:
         k, i, f = self.spec.out_kif
         return interpret_as(self.table, k, i, f)  # type: ignore
@@ -896,14 +896,20 @@ class FixedVariable:
             f'Input variable size does not match lookup table size ({round((self.high - self.low) / self.step) + 1} != {size})'
         )
 
-        if was_numpy_table and isinstance(table, np.ndarray):
-            if len(table) == 1:
-                return self.from_const(float(table[0]), hwconf=self.hwconf)  # type: ignore
-            if self._factor < 0:
-                table = table[::-1]
-
         if isinstance(table, np.ndarray):
+            if was_numpy_table and self._factor < 0:
+                table = table[::-1]
             table = LookupTable(table)
+
+        if np.all(table.float_table == table.float_table[0]):
+            return self.from_const(table.float_table[0], hwconf=self.hwconf)
+
+        if len(table) == 2:
+            a, b = table.float_table
+            if (self.low < 0) ^ (self._factor < 0):
+                return self.msb_mux(a, b)
+            else:
+                return self.msb_mux(b, a)
 
         return FixedVariable(
             *table.spec.out_qint, _from=(self,), _factor=1.0, opr='lookup', hwconf=self.hwconf, _data=None, _table=table
