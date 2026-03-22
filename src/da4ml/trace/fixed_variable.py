@@ -720,6 +720,13 @@ class FixedVariable:
         if not isinstance(b, FixedVariable):
             b = FixedVariable.from_const(b, hwconf=self.hwconf)
 
+        if b.opr == 'const' and b.low == 0:
+            c = self.msb()
+            return (-c * a.step) & a if a.opr != 'const' else c * a
+        if a.opr == 'const' and a.low == 0:
+            c = ~self.msb()
+            return (-c * b.step) & b if b.opr != 'const' else c * b
+
         if self.opr == 'const':
             if self.low >= 0:
                 return b if self.high == 0 else a
@@ -988,11 +995,11 @@ class FixedVariable:
             _ones_pos = (2.0**i) - self.step
             if (k == 0 and other.low == _ones_pos) or (k == 1 and other.low == _ones_neg):
                 if _type == 'and':
-                    return self
+                    return self.quantize(k, i, f)
                 if _type == 'or':
-                    return other
+                    return other.quantize(k, i, f)
                 if _type == 'xor':
-                    return self.unary_bit_op('not')
+                    return self.unary_bit_op('not').quantize(k, i, f)
 
         _data = ops[_type]
         return FixedVariable(
