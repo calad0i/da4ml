@@ -764,7 +764,7 @@ class FixedVariable:
         return FixedVariable(
             *qint,
             _from=(self, a, b),
-            _factor=_factor,
+            _factor=abs(_factor),
             opr='msb_mux',
             hwconf=self.hwconf,
         )

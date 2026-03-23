@@ -360,6 +360,7 @@ class CombLogic(NamedTuple):
                     else:
                         _k, _i, _f = minimal_kif(qint_k)
                         ret = v0 if k >= 2.0 ** (_i - 1) else v1 * 2.0**shift
+                    ret = _quantize(ret, *minimal_kif(op.qint), round_mode='TRN')
             case 7:  # multiplication
                 v0, v1 = buf[op.id0], buf[op.id1]
                 ret = v0 * v1
@@ -571,7 +572,7 @@ class CombLogic(NamedTuple):
         with open(path, 'wb') as f:
             data.tofile(f)
 
-    def predict(self, data: NDArray | Sequence[NDArray], n_threads: int = 0, debug=False) -> NDArray[np.float64]:
+    def predict(self, data: NDArray | Sequence[NDArray], n_threads: int = 0, debug=False, dump=False) -> NDArray[np.float64]:
         """Predict the output of the solution for a batch of input data with cpp backed DAIS interpreter.
         Cannot be used if the binary interpreter is not installed.
 
@@ -601,7 +602,7 @@ class CombLogic(NamedTuple):
             n_threads = int(os.environ.get('DA_DEFAULT_THREADS', 0))
 
         bin_logic = self.to_binary()
-        return dais_interp_run(bin_logic, data, n_threads, debug=debug)
+        return dais_interp_run(bin_logic, data, n_threads, debug=debug, dump=dump)
 
 
 class Pipeline(NamedTuple):
