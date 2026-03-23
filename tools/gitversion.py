@@ -20,6 +20,10 @@ def get_git_version() -> str:
     if ver.count('.') == 1:
         ver = f'{ver}.0'
     if n_commits != '0':
+        major, minor, patch = ver.split('.')
+        patch = str(int(patch) + 1)
+        ver = f'{major}.{minor}.{patch}'
+    if n_commits != '0':
         git_hash = git_hash.lstrip('g')
         ver = f'{ver}.dev{n_commits}+g{git_hash}'
     return ver
