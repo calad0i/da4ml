@@ -188,8 +188,8 @@ namespace dais {
     }
 
     bool DAISInterpreter::get_msb(int64_t value, const DType &dtype) const {
-        if (dtype.is_signed)
-            return value < 0;
+        // if (dtype.is_signed)
+        //     return value < 0;
         return (value >> (dtype.width() - 1)) & 1;
     }
 
@@ -295,8 +295,11 @@ namespace dais {
         }
     }
 
-    std::vector<int64_t>
-    DAISInterpreter::exec_ops(const std::span<const double> &inputs, bool verbose) const {
+    std::vector<int64_t> DAISInterpreter::exec_ops(
+        const std::span<const double> &inputs,
+        bool verbose,
+        bool dump
+    ) const {
         if (inputs.size() != n_in)
             throw std::runtime_error(
                 "Input size mismatch: expected " + std::to_string(n_in) + ", got " +
@@ -384,15 +387,26 @@ namespace dais {
         }
         for (size_t i = 0; i < n_out; ++i)
             output_buffer[i] = out_idxs[i] >= 0 ? buffer[out_idxs[i]] : 0;
+        if (dump) {
+            return buffer;
+        }
         return output_buffer;
     }
 
     void DAISInterpreter::inference(
         const std::span<const double> &inputs,
         std::span<double> &outputs,
-        bool verbose
+        bool verbose,
+        bool dump
     ) {
-        std::vector<int64_t> int_outputs = exec_ops(inputs, verbose);
+        std::vector<int64_t> int_outputs = exec_ops(inputs, verbose, dump);
+        if (dump) {
+            for (size_t i = 0; i < int_outputs.size(); ++i) {
+                outputs[i] = static_cast<double>(int_outputs[i]) *
+                             std::pow(2.0, -ops[i].dtype.fractionals);
+            }
+            return;
+        }
         for (size_t i = 0; i < n_out; ++i) {
             int64_t tmp = out_negs[i] ? -int_outputs[i] : int_outputs[i];
             outputs[i] =
@@ -401,11 +415,18 @@ namespace dais {
         }
     }
 
-    std::vector<double>
-    DAISInterpreter::inference(const std::span<const double> &inputs, bool verbose) {
-        std::vector<double> outputs(n_out);
+    std::vector<double> DAISInterpreter::inference(
+        const std::span<const double> &inputs,
+        bool verbose,
+        bool dump
+    ) {
+        std::vector<double> outputs;
+        if (!dump)
+            outputs.resize(n_out);
+        else
+            outputs.resize(n_ops);
         std::span<double> out_span(outputs.data(), n_out);
-        inference(inputs, out_span, verbose);
+        inference(inputs, out_span, verbose, dump);
         return outputs;
     }
 
