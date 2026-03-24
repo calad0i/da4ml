@@ -50,7 +50,7 @@ class OperationTest:
 
     def test_retrace(self, comb: CombLogic):
         inp2 = FixedVariableArray.from_kif(*comb.inp_kifs).as_new()
-        out2 = comb(inp2, debug=True, quantize=True)  # type: ignore
+        out2 = comb(inp2, debug=True, quantize=True)
         comb2 = comb_trace(inp2, out2)
         assert comb == comb2
 

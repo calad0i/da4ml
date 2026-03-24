@@ -22,6 +22,7 @@ def to_da4ml(
     n_threads: int = 4,
     metadata=None,
     inputs_kif: tuple[int, int, int] | None = None,
+    xls_opt: bool = False,
 ):
     from da4ml.codegen import HLSModel, RTLModel
     from da4ml.converter import trace_model
@@ -61,6 +62,7 @@ def to_da4ml(
             clock_period=period,
             part_name=part_name,
         )
+        da_model.write(metadata, xls_opt=xls_opt)
     else:
         da_model = HLSModel(
             comb,
@@ -72,8 +74,7 @@ def to_da4ml(
             clock_period=period,
             part_name=part_name,
         )
-
-    da_model.write(metadata)
+        da_model.write(metadata)
     if verbose > 1:
         print(da_model)
         print('Model written')
@@ -136,7 +137,10 @@ def to_da4ml(
         print('Verilating...')
     for _ in range(3):
         try:
-            da_model._compile(openmp=openmp)
+            if isinstance(da_model, RTLModel):
+                da_model._compile(openmp=openmp, _env={'VERILATOR_FLAGS': ''})
+            else:
+                da_model._compile(openmp=openmp)
             break
         except RuntimeError:
             pass
@@ -177,6 +181,7 @@ def convert_main(args):
         n_threads=args.n_threads,
         metadata=metadata,
         inputs_kif=args.inputs_kif,
+        xls_opt=args.xls,
     )
 
 
@@ -234,6 +239,11 @@ def _add_convert_args(parser: argparse.ArgumentParser):
         type=int,
         default=-1,
         help='Number of pipeline stages for pipelining. If set to positive, it will override latency cutoff and pipeline into exactly this many stages.',
+    )
+    parser.add_argument(
+        '--xls',
+        action='store_true',
+        help='Whether use XLS for Verilog generation. Only applicable when --flavor is set to verilog.',
     )
 
 
