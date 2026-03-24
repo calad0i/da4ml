@@ -7,13 +7,8 @@ def is_used_in(comb: CombLogic) -> dict[int, set[int]]:
     for i, op in enumerate(comb.ops):
         if op.opcode == -1:
             continue
-        if op.id0 >= 0:
-            used_in[op.id0].add(i)
-        if op.id1 >= 0:
-            used_in[op.id1].add(i)
-        if op.opcode == 6:  # msb_mux
-            id_c = op.data & 0xFFFFFFFF
-            used_in[id_c].add(i)
+        for j in op.input_ids:
+            used_in[j].add(i)
     for i, j in enumerate(comb.out_idxs):
         if j < 0:
             continue

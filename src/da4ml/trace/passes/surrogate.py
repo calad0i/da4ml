@@ -6,6 +6,40 @@ from ..._binary import iceil_log2, overlap_counts
 from ...trace import HWConfig
 from ...trace.fixed_variable import LookupTable
 from ...types import CombLogic, Op, QInterval, minimal_kif
+from .cse import is_used_in
+
+
+def consumer_opcodes(idx: int, ops: list[Op], used_in: dict[int, set[int]]) -> set[int]:
+    ret: set[int] = set()
+    for cidx in used_in[idx]:
+        if cidx < 0:
+            ret.add(-1)  # output
+        else:
+            if ops[cidx].opcode != -2:  # NEG
+                ret.add(ops[cidx].opcode)
+            else:
+                ret.update(consumer_opcodes(cidx, ops, used_in))
+    return ret
+
+
+def _is_const_descendent(idx: int, ops: list[Op], cache: dict[int, float]) -> float:
+    if idx in cache:
+        return cache[idx]
+    op = ops[idx]
+    if op.opcode == 5:  # CONST
+        cache[idx] = 1.0
+        return 1.0
+    if op.opcode == -2:  # NEG
+        res = _is_const_descendent(op.id0, ops, cache)
+        cache[idx] = res
+        return res
+    if op.opcode == 6:  # MUX
+        a, b = _is_const_descendent(op.id0, ops, cache), _is_const_descendent(op.id1, ops, cache)
+        res = 0.25 * (a + b) + 0.5 * (a or b)
+        cache[idx] = res
+        return res
+    cache[idx] = 0.0
+    return 0.0
 
 
 def cost_lat_add(qint0: QInterval, qint1: QInterval, shift1: int, n_add: int, n_accum: int):
@@ -120,13 +154,16 @@ def cost_lat_bin_bitops(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: 
 
 
 def cost_lat_op(
+    idx: int,
     ops: list[Op],
-    op: Op,
     hwconf: HWConfig,
     lut: tuple[LookupTable, ...] | None,
+    used_in: dict[int, set[int]],
 ) -> tuple[float, float]:
     LUT_X, LUT_Y = 6, 5
     n_add, n_carry = hwconf.adder_size % 65535, hwconf.carry_size % 65535
+    op = ops[idx]
+    _cache: dict[int, float] = {}
     match op.opcode:
         case -2:  # neg
             c, l = 0, 0
@@ -144,14 +181,18 @@ def cost_lat_op(
             c, l = cost_relu(qint_in, LUT_X, LUT_Y)
         case 3:  # WRAP
             return 0, 0
-        case 4:  # cadd: absorbed
+        case 4:  # cadd: absorbed if consumer is not add/sub/mux
+            eff_consumers = consumer_opcodes(idx, ops, used_in)
+            if any(cop in (0, 1, 6) for cop in eff_consumers):
+                bw_in = sum(minimal_kif(ops[op.id0].qint))
+                return max(bw_in - 1, 0) * 0.30, 0
             return 0, 0
         case 5:  # const
             return 0, 0
         case 6:  # msb_mux
             out_bw = sum(minimal_kif(op.qint))
-            c = out_bw * 2.0 ** (LUT_Y - LUT_X)  # 0.5 LUT/bit
-            l = 1
+            sf = _is_const_descendent(idx, ops, _cache)
+            return out_bw * (0.5 - 0.36 * sf), 1
         case 7:  # mul
             qint0, qint1 = ops[op.id0].qint, ops[op.id1].qint
             c, l = cost_lat_mul(qint0, qint1, n_add, n_carry)
@@ -178,9 +219,11 @@ def _with_cost_lat(op: Op, cost, lat) -> Op:
 def add_surrogate(comb: CombLogic) -> CombLogic:
     "Add surrogate cost and latency"
     new_ops = []
-    hwconf = HWConfig(1, 1, -1)
-    for op in comb.ops:
-        cost, lat = cost_lat_op(new_ops, op, hwconf, comb.lookup_tables)
+    ops = comb.ops
+    hwconf = HWConfig(comb.adder_size, comb.carry_size, -1)
+    used_in = is_used_in(comb)
+    for idx, op in enumerate(comb.ops):
+        cost, lat = cost_lat_op(idx, ops, hwconf, comb.lookup_tables, used_in)
         lat = lat + max(tuple(new_ops[j].latency for j in op.input_ids) + (0,))
         new_ops.append(_with_cost_lat(op, cost, lat))
     return CombLogic(
