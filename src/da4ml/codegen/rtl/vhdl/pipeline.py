@@ -1,4 +1,6 @@
-from ....types import Pipeline, minimal_kif
+from collections.abc import Callable
+
+from ....types import CombLogic, Pipeline, minimal_kif
 from .comb import comb_logic_gen
 
 
@@ -7,7 +9,9 @@ def pipeline_logic_gen(
     name: str,
     print_latency=False,
     timescale: str | None = None,
+    comb_logic_gen_fn: Callable[[CombLogic, str, bool, str | None], str] | None = None,
 ):
+    comb_logic_gen_fn = comb_logic_gen_fn or comb_logic_gen
     N = len(csol.solutions)
     inp_bits = [sum(map(sum, map(minimal_kif, sol.inp_qint))) for sol in csol.solutions]
     out_bits = inp_bits[1:] + [sum(map(sum, map(minimal_kif, csol.out_qint)))]
@@ -52,6 +56,6 @@ end architecture rtl;
     ret: dict[str, str] = {}
     for i, s in enumerate(csol.solutions):
         stage_name = f'{name}_stage{i}'
-        ret[stage_name] = comb_logic_gen(s, stage_name, print_latency=print_latency, timescale=timescale)
+        ret[stage_name] = comb_logic_gen_fn(s, stage_name, print_latency=print_latency, timescale=timescale)
     ret[name] = module
     return ret

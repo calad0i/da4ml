@@ -117,6 +117,26 @@ class OperationTestSynth(OperationTest):
         xls_pred = xls_model.predict(test_data, n_threads=1)
         np.testing.assert_equal(xls_pred, comb_pred)
 
+    @pytest.mark.slow
+    @pytest.mark.parametrize('latency_cutoff', (-1, 1))
+    def test_xls_verilog_gen(self, comb: CombLogic, latency_cutoff, temp_directory: str, test_data: np.ndarray):
+        rtl_model = RTLModel(comb, temp_directory, flavor='verilog', latency_cutoff=latency_cutoff)
+
+        if np.sum(comb.inp_kifs) == 0 or np.sum(comb.out_kifs) == 0:
+            return  # By chance, the comb logic is trivial/invalid.
+
+        if shutil.which('verilator') is None:
+            rtl_model.write(xls_opt=True)
+            subprocess.run(['rm', '-rf', temp_directory])
+            pytest.skip('verilator not found')
+
+        rtl_model.compile(nproc=1)
+
+        rtl_pred = rtl_model.predict(test_data, n_threads=1)
+        comb_pred = comb.predict(test_data, n_threads=1)
+        np.testing.assert_equal(rtl_pred, comb_pred)
+        subprocess.run(['rm', '-rf', temp_directory])
+
 
 class TestQuantize(OperationTestSynth):
     @pytest.fixture(params=[(1, 3, 3), (0, 4, -2), (1, 0, 0)])

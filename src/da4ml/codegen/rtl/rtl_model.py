@@ -78,6 +78,17 @@ def canon_name(name: str) -> str:
     return re.sub(r'\W|^(?=\d)', '_', name)
 
 
+def verilog_comb_logic_gen_xls(sol: CombLogic, fn_name: str, print_latency: bool = False, timescale: str | None = None):
+    from ..xls.xls_codegen import build_xls_function
+
+    pkg, fn = build_xls_function(sol, fn_name)
+    result = pkg.schedule_and_codegen(generator='combinational', output_port_name='model_out')
+    verilog = result.get_verilog_text()
+    if timescale is not None:
+        verilog = f'{timescale}\n\n' + verilog
+    return verilog
+
+
 class RTLModel:
     def __init__(
         self,
@@ -153,21 +164,30 @@ class RTLModel:
         self._lib = None
         self._uuid = None
 
-    def write(self, metadata: None | dict[str, Any] = None):
+    def write(self, metadata: None | dict[str, Any] = None, xls_opt: bool = False):
         """Write the RTL project to the specified path.
 
         Parameters
         ----------
         metadata : dict[str, Any] | None, optional
             Additional metadata to write to `metadata.json`, by default None
+        xls_opt : bool, optional
+            Whether to apply XLS optimizations to the generated RTL.
+            Requires `xls-python` package, only applicable to verilog codegen. Default is False.
         """
 
         flavor = self._flavor
         suffix = 'v' if flavor == 'verilog' else 'vhd'
         if flavor == 'vhdl':
+            assert not xls_opt, 'XLS optimizations are not supported for VHDL codegen.'
             from .vhdl import comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
         else:  # verilog
-            from .verilog import comb_logic_gen, generate_io_wrapper, pipeline_logic_gen
+            from .verilog import generate_io_wrapper, pipeline_logic_gen
+
+            if xls_opt:
+                comb_logic_gen = verilog_comb_logic_gen_xls
+            else:
+                from .verilog import comb_logic_gen
 
         from .verilog.comb import table_mem_gen
 
@@ -194,7 +214,12 @@ class RTLModel:
 
             if not self._place_holder:
                 # Main logic
-                codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency)
+                codes = pipeline_logic_gen(
+                    csol=self._pipe,
+                    name=self._prj_name,
+                    print_latency=self._print_latency,
+                    comb_logic_gen_fn=comb_logic_gen,
+                )
 
                 # Table memory files
                 memfiles: dict[str, str] = {}
@@ -372,6 +397,7 @@ class RTLModel:
         o3: bool = False,
         clean=True,
         metadata: None | dict[str, Any] = None,
+        xls_opt: bool = False,
     ):
         """Compile the generated code to a emulator for logic simulation.
 
@@ -390,6 +416,9 @@ class RTLModel:
             Remove obsolete shared object files and `obj_dir`, by default True
         metadata : dict[str, Any] | None, optional
             Additional metadata to write to `metadata.json`, by default None
+        xls_opt : bool, optional
+            Whether to apply XLS optimizations to the generated RTL.
+            Requires `xls-python` package, only applicable to verilog codegen. Default is False.
 
         Raises
         ------
@@ -397,7 +426,7 @@ class RTLModel:
             If compilation fails
         """
 
-        self.write(metadata=metadata)
+        self.write(metadata=metadata, xls_opt=xls_opt)
         self._compile(verbose=verbose, openmp=openmp, nproc=nproc, o3=o3, clean=clean)
 
     def predict(self, data: NDArray | Sequence[NDArray], n_threads: int = 0) -> NDArray[np.float32]:

@@ -53,8 +53,8 @@ class XLSModel:
         if not self.built:
             self._build()
         result = self._pkg.schedule_and_codegen(
-            scheduling_options=scheduling_options,
-            codegen_flags=codegen_flags,
+            scheduling_options_textproto=scheduling_options,
+            codegen_flags_textproto=codegen_flags,
             with_delay_model=with_delay_model,
         )
         verilog = result.get_verilog_text()

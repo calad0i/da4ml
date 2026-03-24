@@ -375,9 +375,9 @@ def build_xls_function(sol: CombLogic, fn_name: str = 'dais_fn') -> tuple[Packag
         raise ValueError('No output parts')
 
     if len(out_parts) == 1:
-        ret_val = out_parts[0]
+        ret_val = bb.add_identity(out_parts[0], name='model_out')
     else:
-        ret_val = bb.add_concat(out_parts[::-1])
+        ret_val = bb.add_concat(out_parts[::-1], name='model_out')
 
     _ = fb.build_with_return_value(ret_val)
     ir_str = pkg.to_string()
@@ -467,7 +467,7 @@ def build_xls_io_wrapper(sol: CombLogic, fn_name: str = 'dais_fn') -> tuple[Pack
             v = _extend(bb, v, obw, max_out_bw, is_signed)
         out_elems.append(v)
 
-    ret_val = bb.add_array(out_elem_type, out_elems)
+    ret_val = bb.add_array(out_elem_type, out_elems, name='model_out')
 
     _ = fb.build_with_return_value(ret_val)
     ir_str = pkg.to_string()
