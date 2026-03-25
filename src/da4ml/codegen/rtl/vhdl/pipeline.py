@@ -1,6 +1,4 @@
-from collections.abc import Callable
-
-from ....types import CombLogic, Pipeline, minimal_kif
+from ....types import Pipeline, minimal_kif
 from .comb import comb_logic_gen
 
 
@@ -9,7 +7,8 @@ def pipeline_logic_gen(
     name: str,
     print_latency=False,
     timescale: str | None = None,
-    comb_logic_gen_fn: Callable[[CombLogic, str, bool, str | None], str] | None = None,
+    comb_logic_gen_fn=None,
+    no_shreg: bool = False,
 ):
     comb_logic_gen_fn = comb_logic_gen_fn or comb_logic_gen
     N = len(csol.solutions)
@@ -18,6 +17,11 @@ def pipeline_logic_gen(
 
     registers = [f'signal stage{i}_inp:std_logic_vector({width - 1} downto 0);' for i, width in enumerate(inp_bits)]
     wires = [f'signal stage{i}_out:std_logic_vector({width - 1} downto 0);' for i, width in enumerate(out_bits)]
+
+    shreg_attr = ()
+    if no_shreg:
+        shreg_attr = ['attribute shreg_extract:string;']
+        shreg_attr += [f'attribute shreg_extract of stage{i}_inp:signal is "no";' for i in range(N)]
 
     comb_logic = [
         f'stage{i}:entity work.{name}_stage{i} port map(model_inp=>stage{i}_inp,model_out=>stage{i}_out);' for i in range(N)
@@ -41,7 +45,7 @@ end entity {name};
 architecture rtl of {name} is
     {blk.join(registers)}
     {blk.join(wires)}
-
+    {blk.join(shreg_attr) if shreg_attr else ''}
 begin
     {blk.join(comb_logic)}
 

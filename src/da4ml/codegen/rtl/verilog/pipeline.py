@@ -1,6 +1,4 @@
-from collections.abc import Callable
-
-from ....types import CombLogic, Pipeline, minimal_kif
+from ....types import Pipeline, minimal_kif
 from .comb import comb_logic_gen
 
 
@@ -9,14 +7,16 @@ def pipeline_logic_gen(
     name: str,
     print_latency=False,
     timescale: str | None = '`timescale 1 ns / 1 ps',
-    comb_logic_gen_fn: Callable[[CombLogic, str, bool, str | None], str] | None = None,
+    comb_logic_gen_fn=None,
+    no_shreg: bool = False,
 ):
     comb_logic_gen_fn = comb_logic_gen_fn or comb_logic_gen
     N = len(csol.solutions)
     inp_bits = [sum(map(sum, map(minimal_kif, sol.inp_qint))) for sol in csol.solutions]
     out_bits = inp_bits[1:] + [sum(map(sum, map(minimal_kif, csol.out_qint)))]
 
-    registers = [f'reg [{width - 1}:0] stage{i}_inp;' for i, width in enumerate(inp_bits)]
+    reg_attr = '(* shreg_extract = "no" *) ' if no_shreg else ''
+    registers = [f'{reg_attr}reg [{width - 1}:0] stage{i}_inp;' for i, width in enumerate(inp_bits)]
     wires = [f'wire [{width - 1}:0] stage{i}_out;' for i, width in enumerate(out_bits)]
 
     comb_logic = [f'{name}_stage{i} stage{i} (.model_inp(stage{i}_inp), .model_out(stage{i}_out));' for i in range(N)]

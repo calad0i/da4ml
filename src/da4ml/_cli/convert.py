@@ -23,6 +23,7 @@ def to_da4ml(
     metadata=None,
     inputs_kif: tuple[int, int, int] | None = None,
     xls_opt: bool = False,
+    no_shreg: bool = False,
 ):
     from da4ml.codegen import HLSModel, RTLModel
     from da4ml.converter import trace_model
@@ -62,7 +63,7 @@ def to_da4ml(
             clock_period=period,
             part_name=part_name,
         )
-        da_model.write(metadata, xls_opt=xls_opt)
+        da_model.write(metadata, xls_opt=xls_opt, no_shreg=no_shreg)
     else:
         da_model = HLSModel(
             comb,
@@ -182,6 +183,7 @@ def convert_main(args):
         metadata=metadata,
         inputs_kif=args.inputs_kif,
         xls_opt=args.xls,
+        no_shreg=args.no_shreg,
     )
 
 
@@ -244,6 +246,11 @@ def _add_convert_args(parser: argparse.ArgumentParser):
         '--xls',
         action='store_true',
         help='Whether use XLS for Verilog generation. Only applicable when --flavor is set to verilog.',
+    )
+    parser.add_argument(
+        '--no-shreg',
+        action='store_true',
+        help='Whether to add shreg_extract="no" attribute to all pipeline registers in the generated RTL code.',
     )
 
 

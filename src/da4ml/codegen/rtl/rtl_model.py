@@ -164,7 +164,7 @@ class RTLModel:
         self._lib = None
         self._uuid = None
 
-    def write(self, metadata: None | dict[str, Any] = None, xls_opt: bool = False):
+    def write(self, metadata: None | dict[str, Any] = None, xls_opt: bool = False, no_shreg: bool = False):
         """Write the RTL project to the specified path.
 
         Parameters
@@ -174,6 +174,9 @@ class RTLModel:
         xls_opt : bool, optional
             Whether to apply XLS optimizations to the generated RTL.
             Requires `xls-python` package, only applicable to verilog codegen. Default is False.
+        no_shreg : bool, optional
+            Whether to add shreg_extract="no" attribute to all pipeline registers in the generated RTL code.
+            Default is False.
         """
 
         flavor = self._flavor
@@ -219,6 +222,7 @@ class RTLModel:
                     name=self._prj_name,
                     print_latency=self._print_latency,
                     comb_logic_gen_fn=comb_logic_gen,
+                    no_shreg=no_shreg,
                 )
 
                 # Table memory files
@@ -398,6 +402,7 @@ class RTLModel:
         clean=True,
         metadata: None | dict[str, Any] = None,
         xls_opt: bool = False,
+        no_shreg: bool = False,
     ):
         """Compile the generated code to a emulator for logic simulation.
 
@@ -419,6 +424,9 @@ class RTLModel:
         xls_opt : bool, optional
             Whether to apply XLS optimizations to the generated RTL.
             Requires `xls-python` package, only applicable to verilog codegen. Default is False.
+        no_shreg : bool, optional
+            Whether to add shreg_extract="no" attribute to all pipeline registers in the generated RTL code.
+            Default is False.
 
         Raises
         ------
@@ -426,7 +434,7 @@ class RTLModel:
             If compilation fails
         """
 
-        self.write(metadata=metadata, xls_opt=xls_opt)
+        self.write(metadata=metadata, xls_opt=xls_opt, no_shreg=no_shreg)
         self._compile(verbose=verbose, openmp=openmp, nproc=nproc, o3=o3, clean=clean)
 
     def predict(self, data: NDArray | Sequence[NDArray], n_threads: int = 0) -> NDArray[np.float32]:
