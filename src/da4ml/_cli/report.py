@@ -223,6 +223,10 @@ def _load_project(path: str | Path) -> dict[str, Any]:
     power = parse_if_exists(rpt_path / f'{top_name}_post_route_power.rpt', parse_power_vivado)
     if util is not None:
         d.update(util)
+        if (path / f'src/{top_name}.xdc').exists():
+            line_one = (path / f'src/{top_name}.xdc').read_text().splitlines()[0]
+            assert line_one.startswith('set clock_period '), f'Unexpected first line in XDC file: {line_one}'
+            d['clock_period'] = float(line_one.rsplit(' ', 1)[1].strip())
     if timing is not None:
         d.update(timing)
         if 'latency' in d:  # pipelined logic
@@ -242,6 +246,10 @@ def _load_project(path: str | Path) -> dict[str, Any]:
             d['latency(ns)'] = d['latency'] * d['actual_period']
     if util is not None:
         d.update(util)
+        if (path / f'src/{top_name}.sdc').exists():
+            line_one = (path / f'src/{top_name}.sdc').read_text().splitlines()[0]
+            assert line_one.startswith('set clock_period '), f'Unexpected first line in SDC file: {line_one}'
+            d['clock_period'] = float(line_one.rsplit(' ', 1)[1].strip())
 
     return d
 
