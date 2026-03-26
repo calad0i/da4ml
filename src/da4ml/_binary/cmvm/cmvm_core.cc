@@ -217,6 +217,8 @@ CombLogicResult to_solution(const DAState &state, bool partial) {
     result.out_shifts = std::move(out_shifts_vec);
     result.out_negs = std::move(out_negs);
     result.ops = std::move(ops);
+    result.adder_size = -1;
+    result.carry_size = -1;
     return result;
 }
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "types.hh"
-#include <utility>
 
 Pair idx_mc(const DAState &state);
 Pair idx_mc_dc(const DAState &state, bool absolute = false);
