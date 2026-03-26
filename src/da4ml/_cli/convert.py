@@ -4,6 +4,8 @@ from pathlib import Path
 
 import numpy as np
 
+from da4ml.trace.passes import optimize
+
 
 def to_da4ml(
     model_path: Path,
@@ -24,6 +26,7 @@ def to_da4ml(
     inputs_kif: tuple[int, int, int] | None = None,
     xls_opt: bool = False,
     no_shreg: bool = False,
+    opt: bool = True,
 ):
     from da4ml.codegen import HLSModel, RTLModel
     from da4ml.converter import trace_model
@@ -38,7 +41,7 @@ def to_da4ml(
         if verbose > 1:
             model.summary()
         inp, out = trace_model(model, HWConfig(*hwconf), {'hard_dc': hard_dc}, verbose > 1, inputs_kif=inputs_kif)
-        comb = comb_trace(inp, out)
+        comb = comb_trace(inp, out, optimize=opt)
 
     elif model_path.suffix == '.json':
         with open(model_path) as f:
@@ -46,6 +49,8 @@ def to_da4ml(
         if data.get('meta', None) != 'DAISModel':
             raise ValueError('Unknown model type in JSON file.')
         comb = CombLogic.deserialize(data)
+        if opt:
+            comb = optimize(comb)
         model = None  # type: ignore
 
     else:
@@ -184,6 +189,7 @@ def convert_main(args):
         inputs_kif=args.inputs_kif,
         xls_opt=args.xls,
         no_shreg=args.no_shreg,
+        opt=not args.no_opt,
     )
 
 
@@ -251,6 +257,11 @@ def _add_convert_args(parser: argparse.ArgumentParser):
         '--no-shreg',
         action='store_true',
         help='Whether to add shreg_extract="no" attribute to all pipeline registers in the generated RTL code.',
+    )
+    parser.add_argument(
+        '--no-opt',
+        action='store_true',
+        help='Disable optimization pass on the traced CombLogic before code generation. IR without optimization is usually not ready for code generation and will likely cause errors. Only use this if you know what you are doing.',
     )
 
 
