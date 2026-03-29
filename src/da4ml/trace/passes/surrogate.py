@@ -49,7 +49,7 @@ def cost_lat_add(qint0: QInterval, qint1: QInterval, shift1: int, n_add: int, n_
 
     bw_add = left + overlap + right
     cost = (max(bw_add - 1, 1) + n_add - 1) // n_add
-    lat = (left + overlap - 1) // n_accum * 0.029296875 + 1.099609375
+    lat = (bw_add - 1 + n_accum - 1) // n_accum * 0.025390625 + 1.09375
     return cost, lat
 
 
@@ -60,8 +60,8 @@ def cost_lat_mul(qint0: QInterval, qint1: QInterval, n_add: int, n_accum: int):
     cost1 = b0 * (b1 + n_add - 1) // n_add
     cost2 = b1 * (b0 + n_add - 1) // n_add
     cost = min(cost1, cost2)
-    lat1 = b0 * (b1 + n_accum - 1) // n_accum * 0.029296875 + 1.099609375
-    lat2 = b1 * (b0 + n_accum - 1) // n_accum * 0.029296875 + 1.099609375
+    lat1 = b0 * ((b1 - 1 + n_accum - 1) // n_accum) * 0.025390625 + 1.09375
+    lat2 = b1 * ((b0 - 1 + n_accum - 1) // n_accum) * 0.025390625 + 1.09375
     lat = min(lat1, lat2)
     return cost, lat
 
