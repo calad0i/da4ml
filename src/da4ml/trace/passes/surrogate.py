@@ -192,7 +192,7 @@ def cost_lat_op(
         case 6:  # msb_mux
             out_bw = sum(minimal_kif(op.qint))
             sf = _is_const_descendent(idx, ops, _cache)
-            return out_bw * (0.5 - 0.36 * sf), 1
+            return out_bw * (0.5 - 0.36 * sf), 0.5
         case 7:  # mul
             qint0, qint1 = ops[op.id0].qint, ops[op.id1].qint
             c, l = cost_lat_mul(qint0, qint1, n_add, n_carry)
