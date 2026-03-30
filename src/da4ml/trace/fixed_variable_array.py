@@ -13,6 +13,7 @@ from .ops import _quantize, einsum, reduce, sort
 T = TypeVar('T')
 
 _ARRAY_FN: dict = {}
+_UFUNC_REDUCE: dict = {}
 _UFUNC: dict = {}
 
 
@@ -168,7 +169,13 @@ class FixedVariableArray(np.ndarray):
         return FixedVariableArray(func(*args, **kwargs), self.solver_options, hwconf=self.hwconf)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        assert method == '__call__', f'Only __call__ method is supported for ufuncs, got {method}'
+        if method == 'reduce':
+            if ufunc in _UFUNC_REDUCE:
+                axis = kwargs.get('axis', None)
+                keepdims = kwargs.get('keepdims', False)
+                return _UFUNC_REDUCE[ufunc](*inputs, axis=axis, keepdims=keepdims)
+            raise NotImplementedError(f'Unsupported ufunc.reduce: {ufunc}')
+        assert method == '__call__', f'Only __call__ and reduce methods are supported for ufuncs, got {method}'
         if ufunc in _UFUNC:
             return _UFUNC[ufunc](self, ufunc, *inputs, **kwargs)
         if ufunc in _unary_functions:
@@ -468,6 +475,12 @@ def _np_prod(*args, **kwargs):
     return reduce(lambda x, y: x * y, *args, **kwargs)
 
 
+_UFUNC_REDUCE[np.add] = _np_sum
+_UFUNC_REDUCE[np.multiply] = _np_prod
+_UFUNC_REDUCE[np.maximum] = _np_amax
+_UFUNC_REDUCE[np.minimum] = _np_amin
+
+
 @_array_fn(np.all)
 def _np_all(x, axis=None, keepdims=False, **kw):
     _arr = np.array([v.unary_bit_op('any') for v in np.asarray(x).ravel()]).reshape(x.shape)
@@ -480,6 +493,12 @@ def _np_any(x, axis=None, keepdims=False, **kw):
     _arr = np.array([v.unary_bit_op('any') for v in np.asarray(x).ravel()]).reshape(x.shape)
     x2 = FixedVariableArray(_arr, x.solver_options, hwconf=x.hwconf)
     return reduce(lambda a, b: a | b, x2, axis=axis, keepdims=keepdims)
+
+
+_UFUNC_REDUCE[np.logical_and] = _np_all
+_UFUNC_REDUCE[np.logical_or] = _np_any
+_UFUNC_REDUCE[np.bitwise_and] = _np_all
+_UFUNC_REDUCE[np.bitwise_or] = _np_any
 
 
 @_array_fn(np.clip)
