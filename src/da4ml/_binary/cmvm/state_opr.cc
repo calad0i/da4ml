@@ -37,7 +37,7 @@ cost_add(const QInterval &q0, const QInterval &q1, int64_t shift) {
     }
     uint8_t bw_add = accum + overlap + tail;
     float cost = std::max(bw_add - 1, 1);
-    float lat = (accum + overlap - 1) * 0.03 + 1.1;
+    float lat = static_cast<float>(bw_add - 1) * 0.025 + 1.1;
     return {cost, lat};
 }
 
@@ -188,7 +188,7 @@ gather_matching_idxs(const DAState &state, const Pair &pair) {
 }
 
 Op pair_to_op(const Pair &pair, const DAState &state) {
-    auto [dlat, cost] =
+    auto [cost, dlat] =
         cost_add(state.ops[pair.id0].qint, state.ops[pair.id1].qint, pair.shift);
     float lat = std::max(state.ops[pair.id0].latency, state.ops[pair.id1].latency) + dlat;
     QInterval qint = qint_add(

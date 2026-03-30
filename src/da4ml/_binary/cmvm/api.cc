@@ -37,7 +37,7 @@ PipelineResult _solve(
     size_t n_in = kernel.shape(0);
 
     if (method1 == "auto") {
-        if (hard_dc >= 6 || method0.ends_with("dc")) {
+        if (hard_dc < 0 || hard_dc >= 5 || method0.ends_with("dc")) {
             method1 = method0;
         }
         else {
@@ -66,6 +66,8 @@ PipelineResult _solve(
     float min_lat = std::numeric_limits<float>::infinity();
     if (hard_dc >= 0)
         min_lat = minimal_latency(kernel, qintervals, inp_latencies);
+    else
+        hard_dc = std::numeric_limits<int>::max();
     float latency_allowed = hard_dc + min_lat;
 
     int log2_n = static_cast<int>(std::ceil(std::log2(static_cast<float>(n_in))));
@@ -174,14 +176,14 @@ PipelineResult solve(
 
     int _hard_dc = hard_dc;
     if (_hard_dc < 0)
-        _hard_dc = 1000000000;
+        _hard_dc = std::numeric_limits<int>::max();
 
     int max_decompose_dc = std::min(
         _hard_dc, static_cast<int>(std::ceil(std::log2(static_cast<float>(n_in))))
     );
 
     std::vector<int> try_dcs;
-    for (int d = -1; d <= max_decompose_dc; ++d) {
+    for (int d = 0; d <= max_decompose_dc; ++d) {
         try_dcs.push_back(d);
     }
 

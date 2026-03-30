@@ -19,7 +19,7 @@ def to_da4ml(
     verbose: int = 1,
     rtl_validation: bool = False,
     hwconf: tuple[int, int, int] = (1, 1, -1),
-    hard_dc: int = 2,
+    hard_dc: int = 5,
     openmp: bool = True,
     n_threads: int = 4,
     metadata=None,
@@ -226,7 +226,7 @@ def _add_convert_args(parser: argparse.ArgumentParser):
         default=[1, 1, -1],
         help='Size of accumulator and adder, and cutoff threshold during tracing. No need to modify unless you know what you are doing.',
     )
-    parser.add_argument('--delay-constraint', '-dc', type=int, default=2, help='Delay constraint for each CMVM block')
+    parser.add_argument('--delay-constraint', '-dc', type=int, default=5, help='Delay constraint for each CMVM block')
     parser.add_argument(
         '--no-openmp',
         '--no-omp',

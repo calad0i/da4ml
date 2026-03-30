@@ -157,16 +157,13 @@ CombLogicResult to_solution(const DAState &state, bool partial) {
             int64_t shift0 = e0.shift, shift1 = e1.shift;
 
             QInterval qint;
-            float dlat, dcost;
             Op op;
             int64_t result_shift;
 
             if (sub0) {
                 int64_t s = shift0 - shift1;
                 qint = qint_add(qint1, qint0, s, sub1 != 0, sub0 != 0);
-                auto [dl, dc] = cost_add(qint1, qint0, s);
-                dlat = dl;
-                dcost = dc;
+                auto [dcost, dlat] = cost_add(qint1, qint0, s);
                 float lat = std::max(lat0, lat1) + dlat;
                 op = Op{id1, id0, 1 ^ sub1, s, qint, lat, dcost};
                 result_shift = shift1;
@@ -174,9 +171,7 @@ CombLogicResult to_solution(const DAState &state, bool partial) {
             else {
                 int64_t s = shift1 - shift0;
                 qint = qint_add(qint0, qint1, s, sub0 != 0);
-                auto [dl, dc] = cost_add(qint0, qint1, s);
-                dlat = dl;
-                dcost = dc;
+                auto [dcost, dlat] = cost_add(qint0, qint1, s);
                 float lat = std::max(lat0, lat1) + dlat;
                 op = Op{id0, id1, sub1, s, qint, lat, dcost};
                 result_shift = shift0;
