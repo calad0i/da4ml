@@ -27,6 +27,7 @@ def to_da4ml(
     xls_opt: bool = False,
     no_shreg: bool = False,
     opt: bool = True,
+    n_stages: int = -1,
 ):
     from da4ml.codegen import HLSModel, RTLModel
     from da4ml.converter import trace_model
@@ -57,6 +58,8 @@ def to_da4ml(
         raise ValueError(f'Unsupported model file format: {model_path}')
 
     if flavor in ('verilog', 'vhdl'):
+        if n_stages > 0:
+            latency_cutoff = -1
         da_model = RTLModel(
             comb,
             path,
@@ -67,6 +70,7 @@ def to_da4ml(
             clock_uncertainty=unc / 100,
             clock_period=period,
             part_name=part_name,
+            n_stages=n_stages,
         )
         da_model.write(metadata, xls_opt=xls_opt, no_shreg=no_shreg)
     else:
@@ -190,6 +194,7 @@ def convert_main(args):
         xls_opt=args.xls,
         no_shreg=args.no_shreg,
         opt=not args.no_opt,
+        n_stages=args.n_stages,
     )
 
 
