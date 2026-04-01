@@ -29,13 +29,15 @@ def _is_const_descendent(idx: int, ops: list[Op], cache: dict[int, float]) -> fl
     if op.opcode == 5:  # CONST
         cache[idx] = 1.0
         return 1.0
-    if op.opcode == -2:  # NEG
+    if op.opcode == 10:  # bin bitops
+        return max(_is_const_descendent(op.id0, ops, cache), _is_const_descendent(op.id1, ops, cache))
+    if op.opcode in (-2, 3, 9):  # NEG, wrap, unary bitops
         res = _is_const_descendent(op.id0, ops, cache)
         cache[idx] = res
         return res
     if op.opcode == 6:  # MUX
         a, b = _is_const_descendent(op.id0, ops, cache), _is_const_descendent(op.id1, ops, cache)
-        res = 0.25 * (a + b) + 0.5 * (a or b)
+        res = 0.5 * (a + b)
         cache[idx] = res
         return res
     cache[idx] = 0.0
@@ -149,7 +151,7 @@ def cost_lat_bin_bitops(qint0: QInterval, qint1: QInterval, shift1: int, LUT_X: 
     if y <= 0:
         return 0, 0
     cost = 2 * y / LUT_Y * 2 ** (LUT_Y - LUT_X)
-    lat = 1
+    lat = 0.1
     return cost, lat
 
 
@@ -192,7 +194,7 @@ def cost_lat_op(
         case 6:  # msb_mux
             out_bw = sum(minimal_kif(op.qint))
             sf = _is_const_descendent(idx, ops, _cache)
-            return out_bw * (0.5 - 0.36 * sf), 0.5
+            return out_bw * (0.5 - 0.36 * sf), 0.5 - 0.4 * sf
         case 7:  # mul
             qint0, qint1 = ops[op.id0].qint, ops[op.id1].qint
             c, l = cost_lat_mul(qint0, qint1, n_add, n_carry)
