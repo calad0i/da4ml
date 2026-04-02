@@ -934,7 +934,7 @@ class FixedVariable:
         _data = ops[_type]
         if _type == 'not':
             if self.opr == 'bit_unary' and self._data == 0:
-                return self._from[0]
+                return self._from[0] * (self._factor / self._from[0]._factor)
             k, i, f = self.kif
             return FixedVariable.from_kif(
                 k, i, f, hwconf=self.hwconf, opr='bit_unary', _data=_data, _from=(self,), _factor=abs(self._factor)
