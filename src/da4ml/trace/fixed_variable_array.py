@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from .._binary import get_lsb_loc
 from ..cmvm import solve, solver_options_t
 from .fixed_variable import FixedVariable, FixedVariableInput, HWConfig, LookupTable, QInterval
-from .ops import _quantize, einsum, reduce, sort
+from .ops import _quantize, einsum, histogram, reduce, sort
 
 T = TypeVar('T')
 
@@ -557,6 +557,11 @@ def _np_where(condition, x=None, y=None):
         fva.solver_options,
         hwconf=fva.hwconf,
     )
+
+
+@_array_fn(np.histogram)
+def _np_histogram(a, bins=10, range=None, density=None, weights=None):
+    return histogram(a, bins=bins, range=range, weights=weights, density=density or False)
 
 
 @_array_fn(np.sort)
