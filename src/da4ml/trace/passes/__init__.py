@@ -34,4 +34,5 @@ def optimize(
         counter += 1
     if surrogate:
         comb = add_surrogate(comb)
+        comb = order_ops(comb)
     return comb
