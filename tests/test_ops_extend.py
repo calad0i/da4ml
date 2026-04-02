@@ -161,3 +161,48 @@ def test_offload(thres):
     traced_out = comb.predict(data_in, n_threads=1)
     expected_out = (quantize(data_in, *inp.kif) @ w).reshape(10000, -1)
     np.testing.assert_equal(traced_out, expected_out)
+
+
+class TestHistogram(OperationTest):
+    @pytest.fixture(
+        params=[
+            {'bins': 4, 'range': (-2.0, 2.0)},
+            {'bins': np.array([-2.0, -1.0, 0.0, 1.0, 2.0])},
+            {'bins': 1, 'range': (-1.0, 1.0)},
+            {'bins': 2, 'range': (-1.0, 1.0)},
+            {'bins': np.array([-3.0, -0.5, 0.5, 3.0])},
+        ]
+    )
+    def edge_config(self, request):
+        return request.param
+
+    @pytest.fixture(params=[False, True])
+    def weighting(self, request):
+        return request.param
+
+    @pytest.fixture()
+    def op_func(self, edge_config, weighting):
+
+        if weighting:
+            w = np.array([1.0, 0.5, 2.0, 1.5, 0.25, 1.0, 3.0, 0.75])
+        else:
+            w = None
+
+        kwargs = {**edge_config, 'weights': w}
+
+        def hist_fn(x):
+            if isinstance(x, FixedVariableArray):
+                return np.histogram(x, **kwargs)[0]
+            return np.apply_along_axis(lambda v: np.histogram(v, **kwargs)[0], -1, x)
+
+        return hist_fn
+
+
+def test_empty_histogram():
+    from da4ml.trace.fixed_variable import HWConfig
+
+    hwconf = HWConfig(1, 1, -1)
+    fva = FixedVariableArray(np.array([], dtype=object), hwconf=hwconf)
+    counts, edges = np.histogram(fva, bins=3, range=(0.0, 3.0))
+    assert counts.shape == (3,)
+    assert all(float(c.low) == 0.0 for c in np.asarray(counts).ravel())
