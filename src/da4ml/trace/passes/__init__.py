@@ -17,17 +17,17 @@ def optimize(
     counter = 0
     while True:
         comb = canonicalize(comb)
-        comb0 = comb
         comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)
         comb = common_subexpr_elimin(comb)
         comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)
         comb = null_quant_elimin(comb)
         comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)
+        comb = order_ops(comb)
+        comb0 = comb
         if retrace:
             comb = _retrace(comb)
-            comb = canonicalize(comb)
-        comb = order_ops(comb)
-        if comb == comb0:
+            comb = optimize(comb, retrace=False, keep_dead_inputs=keep_dead_inputs, surrogate=False)
+        if not retrace or comb == comb0:
             break
         if counter > 2:
             raise RuntimeError('Optimization did not converge after 3 iterations')
