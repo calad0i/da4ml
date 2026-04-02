@@ -9,16 +9,16 @@ from ...types import CombLogic, Op, QInterval, minimal_kif
 from .cse import is_used_in
 
 
-def consumer_opcodes(idx: int, ops: list[Op], used_in: dict[int, set[int]]) -> set[int]:
+def _cadd_consumer_width(idx: int, ops: list[Op], used_in: dict[int, set[int]]) -> set[int]:
     ret: set[int] = set()
     for cidx in used_in[idx]:
         if cidx < 0:
             ret.add(-1)  # output
         else:
-            if ops[cidx].opcode != -2:  # NEG
+            if ops[cidx].opcode not in (-2, 3, 9):
                 ret.add(ops[cidx].opcode)
             else:
-                ret.update(consumer_opcodes(cidx, ops, used_in))
+                ret.update(_cadd_consumer_width(cidx, ops, used_in))
     return ret
 
 
@@ -184,7 +184,7 @@ def cost_lat_op(
         case 3:  # WRAP
             return 0, 0
         case 4:  # cadd: absorbed if consumer is not add/sub/mux
-            eff_consumers = consumer_opcodes(idx, ops, used_in)
+            eff_consumers = _cadd_consumer_width(idx, ops, used_in)
             if any(cop in (0, 1, 6) for cop in eff_consumers):
                 bw_in = sum(minimal_kif(ops[op.id0].qint))
                 return max(bw_in - 1, 0) * 0.30, 0

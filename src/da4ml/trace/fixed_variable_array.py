@@ -383,7 +383,17 @@ class RetardedFixedVariableArray(FixedVariableArray):
         super().__array_finalize__(obj)
 
     def __array_function__(self, func, types, args, kwargs):
-        raise RuntimeError('RetardedFixedVariableArray only supports quantization or further unary mapping operations.')
+        if func is np.round:
+            # For some reason np.round is registered as array function but not ufunc...
+            return self.apply(lambda x: np.round(self._operator(x), **kwargs)).quantize()
+        raise RuntimeError(
+            f'RetardedFixedVariableArray only supports quantization or further unary mapping operations. Got array function {func}.'
+        )
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # np.round/ceil/floor are allowed since they act like quantizer.
+        if ufunc in (np.round, np.ceil, np.floor) and method == '__call__':
+            return self.apply(lambda x: ufunc(self._operator(x), **kwargs)).quantize()
 
     def apply(self, fn: Callable[[NDArray], NDArray]) -> 'RetardedFixedVariableArray':
         return RetardedFixedVariableArray(
@@ -400,13 +410,13 @@ class RetardedFixedVariableArray(FixedVariableArray):
         overflow_mode: str = 'WRAP',
         round_mode: str = 'TRN',
     ):
-        if any(x is None for x in (k, i, f)):
+        if any(x is not None for x in (k, i, f)):
             assert all(x is not None for x in (k, i, f)), 'Either all or none of k, i, f must be specified'
-            _k = _i = _f = [None] * self.size
-        else:
             _k = np.broadcast_to(k, self.shape).ravel()  # type: ignore
             _i = np.broadcast_to(i, self.shape).ravel()  # type: ignore
             _f = np.broadcast_to(f, self.shape).ravel()  # type: ignore
+        else:
+            _k = _i = _f = [None] * self.size
 
         local_tables: dict[tuple[QInterval, tuple[int, int, int]] | QInterval, LookupTable] = {}
         variables = []

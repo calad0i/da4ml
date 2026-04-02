@@ -117,8 +117,8 @@ def _comb_trace(inputs: Sequence[FixedVariable], outputs: Sequence[FixedVariable
                 qint = v.unscaled.qint
                 assert qint.min == qint.max, f'const {v.id} {qint.min} {qint.max}'
                 f = -get_lsb_loc(qint.min)
-                step = 2.0**-f
-                qint = QInterval(qint.min, qint.min, step)
+                step = float(2.0**-f)
+                qint = QInterval(float(qint.min), float(qint.min), step)
                 data = qint.min / step
                 op = Op(-1, -1, 5, int(data), qint, v.latency, 0.0)
             case 'msb_mux':
