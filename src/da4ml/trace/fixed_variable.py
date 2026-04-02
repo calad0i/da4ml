@@ -949,9 +949,7 @@ class FixedVariable:
                 if _max % 1 != 0:
                     return self.from_const(0, hwconf=self.hwconf)
 
-        return FixedVariable(
-            0, 1, 1, hwconf=self.hwconf, opr='bit_unary', _data=int(_data), _from=(self,), _factor=abs(self._factor)
-        )
+        return FixedVariable(0, 1, 1, hwconf=self.hwconf, opr='bit_unary', _data=int(_data), _from=(self,), _factor=1)
 
     def binary_bit_op(self, other: 'FixedVariable', _type: str):
         ops = {
