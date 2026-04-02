@@ -87,7 +87,7 @@ class TestSort(OperationTest):
             if not isinstance(x, FixedVariableArray):
                 _kind = 'quicksort'
             if size >= 4:
-                return np.sort(x[..., :size], axis=-1, kind=_kind)
+                return np.sort(x[..., :size], axis=-1, kind=_kind)  # type: ignore
             else:
                 x = x.reshape(x.shape[:-1] + (4, 2))
                 x = np.sort(x, axis=-2, kind=_kind)[..., :size, :]
@@ -101,7 +101,7 @@ class TestArgsort(OperationTest):
     def op_func(self):
         def argsort_fn(x):
             if isinstance(x, FixedVariableArray):
-                return x[..., :4][np.argsort(x[..., 4:])]
+                return x[..., :4][np.argsort(x[..., 4:])]  # type: ignore
             else:
                 return np.apply_along_axis(lambda v: v[:4][np.argsort(v[4:])], -1, x)
 
