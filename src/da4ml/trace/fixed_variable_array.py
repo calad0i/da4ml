@@ -412,9 +412,10 @@ class RetardedFixedVariableArray(FixedVariableArray):
         )
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        # np.round/ceil/floor are allowed since they act like quantizer.
+        v = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
         if ufunc in (np.round, np.ceil, np.floor) and method == '__call__':
-            return self.apply(lambda x: ufunc(self._operator(x), **kwargs)).quantize()
+            return v.quantize()
+        return v
 
     def apply(self, fn: Callable[[NDArray], NDArray]) -> 'RetardedFixedVariableArray':
         return RetardedFixedVariableArray(
