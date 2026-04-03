@@ -382,10 +382,31 @@ class RetardedFixedVariableArray(FixedVariableArray):
         self._operator = obj._operator
         super().__array_finalize__(obj)
 
+    def __add__(self, other):
+        return self.apply(lambda x: x + other)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __mul__(self, other):
+        return self.apply(lambda x: x * other)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __sub__(self, other):
+        return self.apply(lambda x: x - other)
+
+    def __rsub__(self, other):
+        return self.apply(lambda x: other - x)
+
+    def __truediv__(self, other):
+        return self.apply(lambda x: x / other)
+
     def __array_function__(self, func, types, args, kwargs):
         if func is np.round:
             # For some reason np.round is registered as array function but not ufunc...
-            return self.apply(lambda x: np.round(self._operator(x), **kwargs)).quantize()
+            return self.apply(np.round).quantize()
         raise RuntimeError(
             f'RetardedFixedVariableArray only supports quantization or further unary mapping operations. Got array function {func}.'
         )
@@ -576,7 +597,8 @@ def _np_histogram(a, bins=10, range=None, density=None, weights=None):
 
 @_array_fn(np.sort)
 def _np_sort(a, axis=-1, kind=None, order=None):
-    return sort(a, axis=axis)
+    assert order is None, 'Sorting with order is not supported for FixedVariableArray'
+    return sort(a, axis=axis, kind=kind)  # type: ignore
 
 
 @_array_fn(np.argsort)
