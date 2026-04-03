@@ -22,8 +22,7 @@ def optimize(
         comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)
         comb = null_quant_elimin(comb)
         comb = dead_code_elimin(comb, keep_dead_inputs=keep_dead_inputs)
-        comb = order_ops(comb)
-        comb0 = comb
+        comb0 = order_ops(comb)
         if retrace:
             comb = _retrace(comb)
             comb = optimize(comb, retrace=False, keep_dead_inputs=keep_dead_inputs, surrogate=False)
@@ -34,5 +33,5 @@ def optimize(
         counter += 1
     if surrogate:
         comb = add_surrogate(comb)
-        comb = order_ops(comb)
+    comb = order_ops(comb)
     return comb
