@@ -44,7 +44,7 @@ class DAISTracerPluginBase:
         self,
         verbose: bool,
         inputs: tuple[FixedVariableArray, ...],
-    ) -> tuple[dict[str, FixedVariableArray], list[str]]:
+    ) -> tuple[dict[str, FixedVariableArray] | dict[str, tuple[FixedVariableArray, ...]], list[str]]:
         """Apply the model and return all intermediate traces.
 
         Parameters
@@ -102,7 +102,9 @@ class DAISTracerPluginBase:
         inputs: tuple[FixedVariableArray, ...] | FixedVariableArray | None = None,
         inputs_kif: tuple[int, int, int] | None = None,
         dump: bool = False,
-    ) -> dict[str, FixedVariableArray] | tuple[FixedVariableArray, FixedVariableArray]:
+    ) -> (
+        dict[str, FixedVariableArray] | dict[str, tuple[FixedVariableArray, ...]] | tuple[FixedVariableArray, FixedVariableArray]
+    ):
         """Trace the model.
 
         Parameters
