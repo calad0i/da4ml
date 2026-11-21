@@ -88,7 +88,12 @@ class RTLModel:
         clock_uncertainty: float = 0.1,
         io_delay_minmax: tuple[float, float] = (0.2, 0.4),
         register_layers: int = 1,
+        ternary_rows: bool = False,
     ):
+        """Build RTL. With ternary_rows=True, fuse single-use adder pairs into
+        UltraScale+ LUT6_2/CARRY8 rows (Verilog only). The default False
+        leaves the emitted RTL unchanged.
+        """
         self._flavor = flavor.lower()
         self._solution = solution
         self._path = Path(path).resolve()
@@ -101,9 +106,12 @@ class RTLModel:
         self._clock_uncertainty = clock_uncertainty
         self._io_delay_minmax = io_delay_minmax
         self._register_layers = register_layers
+        self._ternary_rows = ternary_rows
         self._place_holder = False
 
         assert self._flavor in ('vhdl', 'verilog'), f'Unsupported flavor {flavor}, only vhdl and verilog are supported.'
+        if self._ternary_rows and self._flavor != 'verilog':
+            raise ValueError('ternary_rows is an UltraScale+ Verilog-only option')
 
         self._pipe = solution if isinstance(solution, Pipeline) else None
         if latency_cutoff > 0 and self._pipe is None:
@@ -154,7 +162,7 @@ class RTLModel:
         if self._pipe is not None:  # Pipeline
             if not self._place_holder:
                 # Main logic
-                codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers)
+                codes = pipeline_logic_gen(self._pipe, self._prj_name, self._print_latency, register_layers=self._register_layers, **({'ternary_rows': True} if self._ternary_rows else {}))
 
                 # Table memory files
                 memfiles: dict[str, str] = {}
@@ -194,7 +202,7 @@ class RTLModel:
                 memfiles = table_mem_gen(self._solution)
 
                 # Main logic
-                code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps')
+                code = comb_logic_gen(self._solution, self._prj_name, self._print_latency, '`timescale 1ns/1ps', **({'ternary_rows': True} if self._ternary_rows else {}))
                 with open(self._path / f'src/{self._prj_name}.{suffix}', 'w') as f:
                     f.write(code)
             else:

@@ -5,6 +5,7 @@ from uuid import UUID
 import numpy as np
 
 from ....types import CombLogic, Op, QInterval, minimal_kif
+from .ternary_rows import emit_ternary_row, select_fusions
 
 
 def make_neg(lines: list[str], idx: int, qint: QInterval, v0_name: str, neg_repo: dict[int, tuple[int, str]]):
@@ -48,7 +49,7 @@ def get_table_name_memfile(sol: CombLogic, op: Op) -> tuple[str, str]:
     return f'table_{str(uuid)}.mem', memfile
 
 
-def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency: bool = False) -> list[str]:
+def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency: bool = False, ternary_rows: bool = False) -> list[str]:
     ops = sol.ops
     kifs = list(map(minimal_kif, (op.qint for op in ops)))
     widths: list[int] = list(map(sum, kifs))
@@ -59,15 +60,20 @@ def ssa_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]], print_latency:
 
     lines: list[str] = []
     ref_count = sol.ref_count
+    fused, consumed = select_fusions(sol, kifs) if ternary_rows else ({}, set())
 
     for i, op in enumerate(ops):
-        if ref_count[i] == 0:
+        if i in consumed or ref_count[i] == 0:
             continue
 
         bw = widths[i]
         v = f'v{i}[{bw - 1}:0]'
         _def = f'wire [{bw - 1}:0] v{i};'
         if bw == 0:
+            continue
+        if i in fused:
+            lines.append(_def)
+            lines.extend(emit_ternary_row(i, bw, fused[i], kifs, widths))
             continue
 
         match op.opcode:
@@ -242,7 +248,7 @@ def output_gen(sol: CombLogic, neg_repo: dict[int, tuple[int, str]]) -> list[str
     return lines
 
 
-def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, timescale: str | None = None):
+def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, timescale: str | None = None, ternary_rows: bool = False):
     inp_bits = sum(map(sum, map(minimal_kif, sol.inp_qint)))
     out_bits = sum(map(sum, map(minimal_kif, sol.out_qint)))
 
@@ -254,7 +260,7 @@ def comb_logic_gen(sol: CombLogic, fn_name: str, print_latency: bool = False, ti
     ]
 
     neg_repo: dict[int, tuple[int, str]] = {}
-    ssa_lines = ssa_gen(sol, neg_repo=neg_repo, print_latency=print_latency)
+    ssa_lines = ssa_gen(sol, neg_repo=neg_repo, print_latency=print_latency, ternary_rows=ternary_rows)
     output_lines = output_gen(sol, neg_repo)
 
     indent = '    '

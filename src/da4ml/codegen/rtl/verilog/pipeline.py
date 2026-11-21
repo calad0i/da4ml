@@ -8,6 +8,7 @@ def pipeline_logic_gen(
     print_latency=False,
     timescale: str | None = '`timescale 1 ns / 1 ps',
     register_layers: int = 1,
+    ternary_rows: bool = False,
 ):
     N = len(csol.solutions)
     inp_bits = [sum(map(sum, map(minimal_kif, sol.inp_qint))) for sol in csol.solutions]
@@ -62,6 +63,6 @@ endmodule
     ret: dict[str, str] = {}
     for i, s in enumerate(csol.solutions):
         stage_name = f'{name}_stage{i}'
-        ret[stage_name] = comb_logic_gen(s, stage_name, print_latency=print_latency, timescale=timescale)
+        ret[stage_name] = comb_logic_gen(s, stage_name, print_latency=print_latency, timescale=timescale, ternary_rows=ternary_rows)
     ret[name] = module
     return ret
